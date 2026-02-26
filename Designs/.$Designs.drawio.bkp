@@ -1,6 +1,6 @@
 <mxfile host="Electron" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.2.9 Chrome/140.0.7339.249 Electron/38.7.2 Safari/537.36" version="29.2.9">
   <diagram name="Page-1" id="B2Qdioa7dazTXzhuvie3">
-    <mxGraphModel dx="2528" dy="1148" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+    <mxGraphModel dx="1529" dy="465" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -174,6 +174,12 @@
         </mxCell>
         <mxCell id="pRIO8QzkIFryCjnI-72j-14" parent="1" style="rounded=1;whiteSpace=wrap;html=1;align=center;" value="[Prev Song]" vertex="1">
           <mxGeometry height="105" width="105" x="-65" y="642.5" as="geometry" />
+        </mxCell>
+        <mxCell id="6WZl4LRE6qJApYEpVUbN-10" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="[HI RES DETECTOR]" vertex="1">
+          <mxGeometry height="30" width="170" x="480" y="810" as="geometry" />
+        </mxCell>
+        <mxCell id="6WZl4LRE6qJApYEpVUbN-11" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="[H/S]" vertex="1">
+          <mxGeometry height="30" width="40" x="430" y="810" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
