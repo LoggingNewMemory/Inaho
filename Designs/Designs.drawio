@@ -1,6 +1,6 @@
-<mxfile host="Electron" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.2.9 Chrome/140.0.7339.249 Electron/38.7.2 Safari/537.36" version="29.2.9">
+<mxfile host="Electron" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.6.1 Chrome/142.0.7444.265 Electron/39.8.0 Safari/537.36" version="29.6.1">
   <diagram name="Page-1" id="B2Qdioa7dazTXzhuvie3">
-    <mxGraphModel dx="2276" dy="976" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+    <mxGraphModel dx="1265" dy="274" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -46,7 +46,7 @@
         <mxCell id="Xmi43DAmHUrzzThzzO7O-22" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="[Song Name]" vertex="1">
           <mxGeometry height="30" width="100" x="60" y="210" as="geometry" />
         </mxCell>
-        <mxCell id="Xmi43DAmHUrzzThzzO7O-23" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;" value="Material Colors &amp;amp; Material UI&lt;div&gt;Standard Flutter Localization&lt;/div&gt;&lt;div&gt;Include Flutter Awesome Fonts&lt;/div&gt;" vertex="1">
+        <mxCell id="Xmi43DAmHUrzzThzzO7O-23" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;" value="Material Colors &amp;amp; Material UI&lt;div&gt;Standard Localization&lt;/div&gt;" vertex="1">
           <mxGeometry height="60" width="180" x="20" y="90" as="geometry" />
         </mxCell>
         <mxCell id="Xmi43DAmHUrzzThzzO7O-26" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="[Search]" vertex="1">

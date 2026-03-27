@@ -24,4 +24,3 @@ dependencyResolutionManagement {
 
 rootProject.name = "Halo Music"
 include(":app")
- 
