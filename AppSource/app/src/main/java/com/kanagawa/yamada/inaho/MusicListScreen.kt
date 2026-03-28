@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.ContentUris
 import android.content.Context
 import android.content.pm.PackageManager
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -32,6 +33,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 // --- 1. Data Model ---
 data class Song(
@@ -39,7 +42,7 @@ data class Song(
     val title: String,
     val artist: String,
     val durationMs: Long,
-    val albumArtUri: Uri // Added to hold the cover art location
+    val trackUri: Uri // Points to the exact audio file
 ) {
     val formattedDuration: String
         get() {
@@ -63,8 +66,7 @@ fun getAudioFiles(context: Context): List<Song> {
         MediaStore.Audio.Media._ID,
         MediaStore.Audio.Media.TITLE,
         MediaStore.Audio.Media.ARTIST,
-        MediaStore.Audio.Media.DURATION,
-        MediaStore.Audio.Media.ALBUM_ID // Added to find the cover art
+        MediaStore.Audio.Media.DURATION
     )
 
     val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
@@ -80,21 +82,18 @@ fun getAudioFiles(context: Context): List<Song> {
         val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
         val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
         val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-        val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
 
         while (cursor.moveToNext()) {
             val id = cursor.getLong(idColumn)
             val title = cursor.getString(titleColumn) ?: "Unknown Title"
             val artist = cursor.getString(artistColumn) ?: "Unknown Artist"
             val duration = cursor.getLong(durationColumn)
-            val albumId = cursor.getLong(albumIdColumn)
 
-            // Construct the specific URI for this song's album art
-            val artworkUri = Uri.parse("content://media/external/audio/albumart")
-            val albumArtUri = ContentUris.withAppendedId(artworkUri, albumId)
+            // Construct the URI to the exact audio file
+            val trackUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
 
             if (duration > 10000) {
-                songs.add(Song(id, title, artist, duration, albumArtUri))
+                songs.add(Song(id, title, artist, duration, trackUri))
             }
         }
     }
@@ -153,7 +152,7 @@ fun MusicListScreen() {
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // REFRESH ICON: Rescans the files and caches new art
+            // REFRESH ICON: Rescans the files
             IconButton(onClick = {
                 if (hasPermission) songs = getAudioFiles(context)
             }) {
@@ -201,19 +200,36 @@ fun MusicListScreen() {
 
 @Composable
 fun SongListItem(song: Song) {
+    val context = LocalContext.current
+    var coverBytes by remember { mutableStateOf<ByteArray?>(null) }
+
+    // Extracts the true file image in the background
+    LaunchedEffect(song.trackUri) {
+        withContext(Dispatchers.IO) {
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(context, song.trackUri)
+                coverBytes = retriever.embeddedPicture
+            } catch (e: Exception) {
+                // Ignore if corrupt or unreadable
+            } finally {
+                retriever.release()
+            }
+        }
+    }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Coil Image Loader: Automatically caches the image
         AsyncImage(
-            model = song.albumArtUri,
+            model = coverBytes,
             contentDescription = "Song Cover",
             contentScale = ContentScale.Crop,
             modifier = Modifier
-                .size(50.dp) // Adjusted size
+                .size(50.dp)
                 .clip(RoundedCornerShape(4.dp))
-                .background(Color(0xFF2C2C2C)) // Dark grey placeholder if a song has no cover art
+                .background(Color(0xFF2C2C2C)) // Dark grey placeholder
         )
 
         Spacer(modifier = Modifier.width(16.dp))
