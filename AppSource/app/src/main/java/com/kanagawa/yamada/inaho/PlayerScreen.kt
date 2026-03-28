@@ -35,9 +35,9 @@ fun PlayerScreen(
     val song = playerState.currentSong
     val coverBitmap: Bitmap? = song?.let { artCache[it.id] }
 
-    // Shuffle & Repeat UI-only toggle state
-    var isShuffled by remember { mutableStateOf(false) }
-    var isRepeating by remember { mutableStateOf(false) }
+    // Shuffle & Repeat UI-only toggle state (Now collected from ViewModel)
+    val isShuffled by musicViewModel.isShuffled.collectAsState()
+    val isRepeating by musicViewModel.isRepeating.collectAsState()
 
     val durationMs = playerState.durationMs.coerceAtLeast(1L)
 
@@ -194,7 +194,7 @@ fun PlayerScreen(
         ) {
             // Shuffle
             IconButton(
-                onClick = { isShuffled = !isShuffled },
+                onClick = { musicViewModel.toggleShuffle() },
                 modifier = Modifier.size(48.dp)
             ) {
                 Icon(
@@ -258,7 +258,7 @@ fun PlayerScreen(
 
             // Repeat
             IconButton(
-                onClick = { isRepeating = !isRepeating },
+                onClick = { musicViewModel.toggleRepeat() },
                 modifier = Modifier.size(48.dp)
             ) {
                 Icon(

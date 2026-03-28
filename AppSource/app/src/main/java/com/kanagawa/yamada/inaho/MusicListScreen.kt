@@ -217,6 +217,21 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val _loadedSongs = MutableStateFlow<List<Song>>(emptyList())
     val loadedSongs = _loadedSongs.asStateFlow()
 
+    // --- Hoisted Shuffle & Repeat States ---
+    private val _isShuffled = MutableStateFlow(false)
+    val isShuffled = _isShuffled.asStateFlow()
+
+    private val _isRepeating = MutableStateFlow(false)
+    val isRepeating = _isRepeating.asStateFlow()
+
+    fun toggleShuffle() {
+        _isShuffled.value = !_isShuffled.value
+    }
+
+    fun toggleRepeat() {
+        _isRepeating.value = !_isRepeating.value
+    }
+
     fun recordLoadedSongs(songs: List<Song>) {
         _loadedSongs.value = songs
     }
