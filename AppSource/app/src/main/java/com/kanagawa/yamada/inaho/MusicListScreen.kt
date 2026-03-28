@@ -1,8 +1,10 @@
 package com.kanagawa.yamada.inaho
 
 import android.Manifest
+import android.content.ContentUris
 import android.content.Context
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -13,27 +15,31 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import coil3.compose.AsyncImage
 
 // --- 1. Data Model ---
 data class Song(
     val id: Long,
     val title: String,
     val artist: String,
-    val durationMs: Long
+    val durationMs: Long,
+    val albumArtUri: Uri // Added to hold the cover art location
 ) {
     val formattedDuration: String
         get() {
@@ -47,7 +53,6 @@ data class Song(
 // --- 2. Media Store Fetcher ---
 fun getAudioFiles(context: Context): List<Song> {
     val songs = mutableListOf<Song>()
-    // Use the correct URI based on Android version
     val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
     } else {
@@ -58,10 +63,10 @@ fun getAudioFiles(context: Context): List<Song> {
         MediaStore.Audio.Media._ID,
         MediaStore.Audio.Media.TITLE,
         MediaStore.Audio.Media.ARTIST,
-        MediaStore.Audio.Media.DURATION
+        MediaStore.Audio.Media.DURATION,
+        MediaStore.Audio.Media.ALBUM_ID // Added to find the cover art
     )
 
-    // Only fetch actual music files
     val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
 
     context.contentResolver.query(
@@ -75,16 +80,21 @@ fun getAudioFiles(context: Context): List<Song> {
         val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
         val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
         val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+        val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
 
         while (cursor.moveToNext()) {
             val id = cursor.getLong(idColumn)
             val title = cursor.getString(titleColumn) ?: "Unknown Title"
             val artist = cursor.getString(artistColumn) ?: "Unknown Artist"
             val duration = cursor.getLong(durationColumn)
+            val albumId = cursor.getLong(albumIdColumn)
 
-            // Filter out super short files (e.g., notification sounds < 10 seconds)
+            // Construct the specific URI for this song's album art
+            val artworkUri = Uri.parse("content://media/external/audio/albumart")
+            val albumArtUri = ContentUris.withAppendedId(artworkUri, albumId)
+
             if (duration > 10000) {
-                songs.add(Song(id, title, artist, duration))
+                songs.add(Song(id, title, artist, duration, albumArtUri))
             }
         }
     }
@@ -98,14 +108,12 @@ fun MusicListScreen() {
     var songs by remember { mutableStateOf<List<Song>>(emptyList()) }
     var hasPermission by remember { mutableStateOf(false) }
 
-    // Determine which permission to ask for based on Android version
     val permissionToRequest = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         Manifest.permission.READ_MEDIA_AUDIO
     } else {
         Manifest.permission.READ_EXTERNAL_STORAGE
     }
 
-    // Launcher to ask the user for permission
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -115,18 +123,16 @@ fun MusicListScreen() {
         }
     }
 
-    // Check permission on screen load
     LaunchedEffect(Unit) {
         val status = ContextCompat.checkSelfPermission(context, permissionToRequest)
         if (status == PackageManager.PERMISSION_GRANTED) {
             hasPermission = true
-            songs = getAudioFiles(context)
+            songs = getAudioFiles(context) // Scans on first load
         } else {
             permissionLauncher.launch(permissionToRequest)
         }
     }
 
-    // Main UI Background
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -147,16 +153,25 @@ fun MusicListScreen() {
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Actual Sort Icon
+            // REFRESH ICON: Rescans the files and caches new art
+            IconButton(onClick = {
+                if (hasPermission) songs = getAudioFiles(context)
+            }) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "Refresh Music",
+                    tint = Color.White
+                )
+            }
+
             IconButton(onClick = { /* TODO: Sort actions */ }) {
                 Icon(
-                    imageVector = Icons.Default.List,
+                    imageVector = Icons.AutoMirrored.Filled.List,
                     contentDescription = "Sort Music",
                     tint = Color.White
                 )
             }
 
-            // Actual Settings Icon
             IconButton(onClick = { /* TODO: Open settings */ }) {
                 Icon(
                     imageVector = Icons.Default.Settings,
@@ -173,7 +188,6 @@ fun MusicListScreen() {
         } else if (songs.isEmpty()) {
             Text("No music files found on this device.", color = Color.White)
         } else {
-            // Scrollable List of Songs
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -191,24 +205,19 @@ fun SongListItem(song: Song) {
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Square Cover
-        Box(
+        // Coil Image Loader: Automatically caches the image
+        AsyncImage(
+            model = song.albumArtUri,
+            contentDescription = "Song Cover",
+            contentScale = ContentScale.Crop,
             modifier = Modifier
-                .size(65.dp)
-                .background(Color.White, RoundedCornerShape(4.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "[Song\nCover]",
-                color = Color.Black,
-                fontSize = 12.sp,
-                textAlign = TextAlign.Center
-            )
-        }
+                .size(50.dp) // Adjusted size
+                .clip(RoundedCornerShape(4.dp))
+                .background(Color(0xFF2C2C2C)) // Dark grey placeholder if a song has no cover art
+        )
 
         Spacer(modifier = Modifier.width(16.dp))
 
-        // Title and Details
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = song.title,
@@ -228,7 +237,6 @@ fun SongListItem(song: Song) {
 
         Spacer(modifier = Modifier.width(8.dp))
 
-        // Duration
         Text(
             text = song.formattedDuration,
             color = Color.White,
