@@ -49,6 +49,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
 
 // ==========================================
 // 1. MODEL
@@ -143,7 +145,60 @@ class MusicPagingSource(private val context: Context) : PagingSource<Int, Song>(
 }
 
 // ==========================================
-// 3. VIEWMODEL — with persistent Bitmap art cache
+// 3. DISK CACHE HELPERS
+// ==========================================
+
+/**
+ * Returns the on-disk PNG file for a given song ID.
+ * Stored under:  <app cache dir>/art/<songId>.png
+ */
+private fun artCacheFile(context: Context, songId: Long): File {
+    val dir = File(context.cacheDir, "art").also { it.mkdirs() }
+    return File(dir, "$songId.png")
+}
+
+/**
+ * Loads a Bitmap from disk if the cache file exists, otherwise returns null.
+ * Runs on the caller's thread — always dispatch to IO before calling.
+ */
+private fun loadBitmapFromDisk(context: Context, songId: Long): Bitmap? {
+    val file = artCacheFile(context, songId)
+    if (!file.exists()) return null
+    return try {
+        BitmapFactory.decodeFile(file.absolutePath)
+    } catch (e: Exception) {
+        null
+    }
+}
+
+/**
+ * Saves [bitmap] to disk as a lossless PNG so it survives across app restarts.
+ * A sentinel zero-byte file is written when there is no cover art, so we never
+ * re-extract from MediaMetadataRetriever for songs that simply have no art.
+ */
+private fun saveBitmapToDisk(context: Context, songId: Long, bitmap: Bitmap?) {
+    val file = artCacheFile(context, songId)
+    try {
+        if (bitmap == null) {
+            // Write a sentinel so we know "no art" without re-scanning
+            file.createNewFile()
+        } else {
+            FileOutputStream(file).use { out ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            }
+        }
+    } catch (_: Exception) { /* Disk full or other IO error — silent fail, will retry next launch */ }
+}
+
+/**
+ * Returns true if we already have a cache entry on disk for [songId]
+ * (whether that entry is a real bitmap or the "no art" sentinel).
+ */
+private fun isCachedOnDisk(context: Context, songId: Long): Boolean =
+    artCacheFile(context, songId).exists()
+
+// ==========================================
+// 4. VIEWMODEL — with persistent disk art cache
 // ==========================================
 class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -152,17 +207,30 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         pagingSourceFactory = { MusicPagingSource(application.applicationContext) }
     ).flow.cachedIn(viewModelScope)
 
-    // Cache keyed by song ID.
-    //   Missing key  → not yet fetched
-    //   null value   → fetched, but no cover art exists
-    //   Bitmap value → ready to display
+    // In-memory cache for the current session:
+    //   Key absent        → not yet loaded into memory (may already be on disk)
+    //   Key present, null → confirmed no cover art
+    //   Key present, Bitmap → ready to display
     private val _artCache = MutableStateFlow<Map<Long, Bitmap?>>(emptyMap())
     val artCache = _artCache.asStateFlow()
 
     fun loadArtIfNeeded(song: Song) {
+        // Already in memory — nothing to do
         if (_artCache.value.containsKey(song.id)) return
+
         viewModelScope.launch(Dispatchers.IO) {
-            val bitmap = extractAndDownsample(getApplication(), song.trackUri, targetPx = 150)
+            val context: Context = getApplication()
+
+            // 1. Try the disk cache first (instant — no MediaMetadataRetriever needed)
+            if (isCachedOnDisk(context, song.id)) {
+                val bitmap = loadBitmapFromDisk(context, song.id)  // null == sentinel "no art"
+                _artCache.value = _artCache.value + (song.id to bitmap)
+                return@launch
+            }
+
+            // 2. Cache miss — extract from the audio file, then persist to disk
+            val bitmap = extractAndDownsample(context, song.trackUri, targetPx = 150)
+            saveBitmapToDisk(context, song.id, bitmap)
             _artCache.value = _artCache.value + (song.id to bitmap)
         }
     }
@@ -233,7 +301,7 @@ private fun extractAndDownsample(context: Context, uri: Uri, targetPx: Int): Bit
 }
 
 // ==========================================
-// 4. UI — MusicListScreen
+// 5. UI — MusicListScreen
 // ==========================================
 @Composable
 fun MusicListScreen(musicViewModel: MusicViewModel = viewModel()) {
@@ -358,7 +426,7 @@ fun MusicListScreen(musicViewModel: MusicViewModel = viewModel()) {
 }
 
 // ==========================================
-// 5. UI — SongListItem
+// 6. UI — SongListItem
 // ==========================================
 @Composable
 fun SongListItem(song: Song, coverBitmap: Bitmap?) {
@@ -401,7 +469,7 @@ fun SongListItem(song: Song, coverBitmap: Bitmap?) {
 }
 
 // ==========================================
-// 6. UI — Placeholder
+// 7. UI — Placeholder
 // ==========================================
 @Composable
 private fun SongListItemPlaceholder() {
