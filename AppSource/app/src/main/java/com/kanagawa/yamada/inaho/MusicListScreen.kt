@@ -5,8 +5,6 @@ import android.app.Application
 import android.content.ContentUris
 import android.content.Context
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
@@ -14,7 +12,6 @@ import android.os.Bundle
 import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -29,7 +26,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -43,16 +39,7 @@ import androidx.paging.*
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
-import coil3.ImageLoader
-import coil3.asImage
 import coil3.compose.AsyncImage
-import coil3.decode.DataSource
-import coil3.fetch.FetchResult
-import coil3.fetch.Fetcher
-import coil3.fetch.ImageFetchResult
-import coil3.request.ImageRequest
-import coil3.request.Options
-import coil3.request.crossfade
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -67,63 +54,24 @@ data class Song(
     val artist: String,
     val durationMs: Long,
     val trackUri: Uri,
-    // null when MediaStore has no album art for this file (YouTube downloads, etc.)
-    // In that case we fall back to reading embedded tags from trackUri directly.
-    val albumArtUri: Uri?,
     val formattedDuration: String
 )
 
 // ==========================================
-// 2. IMAGE FETCHING
-// ==========================================
-fun buildImageLoader(context: Context): ImageLoader =
-    ImageLoader.Builder(context)
-        .components { add(AudioCoverFetcher.Factory()) }
-        .build()
-
-class AudioCoverFetcher(
-    private val context: Context,
-    private val uri: Uri
-) : Fetcher {
-    override suspend fun fetch(): FetchResult? {
-        val retriever = MediaMetadataRetriever()
-        return try {
-            retriever.setDataSource(context, uri)
-            val bytes = retriever.embeddedPicture ?: return null
-            val options = BitmapFactory.Options().apply { inSampleSize = 2 }
-            val bitmap: Bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options) ?: return null
-
-            ImageFetchResult(
-                image = bitmap.asImage(),
-                isSampled = true,
-                dataSource = DataSource.DISK
-            )
-        } catch (e: Exception) { null } finally { retriever.release() }
-    }
-
-    class Factory : Fetcher.Factory<Uri> {
-        override fun create(data: Uri, options: Options, imageLoader: ImageLoader): Fetcher? {
-            val path = data.toString()
-            if (!path.startsWith("content://media/external/audio/media")) return null
-            return AudioCoverFetcher(options.context, data)
-        }
-    }
-}
-
-// ==========================================
-// 3. PAGING SOURCE
+// 2. PAGING SOURCE (For Performance)
 // ==========================================
 class MusicPagingSource(private val context: Context) : PagingSource<Int, Song>() {
-    private val albumArtBaseUri = Uri.parse("content://media/external/audio/albumart")
     private val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
     } else MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
 
     private val projection = arrayOf(
-        MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE,
-        MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.DURATION,
-        MediaStore.Audio.Media.ALBUM_ID
+        MediaStore.Audio.Media._ID,
+        MediaStore.Audio.Media.TITLE,
+        MediaStore.Audio.Media.ARTIST,
+        MediaStore.Audio.Media.DURATION
     )
+
     private val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DURATION} > 10000"
 
     override fun getRefreshKey(state: PagingState<Int, Song>): Int? =
@@ -156,28 +104,20 @@ class MusicPagingSource(private val context: Context) : PagingSource<Int, Song>(
                 val titleCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
                 val artistCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
                 val durationCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-                val albumIdCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
 
                 while (c.moveToNext()) {
                     val id = c.getLong(idCol)
-                    val albumId = c.getLong(albumIdCol)
                     val dur = c.getLong(durationCol)
                     val title = c.getString(titleCol) ?: "Unknown Title"
+                    val artist = c.getString(artistCol) ?: "Unknown Artist"
                     val trackUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
 
-                    val albumArtUri: Uri? = if (albumId != 0L && !looksLikeDownload(title)) {
-                        ContentUris.withAppendedId(albumArtBaseUri, albumId)
-                    } else null
-
-                    songs.add(Song(id, title, c.getString(artistCol) ?: "Unknown Artist", dur, trackUri, albumArtUri, buildFormattedDuration(dur)))
+                    songs.add(Song(id, title, artist, dur, trackUri, buildFormattedDuration(dur)))
                 }
             }
             LoadResult.Page(songs, if (page == 0) null else page - 1, if (songs.size < pageSize) null else page + 1)
         } catch (e: Exception) { LoadResult.Error(e) }
     }
-
-    private fun looksLikeDownload(title: String): Boolean =
-        title.contains('『') || title.contains('』') || title.contains('【') || title.contains('】') || title.contains('「') || title.contains('」') || title.contains(" - ")
 
     private fun buildFormattedDuration(durationMs: Long): String {
         val totalSeconds = durationMs / 1000
@@ -186,7 +126,7 @@ class MusicPagingSource(private val context: Context) : PagingSource<Int, Song>(
 }
 
 // ==========================================
-// 4. VIEWMODEL
+// 3. VIEWMODEL
 // ==========================================
 class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -197,7 +137,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 }
 
 // ==========================================
-// 5. UI COMPONENTS
+// 4. UI SCREENS
 // ==========================================
 @Composable
 fun MusicListScreen(musicViewModel: MusicViewModel = viewModel()) {
@@ -259,28 +199,41 @@ fun MusicListScreen(musicViewModel: MusicViewModel = viewModel()) {
 @Composable
 fun SongListItem(song: Song) {
     val context = LocalContext.current
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        if (song.albumArtUri != null) {
-            val imageRequest = remember(song.albumArtUri) { ImageRequest.Builder(context).data(song.albumArtUri).size(150, 150).crossfade(true).build() }
-            AsyncImage(model = imageRequest, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(50.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF2C2C2C)))
-        } else {
-            val bitmap by produceState<Bitmap?>(initialValue = null, key1 = song.id) {
-                value = withContext(Dispatchers.IO) {
-                    try {
-                        val mmr = MediaMetadataRetriever().apply { setDataSource(context, song.trackUri) }
-                        mmr.embeddedPicture?.let { bytes -> BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = 2 }) }.also { mmr.release() }
-                    } catch (e: Exception) { null }
-                }
-            }
-            Box(modifier = Modifier.size(50.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF2C2C2C))) {
-                bitmap?.let { Image(bitmap = it.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize()) }
+    // Using your proven extraction method!
+    var coverBytes by remember { mutableStateOf<ByteArray?>(null) }
+
+    LaunchedEffect(song.trackUri) {
+        withContext(Dispatchers.IO) {
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(context, song.trackUri)
+                coverBytes = retriever.embeddedPicture
+            } catch (e: Exception) {
+                // Ignore if corrupt or unreadable
+            } finally {
+                try { retriever.release() } catch (e: Exception) {}
             }
         }
+    }
+
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        AsyncImage(
+            model = coverBytes,
+            contentDescription = "Song Cover",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .size(50.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(Color(0xFF2C2C2C)) // Dark grey placeholder
+        )
+
         Spacer(Modifier.width(16.dp))
+
         Column(Modifier.weight(1f)) {
             Text(song.title, color = Color.White, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(song.artist, color = Color.LightGray, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+
         Spacer(Modifier.width(8.dp))
         Text(song.formattedDuration, color = Color.White, fontSize = 14.sp)
     }

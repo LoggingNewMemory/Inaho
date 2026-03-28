@@ -17,7 +17,7 @@ import com.kanagawa.yamada.inaho.ui.theme.HaloMusicTheme
 
 // --- Application ---
 class InahoApp : Application(), SingletonImageLoader.Factory {
-    override fun newImageLoader(context: Context): ImageLoader = buildImageLoader(context)
+    override fun newImageLoader(context: Context): ImageLoader = ImageLoader.Builder(context).build()
 }
 
 // --- Activity ---
