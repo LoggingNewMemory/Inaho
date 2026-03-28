@@ -310,15 +310,14 @@ fun MusicListScreen(
             .padding(start = 4.dp, end = 4.dp, top = 4.dp) // Master app margin
     ) {
         // ==========================================
-        // Perfectly Balanced Top Bar
+        // Top Bar
         // ==========================================
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp), // Even padding left and right
+                .padding(horizontal = 12.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Text: Removed extra 'start' padding to keep it mathematically aligned
             Text(
                 text = "Inaho",
                 color = Color(0xFFB8355B),
@@ -329,20 +328,31 @@ fun MusicListScreen(
             Spacer(modifier = Modifier.weight(1f))
 
             Row(
-                verticalAlignment = Alignment.CenterVertically
-                // Let IconButtons use their native spacing to look normal
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                IconButton(
-                    onClick = { songs.refresh() },
-                    enabled = hasPermission && songs.loadState.refresh !is LoadState.Loading
-                ) {
-                    Icon(Icons.Default.Refresh, "Refresh", tint = Color.White)
-                }
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "Refresh",
+                    tint = if (hasPermission && songs.loadState.refresh !is LoadState.Loading)
+                        Color.White else Color.White.copy(alpha = 0.38f),
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clickable(
+                            enabled = hasPermission && songs.loadState.refresh !is LoadState.Loading,
+                            onClick = { songs.refresh() }
+                        )
+                )
 
                 Box {
-                    IconButton(onClick = { showSortMenu = true }) {
-                        Icon(Icons.AutoMirrored.Filled.List, "Sort", tint = Color.White)
-                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.List,
+                        contentDescription = "Sort",
+                        tint = Color.White,
+                        modifier = Modifier
+                            .size(30.dp)
+                            .clickable { showSortMenu = true }
+                    )
                     DropdownMenu(
                         expanded = showSortMenu,
                         onDismissRequest = { showSortMenu = false },
@@ -365,14 +375,14 @@ fun MusicListScreen(
                     }
                 }
 
-                // Settings: Offset by 8dp to counter the invisible ripple boundary
-                // and push the actual white gear graphic flush to the edge
-                IconButton(
-                    onClick = onNavigateToSettings,
-                    modifier = Modifier.offset(x = 8.dp)
-                ) {
-                    Icon(Icons.Default.Settings, "Settings", tint = Color.White)
-                }
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "Settings",
+                    tint = Color.White,
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clickable { onNavigateToSettings() }
+                )
             }
         }
 
