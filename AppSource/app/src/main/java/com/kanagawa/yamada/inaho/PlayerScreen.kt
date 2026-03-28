@@ -1,4 +1,4 @@
-package com.kanagawa.yamada.halo.music
+package com.kanagawa.yamada.inaho
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*

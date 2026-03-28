@@ -1,4 +1,4 @@
-package com.kanagawa.yamada.halo.music.ui.theme
+package com.kanagawa.yamada.inaho.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
