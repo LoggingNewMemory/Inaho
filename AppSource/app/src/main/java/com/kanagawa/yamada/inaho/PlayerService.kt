@@ -33,9 +33,15 @@ data class PlayerState(
     val repeatMode: RepeatMode = RepeatMode.OFF
 ) {
     val nextSong: Song?
-        get() = if (currentIndex + 1 < activeQueue.size) activeQueue[currentIndex + 1] else if (repeatMode == RepeatMode.ALL && activeQueue.isNotEmpty()) activeQueue[0] else null
-    val hasPrev: Boolean get() = currentIndex > 0 || repeatMode == RepeatMode.ALL || repeatMode == RepeatMode.ONE
-    val hasNext: Boolean get() = repeatMode == RepeatMode.ALL || repeatMode == RepeatMode.ONE || currentIndex + 1 < activeQueue.size
+        get() = if (currentIndex + 1 < activeQueue.size) activeQueue[currentIndex + 1]
+        else if (repeatMode == RepeatMode.ALL && activeQueue.isNotEmpty()) activeQueue[0]
+        else null
+
+    val hasPrev: Boolean
+        get() = currentIndex > 0 || repeatMode == RepeatMode.ALL || repeatMode == RepeatMode.ONE
+
+    val hasNext: Boolean
+        get() = repeatMode == RepeatMode.ALL || repeatMode == RepeatMode.ONE || currentIndex + 1 < activeQueue.size
 }
 
 // ==========================================
@@ -88,14 +94,14 @@ class PlayerService : Service() {
         val activeQueue = if (isShuffled) {
             val shuffled = queue.shuffled().toMutableList()
             shuffled.remove(song)
-            shuffled.add(0, song) // Ensure selected song remains first
+            shuffled.add(0, song)
             shuffled
         } else {
             queue
         }
         val currentIndex = if (isShuffled) 0 else index
 
-        val newState = _playerState.value.copy(
+        _playerState.value = _playerState.value.copy(
             currentSong = song,
             originalQueue = queue,
             activeQueue = activeQueue,
@@ -104,7 +110,6 @@ class PlayerService : Service() {
             positionMs = 0L,
             durationMs = song.durationMs
         )
-        _playerState.value = newState
         prepareAndPlay(song.trackUri)
     }
 
@@ -148,11 +153,7 @@ class PlayerService : Service() {
 
     fun toggleRepeat() {
         val state = _playerState.value
-        val newMode = when (state.repeatMode) {
-            RepeatMode.OFF -> RepeatMode.ALL
-            RepeatMode.ALL -> RepeatMode.ONE
-            RepeatMode.ONE -> RepeatMode.OFF
-        }
+        val newMode = if (state.repeatMode == RepeatMode.OFF) RepeatMode.ONE else RepeatMode.OFF
         _playerState.value = state.copy(repeatMode = newMode)
     }
 
@@ -160,18 +161,24 @@ class PlayerService : Service() {
         val state = _playerState.value
         if (state.activeQueue.isEmpty()) return
 
-        val nextIndex = if (isAutoCompletion && state.repeatMode == RepeatMode.ONE) {
-            state.currentIndex
-        } else if (state.currentIndex + 1 < state.activeQueue.size) {
-            state.currentIndex + 1
-        } else if (state.repeatMode == RepeatMode.ALL) {
-            0
-        } else {
-            if (isAutoCompletion) {
-                _playerState.value = state.copy(isPlaying = false, positionMs = 0)
-                updateNotification()
+        val nextIndex: Int = when {
+            // RepeatMode.ONE: always replay current song
+            state.repeatMode == RepeatMode.ONE -> state.currentIndex
+
+            // Normal advance: there is a next song
+            state.currentIndex + 1 < state.activeQueue.size -> state.currentIndex + 1
+
+            // RepeatMode.ALL: wrap back to beginning
+            state.repeatMode == RepeatMode.ALL -> 0
+
+            // No repeat, end of queue
+            else -> {
+                if (isAutoCompletion) {
+                    _playerState.value = state.copy(isPlaying = false, positionMs = 0)
+                    updateNotification()
+                }
+                return
             }
-            return
         }
 
         val nextSong = state.activeQueue[nextIndex]
@@ -189,7 +196,7 @@ class PlayerService : Service() {
         val mp = mediaPlayer
         val position = mp?.currentPosition ?: 0
 
-        // If played more than 3 seconds, just restart the current song
+        // If played more than 3 seconds, restart the current song
         if (position > 3000) {
             mp?.seekTo(0)
             _playerState.value = state.copy(positionMs = 0L)
@@ -198,14 +205,14 @@ class PlayerService : Service() {
 
         if (state.activeQueue.isEmpty()) return
 
-        val prevIndex = if (state.currentIndex > 0) {
-            state.currentIndex - 1
-        } else if (state.repeatMode == RepeatMode.ALL) {
-            state.activeQueue.size - 1
-        } else {
-            mp?.seekTo(0)
-            _playerState.value = state.copy(positionMs = 0L)
-            return
+        val prevIndex = when {
+            state.currentIndex > 0 -> state.currentIndex - 1
+            state.repeatMode == RepeatMode.ALL -> state.activeQueue.size - 1
+            else -> {
+                mp?.seekTo(0)
+                _playerState.value = state.copy(positionMs = 0L)
+                return
+            }
         }
 
         val prevSong = state.activeQueue[prevIndex]
@@ -236,11 +243,18 @@ class PlayerService : Service() {
     }
 
     private fun prepareAndPlay(uri: Uri) {
-        mediaPlayer?.apply {
+        // Release and nullify the old player before creating a new one
+        val oldPlayer = mediaPlayer
+        mediaPlayer = null
+        oldPlayer?.apply {
+            setOnCompletionListener(null)
+            setOnPreparedListener(null)
+            setOnErrorListener(null)
             if (isPlaying) stop()
             reset()
             release()
         }
+
         mediaPlayer = MediaPlayer().apply {
             setAudioAttributes(
                 AudioAttributes.Builder()
@@ -334,7 +348,12 @@ class PlayerService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        mediaPlayer?.release()
+        mediaPlayer?.apply {
+            setOnCompletionListener(null)
+            setOnPreparedListener(null)
+            setOnErrorListener(null)
+            release()
+        }
         mediaPlayer = null
     }
 }

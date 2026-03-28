@@ -245,10 +245,9 @@ fun PlayerScreen(
                 modifier = Modifier.size(48.dp)
             ) {
                 Icon(
-                    imageVector = if (repeatMode == RepeatMode.ONE) Icons.Default.RepeatOne
-                    else Icons.Default.Repeat,
+                    imageVector = Icons.Default.Repeat,
                     contentDescription = "Repeat",
-                    tint = if (repeatMode != RepeatMode.OFF) Color(0xFFB8355B) else Color.White,
+                    tint = if (repeatMode == RepeatMode.ONE) Color(0xFFB8355B) else Color.White,
                     modifier = Modifier.size(26.dp)
                 )
             }
