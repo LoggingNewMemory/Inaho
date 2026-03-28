@@ -19,18 +19,23 @@ import kotlinx.coroutines.flow.asStateFlow
 // ==========================================
 // PLAYER STATE
 // ==========================================
+enum class RepeatMode { OFF, ALL, ONE }
+
 data class PlayerState(
     val currentSong: Song? = null,
-    val queue: List<Song> = emptyList(),
+    val originalQueue: List<Song> = emptyList(),
+    val activeQueue: List<Song> = emptyList(),
     val currentIndex: Int = -1,
     val isPlaying: Boolean = false,
     val positionMs: Long = 0L,
-    val durationMs: Long = 0L
+    val durationMs: Long = 0L,
+    val isShuffled: Boolean = false,
+    val repeatMode: RepeatMode = RepeatMode.OFF
 ) {
     val nextSong: Song?
-        get() = if (currentIndex + 1 < queue.size) queue[currentIndex + 1] else null
-    val hasPrev: Boolean get() = currentIndex > 0
-    val hasNext: Boolean get() = currentIndex + 1 < queue.size
+        get() = if (currentIndex + 1 < activeQueue.size) activeQueue[currentIndex + 1] else if (repeatMode == RepeatMode.ALL && activeQueue.isNotEmpty()) activeQueue[0] else null
+    val hasPrev: Boolean get() = currentIndex > 0 || repeatMode == RepeatMode.ALL || repeatMode == RepeatMode.ONE
+    val hasNext: Boolean get() = repeatMode == RepeatMode.ALL || repeatMode == RepeatMode.ONE || currentIndex + 1 < activeQueue.size
 }
 
 // ==========================================
@@ -42,13 +47,11 @@ class PlayerService : Service() {
         private const val CHANNEL_ID = "inaho_player"
         private const val NOTIF_ID = 1
 
-        // Actions for notification buttons
         const val ACTION_PLAY_PAUSE = "com.kanagawa.yamada.inaho.PLAY_PAUSE"
         const val ACTION_NEXT = "com.kanagawa.yamada.inaho.NEXT"
         const val ACTION_PREV = "com.kanagawa.yamada.inaho.PREV"
         const val ACTION_STOP = "com.kanagawa.yamada.inaho.STOP"
 
-        // Singleton state — survives configuration changes
         private val _playerState = MutableStateFlow(PlayerState())
         val playerState = _playerState.asStateFlow()
     }
@@ -70,7 +73,7 @@ class PlayerService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_PLAY_PAUSE -> togglePlayPause()
-            ACTION_NEXT -> skipNext()
+            ACTION_NEXT -> skipNext(isAutoCompletion = false)
             ACTION_PREV -> skipPrev()
             ACTION_STOP -> {
                 stopPlayback()
@@ -80,13 +83,23 @@ class PlayerService : Service() {
         return START_STICKY
     }
 
-    // ---- Public API ----
-
     fun playSong(song: Song, queue: List<Song>, index: Int) {
-        val newState = PlayerState(
+        val isShuffled = _playerState.value.isShuffled
+        val activeQueue = if (isShuffled) {
+            val shuffled = queue.shuffled().toMutableList()
+            shuffled.remove(song)
+            shuffled.add(0, song) // Ensure selected song remains first
+            shuffled
+        } else {
+            queue
+        }
+        val currentIndex = if (isShuffled) 0 else index
+
+        val newState = _playerState.value.copy(
             currentSong = song,
-            queue = queue,
-            currentIndex = index,
+            originalQueue = queue,
+            activeQueue = activeQueue,
+            currentIndex = currentIndex,
             isPlaying = false,
             positionMs = 0L,
             durationMs = song.durationMs
@@ -107,11 +120,61 @@ class PlayerService : Service() {
         updateNotification()
     }
 
-    fun skipNext() {
+    fun toggleShuffle() {
         val state = _playerState.value
-        if (!state.hasNext) return
-        val nextIndex = state.currentIndex + 1
-        val nextSong = state.queue[nextIndex]
+        val newShuffle = !state.isShuffled
+        if (newShuffle) {
+            val current = state.currentSong
+            val shuffled = state.originalQueue.shuffled().toMutableList()
+            if (current != null) {
+                shuffled.remove(current)
+                shuffled.add(0, current)
+            }
+            _playerState.value = state.copy(
+                isShuffled = true,
+                activeQueue = shuffled,
+                currentIndex = 0
+            )
+        } else {
+            val current = state.currentSong
+            val originalIdx = state.originalQueue.indexOf(current).takeIf { it >= 0 } ?: 0
+            _playerState.value = state.copy(
+                isShuffled = false,
+                activeQueue = state.originalQueue,
+                currentIndex = originalIdx
+            )
+        }
+    }
+
+    fun toggleRepeat() {
+        val state = _playerState.value
+        val newMode = when (state.repeatMode) {
+            RepeatMode.OFF -> RepeatMode.ALL
+            RepeatMode.ALL -> RepeatMode.ONE
+            RepeatMode.ONE -> RepeatMode.OFF
+        }
+        _playerState.value = state.copy(repeatMode = newMode)
+    }
+
+    fun skipNext(isAutoCompletion: Boolean = false) {
+        val state = _playerState.value
+        if (state.activeQueue.isEmpty()) return
+
+        val nextIndex = if (isAutoCompletion && state.repeatMode == RepeatMode.ONE) {
+            state.currentIndex
+        } else if (state.currentIndex + 1 < state.activeQueue.size) {
+            state.currentIndex + 1
+        } else if (state.repeatMode == RepeatMode.ALL) {
+            0
+        } else {
+            if (isAutoCompletion) {
+                _playerState.value = state.copy(isPlaying = false, positionMs = 0)
+                updateNotification()
+            }
+            return
+        }
+
+        val nextSong = state.activeQueue[nextIndex]
         _playerState.value = state.copy(
             currentSong = nextSong,
             currentIndex = nextIndex,
@@ -124,15 +187,28 @@ class PlayerService : Service() {
     fun skipPrev() {
         val state = _playerState.value
         val mp = mediaPlayer
-        // If more than 3s in, restart current; else go previous
         val position = mp?.currentPosition ?: 0
-        if (position > 3000 || !state.hasPrev) {
+
+        // If played more than 3 seconds, just restart the current song
+        if (position > 3000) {
             mp?.seekTo(0)
             _playerState.value = state.copy(positionMs = 0L)
             return
         }
-        val prevIndex = state.currentIndex - 1
-        val prevSong = state.queue[prevIndex]
+
+        if (state.activeQueue.isEmpty()) return
+
+        val prevIndex = if (state.currentIndex > 0) {
+            state.currentIndex - 1
+        } else if (state.repeatMode == RepeatMode.ALL) {
+            state.activeQueue.size - 1
+        } else {
+            mp?.seekTo(0)
+            _playerState.value = state.copy(positionMs = 0L)
+            return
+        }
+
+        val prevSong = state.activeQueue[prevIndex]
         _playerState.value = state.copy(
             currentSong = prevSong,
             currentIndex = prevIndex,
@@ -159,8 +235,6 @@ class PlayerService : Service() {
         _playerState.value = PlayerState()
     }
 
-    // ---- Private helpers ----
-
     private fun prepareAndPlay(uri: Uri) {
         mediaPlayer?.apply {
             if (isPlaying) stop()
@@ -186,8 +260,7 @@ class PlayerService : Service() {
                     startForeground(NOTIF_ID, buildNotification())
                 }
                 setOnCompletionListener {
-                    _playerState.value = _playerState.value.copy(isPlaying = false)
-                    if (_playerState.value.hasNext) skipNext() else updateNotification()
+                    skipNext(isAutoCompletion = true)
                 }
                 setOnErrorListener { _, _, _ ->
                     _playerState.value = _playerState.value.copy(isPlaying = false)

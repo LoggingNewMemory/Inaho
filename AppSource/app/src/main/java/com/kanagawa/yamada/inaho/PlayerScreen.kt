@@ -35,30 +35,25 @@ fun PlayerScreen(
     val song = playerState.currentSong
     val coverBitmap: Bitmap? = song?.let { artCache[it.id] }
 
-    // Shuffle & Repeat UI-only toggle state (Now collected from ViewModel)
-    val isShuffled by musicViewModel.isShuffled.collectAsState()
-    val isRepeating by musicViewModel.isRepeating.collectAsState()
+    val isShuffled = playerState.isShuffled
+    val repeatMode = playerState.repeatMode
 
     val durationMs = playerState.durationMs.coerceAtLeast(1L)
 
-    // Scrubbing state
     var isSeeking by remember { mutableStateOf(false) }
     var seekValue by remember { mutableFloatStateOf(0f) }
     var livePositionMs by remember { mutableLongStateOf(0L) }
 
-    // Continuous Sync Loop for Slider while playing - Now observing playerService connection status
     LaunchedEffect(playerState.isPlaying, playerService, playerState.currentSong?.id) {
         if (playerService != null) {
-            // Initial sync (especially for when paused/resumed)
             val currentPos = playerService.getCurrentPosition()
             if (!isSeeking) {
                 livePositionMs = currentPos
                 seekValue = (currentPos.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
             }
 
-            // Sync continuously while playing
             while (playerState.isPlaying) {
-                delay(200) // 200ms delay to make slider updates smooth
+                delay(200)
                 val pos = playerService.getCurrentPosition()
                 if (!isSeeking) {
                     livePositionMs = pos
@@ -75,8 +70,6 @@ fun PlayerScreen(
             .padding(horizontal = 20.dp)
             .navigationBarsPadding()
     ) {
-
-        // ── Top Bar ──────────────────────────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -103,7 +96,6 @@ fun PlayerScreen(
             }
         }
 
-        // ── Album Art ────────────────────────────────────────────
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -131,7 +123,6 @@ fun PlayerScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // ── Song Title & Artist ───────────────────────────────────
         Text(
             text = song?.title ?: "No song selected",
             color = Color.White,
@@ -153,7 +144,6 @@ fun PlayerScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // ── Seek Bar ──────────────────────────────────────────────
         Slider(
             value = seekValue,
             onValueChange = { value ->
@@ -173,7 +163,6 @@ fun PlayerScreen(
             )
         )
 
-        // Timestamps
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
@@ -184,7 +173,6 @@ fun PlayerScreen(
 
         Spacer(modifier = Modifier.weight(1f))
 
-        // ── Controls Row ─────────────────────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -192,9 +180,8 @@ fun PlayerScreen(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Shuffle
             IconButton(
-                onClick = { musicViewModel.toggleShuffle() },
+                onClick = { playerService?.toggleShuffle() },
                 modifier = Modifier.size(48.dp)
             ) {
                 Icon(
@@ -205,7 +192,6 @@ fun PlayerScreen(
                 )
             }
 
-            // Previous
             IconButton(
                 onClick = { playerService?.skipPrev() },
                 enabled = song != null,
@@ -219,7 +205,6 @@ fun PlayerScreen(
                 )
             }
 
-            // Play / Pause
             Box(
                 modifier = Modifier
                     .size(64.dp)
@@ -242,9 +227,8 @@ fun PlayerScreen(
                 }
             }
 
-            // Next
             IconButton(
-                onClick = { playerService?.skipNext() },
+                onClick = { playerService?.skipNext(isAutoCompletion = false) },
                 enabled = playerState.hasNext,
                 modifier = Modifier.size(48.dp)
             ) {
@@ -256,16 +240,15 @@ fun PlayerScreen(
                 )
             }
 
-            // Repeat
             IconButton(
-                onClick = { musicViewModel.toggleRepeat() },
+                onClick = { playerService?.toggleRepeat() },
                 modifier = Modifier.size(48.dp)
             ) {
                 Icon(
-                    imageVector = if (isRepeating) Icons.Default.RepeatOne
+                    imageVector = if (repeatMode == RepeatMode.ONE) Icons.Default.RepeatOne
                     else Icons.Default.Repeat,
                     contentDescription = "Repeat",
-                    tint = if (isRepeating) Color(0xFFB8355B) else Color.White,
+                    tint = if (repeatMode != RepeatMode.OFF) Color(0xFFB8355B) else Color.White,
                     modifier = Modifier.size(26.dp)
                 )
             }

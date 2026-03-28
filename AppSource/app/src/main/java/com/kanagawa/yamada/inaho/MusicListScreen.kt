@@ -213,24 +213,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val _artCache = MutableStateFlow<Map<Long, Bitmap?>>(emptyMap())
     val artCache = _artCache.asStateFlow()
 
-    // Snapshot of loaded songs for building a play queue
     private val _loadedSongs = MutableStateFlow<List<Song>>(emptyList())
     val loadedSongs = _loadedSongs.asStateFlow()
-
-    // --- Hoisted Shuffle & Repeat States ---
-    private val _isShuffled = MutableStateFlow(false)
-    val isShuffled = _isShuffled.asStateFlow()
-
-    private val _isRepeating = MutableStateFlow(false)
-    val isRepeating = _isRepeating.asStateFlow()
-
-    fun toggleShuffle() {
-        _isShuffled.value = !_isShuffled.value
-    }
-
-    fun toggleRepeat() {
-        _isRepeating.value = !_isRepeating.value
-    }
 
     fun recordLoadedSongs(songs: List<Song>) {
         _loadedSongs.value = songs
@@ -344,24 +328,36 @@ fun MusicListScreen(
         )
     }
 
-    val permissionToRequest =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-            Manifest.permission.READ_MEDIA_AUDIO
-        else
-            Manifest.permission.READ_EXTERNAL_STORAGE
-
     val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        hasPermission = isGranted
-        if (isGranted) songs.refresh()
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val storageGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions[Manifest.permission.READ_MEDIA_AUDIO] == true
+        } else {
+            permissions[Manifest.permission.READ_EXTERNAL_STORAGE] == true
+        }
+        hasPermission = storageGranted
+        if (storageGranted) songs.refresh()
     }
 
     LaunchedEffect(Unit) {
-        if (!hasPermission) permissionLauncher.launch(permissionToRequest)
+        val permissions = mutableListOf<String>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.READ_MEDIA_AUDIO)
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+
+        val neededPermissions = permissions.filter {
+            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (neededPermissions.isNotEmpty()) {
+            permissionLauncher.launch(neededPermissions.toTypedArray())
+        }
     }
 
-    // Keep a snapshot of visible songs for queue building
     LaunchedEffect(songs.itemCount) {
         val list = (0 until songs.itemCount).mapNotNull { songs[it] }
         if (list.isNotEmpty()) musicViewModel.recordLoadedSongs(list)
@@ -373,7 +369,6 @@ fun MusicListScreen(
             .background(Color(0xFF120E0E))
             .padding(start = 4.dp, end = 4.dp, top = 4.dp)
     ) {
-        // ---- Top Bar ----
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -446,7 +441,6 @@ fun MusicListScreen(
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        // ---- Content ----
         Box(modifier = Modifier.weight(1f)) {
             when {
                 !hasPermission ->
@@ -518,7 +512,6 @@ fun MusicListScreen(
             }
         }
 
-        // ---- Mini Player Bar (shown when a song is active) ----
         if (playerState.currentSong != null) {
             MiniPlayerBar(
                 playerState = playerState,
@@ -557,7 +550,6 @@ fun MiniPlayerBar(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Thumbnail
             if (coverBitmap != null) {
                 androidx.compose.foundation.Image(
                     bitmap = coverBitmap.asImageBitmap(),
