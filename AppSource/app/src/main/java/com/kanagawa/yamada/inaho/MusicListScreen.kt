@@ -130,7 +130,7 @@ fun MusicListScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF121212)) // Dark background from your image
+            .background(Color(0xFF120E0E))
             .padding(start = 16.dp, end = 16.dp, bottom = 16.dp, top = 4.dp)
     ) {
         // Top Action Bar
@@ -140,7 +140,7 @@ fun MusicListScreen() {
         ) {
             Text(
                 text = "Inaho",
-                color = Color(0xFFD81B60), // The pink/red color from your design
+                color = Color(0xFFB8355B),
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold
             )
