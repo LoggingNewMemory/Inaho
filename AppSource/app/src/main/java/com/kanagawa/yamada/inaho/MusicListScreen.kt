@@ -230,8 +230,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 _artCache.value = _artCache.value + (song.id to bitmap)
                 return@launch
             }
-            // Use 300px for crisp display (was 150 — too low, causing blur)
-            val bitmap = extractAndDownsample(context, song.trackUri, targetPx = 300)
+            val bitmap = extractAndDownsample(context, song.trackUri, targetPx = 800)
             saveBitmapToDisk(context, song.id, bitmap)
             _artCache.value = _artCache.value + (song.id to bitmap)
         }

@@ -8,21 +8,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -40,38 +35,54 @@ fun PlayerScreen(
     val song = playerState.currentSong
     val coverBitmap: Bitmap? = song?.let { artCache[it.id] }
 
-    // Live position ticker — updates every 500ms while playing
-    var livePositionMs by remember { mutableLongStateOf(playerState.positionMs) }
-    LaunchedEffect(playerState.isPlaying, playerState.currentSong) {
-        while (playerState.isPlaying) {
-            livePositionMs = playerService?.getCurrentPosition() ?: livePositionMs
-            delay(500)
-        }
-    }
-    LaunchedEffect(playerState.positionMs) {
-        livePositionMs = playerState.positionMs
-    }
+    // Shuffle & Repeat UI-only toggle state
+    var isShuffled by remember { mutableStateOf(false) }
+    var isRepeating by remember { mutableStateOf(false) }
 
     val durationMs = playerState.durationMs.coerceAtLeast(1L)
-    val sliderProgress = (livePositionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+
+    // Scrubbing state
+    var isSeeking by remember { mutableStateOf(false) }
+    var seekValue by remember { mutableFloatStateOf(0f) }
+    var livePositionMs by remember { mutableLongStateOf(0L) }
+
+    // Continuous Sync Loop for Slider while playing - Now observing playerService connection status
+    LaunchedEffect(playerState.isPlaying, playerService, playerState.currentSong?.id) {
+        if (playerService != null) {
+            // Initial sync (especially for when paused/resumed)
+            val currentPos = playerService.getCurrentPosition()
+            if (!isSeeking) {
+                livePositionMs = currentPos
+                seekValue = (currentPos.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+            }
+
+            // Sync continuously while playing
+            while (playerState.isPlaying) {
+                delay(200) // 200ms delay to make slider updates smooth
+                val pos = playerService.getCurrentPosition()
+                if (!isSeeking) {
+                    livePositionMs = pos
+                    seekValue = (pos.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+                }
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(Color(0xFF1A0A0E), Color(0xFF120E0E))
-                )
-            )
-            .padding(horizontal = 24.dp)
+            .background(Color(0xFF0D0A0A))
+            .padding(horizontal = 20.dp)
             .navigationBarsPadding()
     ) {
-        // ---- Top Bar ----
+
+        // ── Top Bar ──────────────────────────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 8.dp, bottom = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(top = 12.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
             IconButton(
                 onClick = onNavigateBack,
@@ -83,22 +94,22 @@ fun PlayerScreen(
                     tint = Color(0xFFB8355B)
                 )
             }
-            Text(
-                text = "Now Playing",
-                color = Color(0xFFB8355B),
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.offset(x = (-8).dp)
-            )
+            IconButton(onClick = { /* More options placeholder */ }) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "More",
+                    tint = Color(0xFFB8355B)
+                )
+            }
         }
 
-        // ---- Album Art ----
+        // ── Album Art ────────────────────────────────────────────
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .clip(RoundedCornerShape(20.dp))
-                .background(Color(0xFF2C2C2C)),
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFF1E1414)),
             contentAlignment = Alignment.Center
         ) {
             if (coverBitmap != null) {
@@ -109,53 +120,40 @@ fun PlayerScreen(
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
-                // Tasteful empty state instead of "[SONG COVER]" text
-                Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF3D2020)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("♪", color = Color(0xFFB8355B), fontSize = 36.sp)
-                }
+                Icon(
+                    imageVector = Icons.Default.MusicNote,
+                    contentDescription = null,
+                    tint = Color(0xFF3D2020),
+                    modifier = Modifier.size(80.dp)
+                )
             }
         }
 
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
-        // ---- Song Title & Artist ----
+        // ── Song Title & Artist ───────────────────────────────────
         Text(
             text = song?.title ?: "No song selected",
             color = Color.White,
-            fontSize = 22.sp,
+            fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Start,
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = song?.artist ?: "",
-            color = Color(0xFFB8B8B8),
-            fontSize = 15.sp,
+            color = Color(0xFFAAAAAA),
+            fontSize = 14.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
-        // ---- Seek Bar ----
-        var isSeeking by remember { mutableStateOf(false) }
-        var seekValue by remember { mutableFloatStateOf(sliderProgress) }
-
-        // Keep seekValue in sync when not scrubbing
-        LaunchedEffect(sliderProgress) {
-            if (!isSeeking) seekValue = sliderProgress
-        }
-
+        // ── Seek Bar ──────────────────────────────────────────────
         Slider(
             value = seekValue,
             onValueChange = { value ->
@@ -164,115 +162,111 @@ fun PlayerScreen(
                 livePositionMs = (value * durationMs).toLong()
             },
             onValueChangeFinished = {
-                playerService?.seekTo((seekValue * durationMs).toLong())
                 isSeeking = false
+                playerService?.seekTo((seekValue * durationMs).toLong())
             },
             modifier = Modifier.fillMaxWidth(),
             colors = SliderDefaults.colors(
-                thumbColor = Color(0xFFB8355B),
-                activeTrackColor = Color(0xFFB8355B),
-                inactiveTrackColor = Color(0xFF3D2020)
+                thumbColor = Color.White,
+                activeTrackColor = Color.White,
+                inactiveTrackColor = Color(0xFF3D3030)
             )
         )
 
-        // Time labels
+        // Timestamps
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(formatMs(livePositionMs), color = Color(0xFFB8B8B8), fontSize = 12.sp)
-            Text(formatMs(durationMs), color = Color(0xFFB8B8B8), fontSize = 12.sp)
+            Text(formatMs(livePositionMs), color = Color(0xFFAAAAAA), fontSize = 12.sp)
+            Text(formatMs(durationMs), color = Color(0xFFAAAAAA), fontSize = 12.sp)
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.weight(1f))
 
-        // ---- Playback Controls ----
+        // ── Controls Row ─────────────────────────────────────────
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 40.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Shuffle
+            IconButton(
+                onClick = { isShuffled = !isShuffled },
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Shuffle,
+                    contentDescription = "Shuffle",
+                    tint = if (isShuffled) Color(0xFFB8355B) else Color.White,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+
             // Previous
             IconButton(
                 onClick = { playerService?.skipPrev() },
-                enabled = playerState.currentSong != null,
-                modifier = Modifier.size(56.dp)
+                enabled = song != null,
+                modifier = Modifier.size(48.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.SkipPrevious,
                     contentDescription = "Previous",
-                    tint = if (playerState.currentSong != null) Color.White else Color.White.copy(alpha = 0.3f),
-                    modifier = Modifier.size(36.dp)
+                    tint = if (song != null) Color.White else Color.White.copy(alpha = 0.3f),
+                    modifier = Modifier.size(34.dp)
                 )
             }
 
-            // Play / Pause — large center button
-            IconButton(
-                onClick = { playerService?.togglePlayPause() },
-                enabled = playerState.currentSong != null,
+            // Play / Pause
+            Box(
                 modifier = Modifier
-                    .size(72.dp)
+                    .size(64.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFFB8355B))
+                    .background(Color.White),
+                contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = if (playerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = if (playerState.isPlaying) "Pause" else "Play",
-                    tint = Color.White,
-                    modifier = Modifier.size(40.dp)
-                )
+                IconButton(
+                    onClick = { playerService?.togglePlayPause() },
+                    enabled = song != null,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Icon(
+                        imageVector = if (playerState.isPlaying) Icons.Default.Pause
+                        else Icons.Default.PlayArrow,
+                        contentDescription = if (playerState.isPlaying) "Pause" else "Play",
+                        tint = Color(0xFF0D0A0A),
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
             }
 
             // Next
             IconButton(
                 onClick = { playerService?.skipNext() },
                 enabled = playerState.hasNext,
-                modifier = Modifier.size(56.dp)
+                modifier = Modifier.size(48.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.SkipNext,
                     contentDescription = "Next",
                     tint = if (playerState.hasNext) Color.White else Color.White.copy(alpha = 0.3f),
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(34.dp)
                 )
             }
-        }
 
-        // ---- Up Next — pushed to bottom with Spacer, never overlaps controls ----
-        Spacer(modifier = Modifier.weight(1f))
-
-        playerState.nextSong?.let { next ->
-            HorizontalDivider(color = Color(0xFF2C2C2C), thickness = 1.dp)
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // Repeat
+            IconButton(
+                onClick = { isRepeating = !isRepeating },
+                modifier = Modifier.size(48.dp)
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Up Next", color = Color(0xFFB8B8B8), fontSize = 12.sp)
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        next.title,
-                        color = Color.White,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        next.artist,
-                        color = Color(0xFFB8B8B8),
-                        fontSize = 13.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                Text(
-                    next.formattedDuration,
-                    color = Color(0xFFB8B8B8),
-                    fontSize = 13.sp
+                Icon(
+                    imageVector = if (isRepeating) Icons.Default.RepeatOne
+                    else Icons.Default.Repeat,
+                    contentDescription = "Repeat",
+                    tint = if (isRepeating) Color(0xFFB8355B) else Color.White,
+                    modifier = Modifier.size(26.dp)
                 )
             }
         }
