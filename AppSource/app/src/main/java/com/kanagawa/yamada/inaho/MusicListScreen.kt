@@ -2,18 +2,22 @@ package com.kanagawa.yamada.inaho
 
 import android.Manifest
 import android.app.Application
-import android.content.ContentUris
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.IBinder
 import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.content.ContentUris
+import android.media.MediaMetadataRetriever
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -21,14 +25,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -98,22 +106,20 @@ class MusicPagingSource(
             val offset = page * pageSize
             val songs = ArrayList<Song>(pageSize)
 
-            // Dynamic Sort based on Settings
-            val sortOrder = when(settings.sortOption) {
+            val sortOrder = when (settings.sortOption) {
                 SortOption.TITLE_ASC -> "${MediaStore.Audio.Media.TITLE} ASC"
                 SortOption.TITLE_DESC -> "${MediaStore.Audio.Media.TITLE} DESC"
                 SortOption.ARTIST_ASC -> "${MediaStore.Audio.Media.ARTIST} ASC"
                 SortOption.DATE_ADDED_DESC -> "${MediaStore.Audio.Media.DATE_ADDED} DESC"
             }
 
-            // Dynamic Selection based on Folder Setting
-            var selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DURATION} > 10000"
+            var selection =
+                "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DURATION} > 10000"
             if (settings.onlyMusicFolder) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    selection += " AND ${MediaStore.Audio.Media.RELATIVE_PATH} LIKE '%Music/%'"
-                } else {
-                    selection += " AND ${MediaStore.Audio.Media.DATA} LIKE '%/Music/%'"
-                }
+                selection += if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                    " AND ${MediaStore.Audio.Media.RELATIVE_PATH} LIKE '%Music/%'"
+                else
+                    " AND ${MediaStore.Audio.Media.DATA} LIKE '%/Music/%'"
             }
 
             val cursor = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -207,6 +213,14 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val _artCache = MutableStateFlow<Map<Long, Bitmap?>>(emptyMap())
     val artCache = _artCache.asStateFlow()
 
+    // Snapshot of loaded songs for building a play queue
+    private val _loadedSongs = MutableStateFlow<List<Song>>(emptyList())
+    val loadedSongs = _loadedSongs.asStateFlow()
+
+    fun recordLoadedSongs(songs: List<Song>) {
+        _loadedSongs.value = songs
+    }
+
     fun loadArtIfNeeded(song: Song) {
         if (_artCache.value.containsKey(song.id)) return
         viewModelScope.launch(Dispatchers.IO) {
@@ -216,7 +230,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 _artCache.value = _artCache.value + (song.id to bitmap)
                 return@launch
             }
-            val bitmap = extractAndDownsample(context, song.trackUri, targetPx = 150)
+            // Use 300px for crisp display (was 150 — too low, causing blur)
+            val bitmap = extractAndDownsample(context, song.trackUri, targetPx = 300)
             saveBitmapToDisk(context, song.id, bitmap)
             _artCache.value = _artCache.value + (song.id to bitmap)
         }
@@ -242,7 +257,8 @@ private fun extractAndDownsample(context: Context, uri: Uri, targetPx: Int): Bit
             inSampleSize = sampleSize
             inPreferredConfig = Bitmap.Config.ARGB_8888
         }
-        val sampled = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, decodeOpts) ?: return null
+        val sampled = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, decodeOpts)
+            ?: return null
         val side = minOf(sampled.width, sampled.height)
         val xOffset = (sampled.width - side) / 2
         val yOffset = (sampled.height - side) / 2
@@ -260,17 +276,45 @@ private fun extractAndDownsample(context: Context, uri: Uri, targetPx: Int): Bit
 }
 
 // ==========================================
-// 5. UI — MusicListScreen
+// 5. SERVICE CONNECTION HELPER
+// ==========================================
+@Composable
+fun rememberPlayerService(): PlayerService? {
+    val context = LocalContext.current
+    var playerService by remember { mutableStateOf<PlayerService?>(null) }
+
+    DisposableEffect(Unit) {
+        val connection = object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+                playerService = (binder as PlayerService.PlayerBinder).getService()
+            }
+            override fun onServiceDisconnected(name: ComponentName) {
+                playerService = null
+            }
+        }
+        val intent = Intent(context, PlayerService::class.java)
+        context.startService(intent)
+        context.bindService(intent, connection, Context.BIND_AUTO_CREATE)
+        onDispose { context.unbindService(connection) }
+    }
+    return playerService
+}
+
+// ==========================================
+// 6. UI — MusicListScreen
 // ==========================================
 @Composable
 fun MusicListScreen(
     musicViewModel: MusicViewModel = viewModel(),
-    onNavigateToSettings: () -> Unit
+    onNavigateToSettings: () -> Unit,
+    onNavigateToPlayer: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val songs: LazyPagingItems<Song> = musicViewModel.songs.collectAsLazyPagingItems()
     val artCache by musicViewModel.artCache.collectAsState()
     val settings by musicViewModel.settingsManager.settingsFlow.collectAsState()
+    val playerState by PlayerService.playerState.collectAsState()
+    val playerService = rememberPlayerService()
 
     var showSortMenu by remember { mutableStateOf(false) }
 
@@ -303,15 +347,19 @@ fun MusicListScreen(
         if (!hasPermission) permissionLauncher.launch(permissionToRequest)
     }
 
+    // Keep a snapshot of visible songs for queue building
+    LaunchedEffect(songs.itemCount) {
+        val list = (0 until songs.itemCount).mapNotNull { songs[it] }
+        if (list.isNotEmpty()) musicViewModel.recordLoadedSongs(list)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF120E0E))
-            .padding(start = 4.dp, end = 4.dp, top = 4.dp) // Master app margin
+            .padding(start = 4.dp, end = 4.dp, top = 4.dp)
     ) {
-        // ==========================================
-        // Top Bar
-        // ==========================================
+        // ---- Top Bar ----
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -324,9 +372,7 @@ fun MusicListScreen(
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold
             )
-
             Spacer(modifier = Modifier.weight(1f))
-
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(20.dp)
@@ -343,7 +389,6 @@ fun MusicListScreen(
                             onClick = { songs.refresh() }
                         )
                 )
-
                 Box {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.List,
@@ -374,7 +419,6 @@ fun MusicListScreen(
                         }
                     }
                 }
-
                 Icon(
                     imageVector = Icons.Default.Settings,
                     contentDescription = "Settings",
@@ -388,80 +432,227 @@ fun MusicListScreen(
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        when {
-            !hasPermission ->
-                Text("Storage permission is required to find your music.", color = Color.White, modifier = Modifier.padding(16.dp))
+        // ---- Content ----
+        Box(modifier = Modifier.weight(1f)) {
+            when {
+                !hasPermission ->
+                    Text(
+                        "Storage permission is required to find your music.",
+                        color = Color.White,
+                        modifier = Modifier.padding(16.dp)
+                    )
 
-            songs.loadState.refresh is LoadState.Loading ->
-                Box(Modifier.fillMaxSize(), Alignment.Center) {
-                    CircularProgressIndicator(color = Color(0xFFB8355B))
-                }
-
-            songs.loadState.refresh is LoadState.Error ->
-                Box(Modifier.fillMaxSize(), Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Failed to load music.", color = Color.White)
-                        Button(onClick = { songs.refresh() }) { Text("Retry") }
+                songs.loadState.refresh is LoadState.Loading ->
+                    Box(Modifier.fillMaxSize(), Alignment.Center) {
+                        CircularProgressIndicator(color = Color(0xFFB8355B))
                     }
-                }
 
-            songs.itemCount == 0 ->
-                Box(Modifier.fillMaxSize(), Alignment.Center) {
-                    Text("No music files found.", color = Color.LightGray)
-                }
-
-            else -> LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                contentPadding = PaddingValues(bottom = 8.dp, start = 8.dp, end = 8.dp) // Keeps list items aligned with header text
-            ) {
-                items(
-                    count = songs.itemCount,
-                    key = songs.itemKey { it.id },
-                    contentType = { "song" }
-                ) { index ->
-                    val song = songs[index]
-                    if (song != null) {
-                        LaunchedEffect(song.id) { musicViewModel.loadArtIfNeeded(song) }
-                        SongListItem(song = song, coverBitmap = artCache[song.id])
-                    } else {
-                        SongListItemPlaceholder()
+                songs.loadState.refresh is LoadState.Error ->
+                    Box(Modifier.fillMaxSize(), Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Failed to load music.", color = Color.White)
+                            Button(onClick = { songs.refresh() }) { Text("Retry") }
+                        }
                     }
-                }
 
-                if (songs.loadState.append is LoadState.Loading) {
-                    item {
-                        Box(Modifier.fillMaxWidth().padding(8.dp), Alignment.Center) {
-                            CircularProgressIndicator(color = Color(0xFFB8355B))
+                songs.itemCount == 0 ->
+                    Box(Modifier.fillMaxSize(), Alignment.Center) {
+                        Text("No music files found.", color = Color.LightGray)
+                    }
+
+                else -> LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(
+                        bottom = if (playerState.currentSong != null) 88.dp else 8.dp,
+                        start = 8.dp, end = 8.dp
+                    )
+                ) {
+                    items(
+                        count = songs.itemCount,
+                        key = songs.itemKey { it.id },
+                        contentType = { "song" }
+                    ) { index ->
+                        val song = songs[index]
+                        if (song != null) {
+                            LaunchedEffect(song.id) { musicViewModel.loadArtIfNeeded(song) }
+                            SongListItem(
+                                song = song,
+                                coverBitmap = artCache[song.id],
+                                isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
+                                onClick = {
+                                    val queue = (0 until songs.itemCount).mapNotNull { songs[it] }
+                                    playerService?.playSong(song, queue, index)
+                                }
+                            )
+                        } else {
+                            SongListItemPlaceholder()
+                        }
+                    }
+
+                    if (songs.loadState.append is LoadState.Loading) {
+                        item {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp), Alignment.Center
+                            ) {
+                                CircularProgressIndicator(color = Color(0xFFB8355B))
+                            }
                         }
                     }
                 }
+            }
+        }
+
+        // ---- Mini Player Bar (shown when a song is active) ----
+        if (playerState.currentSong != null) {
+            MiniPlayerBar(
+                playerState = playerState,
+                coverBitmap = playerState.currentSong?.let { artCache[it.id] },
+                onPlayPause = { playerService?.togglePlayPause() },
+                onNext = { playerService?.skipNext() },
+                onExpand = onNavigateToPlayer
+            )
+        }
+    }
+}
+
+// ==========================================
+// 7. UI — MiniPlayerBar
+// ==========================================
+@Composable
+fun MiniPlayerBar(
+    playerState: PlayerState,
+    coverBitmap: Bitmap?,
+    onPlayPause: () -> Unit,
+    onNext: () -> Unit,
+    onExpand: () -> Unit
+) {
+    val song = playerState.currentSong ?: return
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onExpand() },
+        color = Color(0xFF1E1414),
+        tonalElevation = 4.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Thumbnail
+            if (coverBitmap != null) {
+                androidx.compose.foundation.Image(
+                    bitmap = coverBitmap.asImageBitmap(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF2C2C2C))
+                )
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(Modifier.weight(1f)) {
+                Text(
+                    song.title,
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    song.artist,
+                    color = Color.LightGray,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            IconButton(onClick = onPlayPause) {
+                Icon(
+                    imageVector = if (playerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = if (playerState.isPlaying) "Pause" else "Play",
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+            IconButton(onClick = onNext, enabled = playerState.hasNext) {
+                Icon(
+                    imageVector = Icons.Default.SkipNext,
+                    contentDescription = "Next",
+                    tint = if (playerState.hasNext) Color.White else Color.White.copy(alpha = 0.3f),
+                    modifier = Modifier.size(28.dp)
+                )
             }
         }
     }
 }
 
 // ==========================================
-// 6. UI — SongListItem
+// 8. UI — SongListItem
 // ==========================================
 @Composable
-fun SongListItem(song: Song, coverBitmap: Bitmap?) {
+fun SongListItem(
+    song: Song,
+    coverBitmap: Bitmap?,
+    isPlaying: Boolean = false,
+    onClick: () -> Unit
+) {
     val context = LocalContext.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { /* TODO: Play */ },
+            .clickable(onClick = onClick),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        AsyncImage(
-            model = ImageRequest.Builder(context).data(coverBitmap).build(),
-            contentDescription = "Song Cover",
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.size(50.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF2C2C2C))
-        )
+        if (coverBitmap != null) {
+            androidx.compose.foundation.Image(
+                bitmap = coverBitmap.asImageBitmap(),
+                contentDescription = "Song Cover",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(50.dp)
+                    .clip(RoundedCornerShape(4.dp))
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(50.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color(0xFF2C2C2C))
+            )
+        }
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
-            Text(song.title, color = Color.White, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(song.artist, color = Color.LightGray, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                song.title,
+                color = if (isPlaying) Color(0xFFB8355B) else Color.White,
+                fontSize = 18.sp,
+                fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                song.artist,
+                color = Color.LightGray,
+                fontSize = 14.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
         Spacer(Modifier.width(8.dp))
         Text(song.formattedDuration, color = Color.White, fontSize = 14.sp)
@@ -469,17 +660,34 @@ fun SongListItem(song: Song, coverBitmap: Bitmap?) {
 }
 
 // ==========================================
-// 7. UI — Placeholder
+// 9. UI — Placeholder
 // ==========================================
 @Composable
 private fun SongListItemPlaceholder() {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(50.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF2C2C2C)))
+        Box(
+            Modifier
+                .size(50.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(Color(0xFF2C2C2C))
+        )
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
-            Box(Modifier.fillMaxWidth(0.6f).height(16.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF2C2C2C)))
+            Box(
+                Modifier
+                    .fillMaxWidth(0.6f)
+                    .height(16.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color(0xFF2C2C2C))
+            )
             Spacer(Modifier.height(6.dp))
-            Box(Modifier.fillMaxWidth(0.4f).height(12.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF2C2C2C)))
+            Box(
+                Modifier
+                    .fillMaxWidth(0.4f)
+                    .height(12.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color(0xFF2C2C2C))
+            )
         }
     }
 }

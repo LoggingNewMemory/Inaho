@@ -24,9 +24,9 @@ class InahoApp : Application(), SingletonImageLoader.Factory {
     override fun newImageLoader(context: Context): ImageLoader = ImageLoader.Builder(context).build()
 }
 
-// --- Screen Enum for simple Navigation ---
+// --- Screen Enum ---
 enum class AppScreen {
-    LIST, SETTINGS
+    LIST, SETTINGS, PLAYER
 }
 
 // --- Activity ---
@@ -46,12 +46,19 @@ class MainActivity : ComponentActivity() {
                                 AppScreen.LIST -> {
                                     MusicListScreen(
                                         musicViewModel = musicViewModel,
-                                        onNavigateToSettings = { currentScreen = AppScreen.SETTINGS }
+                                        onNavigateToSettings = { currentScreen = AppScreen.SETTINGS },
+                                        onNavigateToPlayer = { currentScreen = AppScreen.PLAYER }
                                     )
                                 }
                                 AppScreen.SETTINGS -> {
                                     SettingsScreen(
                                         settingsManager = musicViewModel.settingsManager,
+                                        onNavigateBack = { currentScreen = AppScreen.LIST }
+                                    )
+                                }
+                                AppScreen.PLAYER -> {
+                                    PlayerScreen(
+                                        musicViewModel = musicViewModel,
                                         onNavigateBack = { currentScreen = AppScreen.LIST }
                                     )
                                 }
