@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Halo Music"
+rootProject.name = "Inaho"
 include(":app")
