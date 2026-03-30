@@ -1,8 +1,10 @@
 package com.kanagawa.yamada.inaho
 
+import android.content.BroadcastReceiver
 import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -17,6 +19,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -86,13 +89,28 @@ fun PlayerScreen(
     var sleepTimerRemainingMs by remember { mutableLongStateOf(-1L) }
     var currentSpeedLabel by remember { mutableStateOf("1.0×") }
 
-    // Volume control
+    // Volume control synced with hardware keys
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat() }
     var volumeValue by remember {
         mutableFloatStateOf(
             audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume
         )
+    }
+
+    DisposableEffect(context, audioManager) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == "android.media.VOLUME_CHANGED_ACTION") {
+                    val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()
+                    volumeValue = currentVolume / maxVolume
+                }
+            }
+        }
+        context.registerReceiver(receiver, IntentFilter("android.media.VOLUME_CHANGED_ACTION"))
+        onDispose {
+            context.unregisterReceiver(receiver)
+        }
     }
 
     val bgColor = if (settings.amoledBlack) Color.Black else Color(0xFF0D0A0A)
@@ -253,7 +271,7 @@ fun PlayerScreen(
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    modifier = Modifier.basicMarquee() // Title now slides automatically
                 )
                 Spacer(modifier = Modifier.height(3.dp))
                 Text(
@@ -616,15 +634,15 @@ fun QueuePanel(
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            qSong.title,
+                            text = qSong.title,
                             color = if (isCurrentSong) Color(0xFFB8355B) else Color.White,
                             fontSize = 14.sp,
                             fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Normal,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            modifier = Modifier.basicMarquee() // Slide effect added here too
                         )
                         Text(
-                            qSong.artist,
+                            text = qSong.artist,
                             color = Color(0xFF888888),
                             fontSize = 12.sp,
                             maxLines = 1,
@@ -640,7 +658,7 @@ fun QueuePanel(
                         )
                     } else {
                         Text(
-                            qSong.formattedDuration,
+                            text = qSong.formattedDuration,
                             color = Color(0xFF666666),
                             fontSize = 12.sp
                         )

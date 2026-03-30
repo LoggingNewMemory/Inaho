@@ -17,6 +17,7 @@ import android.content.ContentUris
 import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -563,8 +564,6 @@ fun MusicListScreen(
                                     song = song,
                                     coverBitmap = artCache[song.id],
                                     isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
-                                    isFavorite = favorites.contains(song.id),
-                                    onFavoriteToggle = { musicViewModel.favoritesManager.toggle(song.id) },
                                     onClick = {
                                         playerService?.playSong(song, filteredSongs, index)
                                         onNavigateToPlayer()
@@ -595,8 +594,6 @@ fun MusicListScreen(
                                 song = song,
                                 coverBitmap = artCache[song.id],
                                 isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
-                                isFavorite = favorites.contains(song.id),
-                                onFavoriteToggle = { musicViewModel.favoritesManager.toggle(song.id) },
                                 onClick = {
                                     val queue = (0 until songs.itemCount).mapNotNull { songs[it] }
                                     playerService?.playSong(song, queue, index)
@@ -701,15 +698,15 @@ fun MiniPlayerBar(
 
                 Column(Modifier.weight(1f)) {
                     Text(
-                        song.title,
+                        text = song.title,
                         color = Color.White,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        modifier = Modifier.basicMarquee() // Title now slides
                     )
                     Text(
-                        song.artist,
+                        text = song.artist,
                         color = Color.LightGray,
                         fontSize = 12.sp,
                         maxLines = 1,
@@ -746,8 +743,6 @@ fun SongListItem(
     song: Song,
     coverBitmap: Bitmap?,
     isPlaying: Boolean = false,
-    isFavorite: Boolean = false,
-    onFavoriteToggle: () -> Unit = {},
     onClick: () -> Unit
 ) {
     Row(
@@ -776,15 +771,15 @@ fun SongListItem(
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(
-                song.title,
+                text = song.title,
                 color = if (isPlaying) Color(0xFFB8355B) else Color.White,
                 fontSize = 16.sp,
                 fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Normal,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                modifier = Modifier.basicMarquee() // Title now slides
             )
             Text(
-                song.artist,
+                text = song.artist,
                 color = Color.LightGray,
                 fontSize = 13.sp,
                 maxLines = 1,
@@ -792,16 +787,6 @@ fun SongListItem(
             )
         }
         Spacer(Modifier.width(4.dp))
-        Text(song.formattedDuration, color = Color(0xFF888888), fontSize = 13.sp)
-        Spacer(Modifier.width(4.dp))
-        // Favorite heart
-        Icon(
-            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-            contentDescription = "Favorite",
-            tint = if (isFavorite) Color(0xFFB8355B) else Color(0xFF444444),
-            modifier = Modifier
-                .size(20.dp)
-                .clickable(onClick = onFavoriteToggle)
-        )
+        Text(text = song.formattedDuration, color = Color(0xFF888888), fontSize = 13.sp)
     }
 }
