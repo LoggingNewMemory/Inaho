@@ -1,15 +1,12 @@
 package com.kanagawa.yamada.inaho
 
 import android.Manifest
-import android.app.Application
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
@@ -17,7 +14,8 @@ import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.content.ContentUris
-import android.media.MediaMetadataRetriever
+import android.net.Uri
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -44,25 +42,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.paging.*
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
-import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import java.io.File
-import java.io.FileOutputStream
 
 // ==========================================
 // 1. MODEL
@@ -173,155 +157,7 @@ class MusicPagingSource(
 }
 
 // ==========================================
-// 3. DISK CACHE HELPERS
-// ==========================================
-private fun artCacheFile(context: Context, songId: Long): File {
-    val dir = File(context.cacheDir, "art").also { it.mkdirs() }
-    return File(dir, "$songId.png")
-}
-
-// A separate sentinel file marks that we've confirmed a song has NO embedded art.
-// This prevents re-extracting on every launch for art-less songs.
-private fun artAbsentFile(context: Context, songId: Long): File {
-    val dir = File(context.cacheDir, "art").also { it.mkdirs() }
-    return File(dir, "${songId}.noart")
-}
-
-private fun loadBitmapFromDisk(context: Context, songId: Long): Bitmap? {
-    val file = artCacheFile(context, songId)
-    if (!file.exists()) return null
-    return try { BitmapFactory.decodeFile(file.absolutePath) } catch (e: Exception) { null }
-}
-
-private fun saveBitmapToDisk(context: Context, songId: Long, bitmap: Bitmap?) {
-    if (bitmap == null) {
-        // Write a sentinel so we know the song genuinely has no art (don't re-extract next time)
-        try { artAbsentFile(context, songId).createNewFile() } catch (_: Exception) {}
-        return
-    }
-    val file = artCacheFile(context, songId)
-    try {
-        FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-    } catch (_: Exception) { }
-}
-
-/**
- * Returns true only when we already have a definitive answer for this song:
- * either a bitmap is saved on disk, or we've confirmed the song has no art.
- */
-private fun isArtResolved(context: Context, songId: Long): Boolean =
-    artCacheFile(context, songId).exists() || artAbsentFile(context, songId).exists()
-
-// ==========================================
-// 4. VIEWMODEL
-// ==========================================
-class MusicViewModel(application: Application) : AndroidViewModel(application) {
-
-    val settingsManager = SettingsManager(application)
-
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val songs = settingsManager.settingsFlow.flatMapLatest { settings ->
-        Pager(
-            config = PagingConfig(pageSize = 40, prefetchDistance = 20, enablePlaceholders = false),
-            pagingSourceFactory = { MusicPagingSource(application.applicationContext, settings) }
-        ).flow
-    }.cachedIn(viewModelScope)
-
-    private val _artCache = MutableStateFlow<Map<Long, Bitmap?>>(emptyMap())
-    val artCache = _artCache.asStateFlow()
-
-    private val _loadedSongs = MutableStateFlow<List<Song>>(emptyList())
-    val loadedSongs = _loadedSongs.asStateFlow()
-
-    // FIX: A mutex to serialize all writes to _artCache, preventing the
-    // concurrent read-modify-write race that caused covers to disappear
-    // when rapidly skipping tracks.
-    private val artCacheMutex = Mutex()
-
-    // FIX: Tracks in-flight loads so we never launch two coroutines for the
-    // same song ID simultaneously (another source of the rapid-skip bug).
-    private val inFlightIds = mutableSetOf<Long>()
-
-    fun recordLoadedSongs(songs: List<Song>) {
-        _loadedSongs.value = songs
-    }
-
-    fun loadArtIfNeeded(song: Song) {
-        // Fast-path: already in memory cache — nothing to do.
-        if (_artCache.value.containsKey(song.id)) return
-
-        viewModelScope.launch(Dispatchers.IO) {
-            // Double-checked locking under the mutex to prevent duplicate launches.
-            artCacheMutex.withLock {
-                if (_artCache.value.containsKey(song.id)) return@launch
-                if (inFlightIds.contains(song.id)) return@launch
-                inFlightIds.add(song.id)
-            }
-
-            val context: Context = getApplication()
-            try {
-                val bitmap: Bitmap? = if (isArtResolved(context, song.id)) {
-                    // Disk hit: load the bitmap (or null for art-absent songs).
-                    loadBitmapFromDisk(context, song.id)
-                } else {
-                    // Cache miss: extract from the audio file and persist.
-                    val extracted = extractAndDownsample(context, song.trackUri, targetPx = 800)
-                    saveBitmapToDisk(context, song.id, extracted)
-                    extracted
-                }
-
-                // FIX: Atomic update — read the latest map inside the lock so no
-                // concurrent write from another song's coroutine can be lost.
-                artCacheMutex.withLock {
-                    _artCache.value = _artCache.value + (song.id to bitmap)
-                    inFlightIds.remove(song.id)
-                }
-            } catch (e: Exception) {
-                artCacheMutex.withLock { inFlightIds.remove(song.id) }
-            }
-        }
-    }
-}
-
-private fun extractAndDownsample(context: Context, uri: Uri, targetPx: Int): Bitmap? {
-    val rawBytes: ByteArray = try {
-        val retriever = MediaMetadataRetriever()
-        retriever.setDataSource(context, uri)
-        val pic = retriever.embeddedPicture
-        retriever.release()
-        pic ?: return null
-    } catch (e: Exception) { return null }
-
-    return try {
-        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, opts)
-        var sampleSize = 1
-        val (w, h) = opts.outWidth to opts.outHeight
-        while ((w / sampleSize) > targetPx * 2 && (h / sampleSize) > targetPx * 2) sampleSize *= 2
-        val decodeOpts = BitmapFactory.Options().apply {
-            inSampleSize = sampleSize
-            inPreferredConfig = Bitmap.Config.ARGB_8888
-        }
-        val sampled = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, decodeOpts)
-            ?: return null
-        val side = minOf(sampled.width, sampled.height)
-        val xOffset = (sampled.width - side) / 2
-        val yOffset = (sampled.height - side) / 2
-        val cropped = if (xOffset == 0 && yOffset == 0) sampled else {
-            val c = Bitmap.createBitmap(sampled, xOffset, yOffset, side, side)
-            sampled.recycle()
-            c
-        }
-        if (cropped.width == targetPx) cropped else {
-            val scaled = Bitmap.createScaledBitmap(cropped, targetPx, targetPx, true)
-            if (scaled !== cropped) cropped.recycle()
-            scaled
-        }
-    } catch (e: Exception) { null }
-}
-
-// ==========================================
-// 5. SERVICE CONNECTION HELPER
+// 3. SERVICE CONNECTION HELPER
 // ==========================================
 @Composable
 fun rememberPlayerService(): PlayerService? {
@@ -346,7 +182,7 @@ fun rememberPlayerService(): PlayerService? {
 }
 
 // ==========================================
-// 6. UI — MusicListScreen
+// 4. UI — MusicListScreen
 // ==========================================
 @Composable
 fun MusicListScreen(
@@ -529,15 +365,9 @@ fun MusicListScreen(
                     ) { index ->
                         val song = songs[index]
                         if (song != null) {
-                            // FIX: Trigger art loading for this song ID.
-                            // Using LaunchedEffect(song.id) means it re-fires if the
-                            // paging source replaces the item with a new Song object
-                            // for the same ID, which covers the startup recomposition case.
                             LaunchedEffect(song.id) { musicViewModel.loadArtIfNeeded(song) }
                             SongListItem(
                                 song = song,
-                                // FIX: Read artCache[song.id] directly so this item
-                                // recomposes as soon as its bitmap lands in the cache.
                                 coverBitmap = artCache[song.id],
                                 isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
                                 onClick = {
@@ -579,7 +409,7 @@ fun MusicListScreen(
 }
 
 // ==========================================
-// 7. UI — MiniPlayerBar
+// 5. UI — MiniPlayerBar
 // ==========================================
 @Composable
 fun MiniPlayerBar(
@@ -605,7 +435,7 @@ fun MiniPlayerBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (coverBitmap != null) {
-                androidx.compose.foundation.Image(
+                Image(
                     bitmap = coverBitmap.asImageBitmap(),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
@@ -663,7 +493,7 @@ fun MiniPlayerBar(
 }
 
 // ==========================================
-// 8. UI — SongListItem
+// 6. UI — SongListItem
 // ==========================================
 @Composable
 fun SongListItem(
@@ -672,7 +502,6 @@ fun SongListItem(
     isPlaying: Boolean = false,
     onClick: () -> Unit
 ) {
-    val context = LocalContext.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -680,7 +509,7 @@ fun SongListItem(
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (coverBitmap != null) {
-            androidx.compose.foundation.Image(
+            Image(
                 bitmap = coverBitmap.asImageBitmap(),
                 contentDescription = "Song Cover",
                 contentScale = ContentScale.Crop,
@@ -720,7 +549,7 @@ fun SongListItem(
 }
 
 // ==========================================
-// 9. UI — Placeholder
+// 7. UI — Placeholder
 // ==========================================
 @Composable
 private fun SongListItemPlaceholder() {
