@@ -1,6 +1,14 @@
 package com.kanagawa.yamada.inaho
 
+import android.content.ContentUris
+import android.content.Context
 import android.graphics.Bitmap
+import android.media.AudioFormat
+import android.media.MediaExtractor
+import android.media.MediaFormat
+import android.media.MediaMetadataRetriever
+import android.net.Uri
+import android.provider.MediaStore
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -17,17 +25,29 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+
+// --- Audio Details Data Class ---
+data class AudioDetails(
+    val format: String,
+    val sampleRate: String,
+    val bitDepth: String,
+    val bitRate: String
+)
 
 @Composable
 fun PlayerScreen(
     musicViewModel: MusicViewModel,
     onNavigateBack: () -> Unit
 ) {
+    val context = LocalContext.current
     val playerState by PlayerService.playerState.collectAsState()
     val artCache by musicViewModel.artCache.collectAsState()
     val playerService = rememberPlayerService()
@@ -43,6 +63,9 @@ fun PlayerScreen(
     var isSeeking by remember { mutableStateOf(false) }
     var seekValue by remember { mutableFloatStateOf(0f) }
     var livePositionMs by remember { mutableLongStateOf(0L) }
+
+    // State for our Format Detector
+    var audioDetails by remember { mutableStateOf<AudioDetails?>(null) }
 
     LaunchedEffect(playerState.isPlaying, playerService, playerState.currentSong?.id) {
         if (playerService != null) {
@@ -63,6 +86,17 @@ fun PlayerScreen(
         }
     }
 
+    // Effect to extract actual audio metadata when the song changes
+    LaunchedEffect(song?.id) {
+        if (song != null) {
+            withContext(Dispatchers.IO) {
+                audioDetails = extractAudioDetails(context, song.id)
+            }
+        } else {
+            audioDetails = null
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -70,16 +104,17 @@ fun PlayerScreen(
             .padding(horizontal = 20.dp)
             .navigationBarsPadding()
     ) {
-        Row(
+        // Updated Top Bar using a Box for perfect centering
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 12.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(top = 12.dp, bottom = 8.dp)
         ) {
             IconButton(
                 onClick = onNavigateBack,
-                modifier = Modifier.offset(x = (-8).dp)
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .offset(x = (-8).dp)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -87,7 +122,25 @@ fun PlayerScreen(
                     tint = Color(0xFFB8355B)
                 )
             }
-            IconButton(onClick = { /* More options placeholder */ }) {
+
+            // FLAC / Audio Detector Badge
+            audioDetails?.let { details ->
+                Text(
+                    text = "${details.format} • ${details.sampleRate} • ${details.bitDepth} • ${details.bitRate}",
+                    color = Color(0xFFAAAAAA),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .background(Color(0xFF1E1414), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+
+            IconButton(
+                onClick = { /* More options placeholder */ },
+                modifier = Modifier.align(Alignment.CenterEnd)
+            ) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
                     contentDescription = "More",
@@ -258,4 +311,75 @@ fun PlayerScreen(
 private fun formatMs(ms: Long): String {
     val totalSeconds = (ms / 1000).coerceAtLeast(0)
     return String.format("%02d:%02d", totalSeconds / 60, totalSeconds % 60)
+}
+
+// --- Audio Metadata Extractor ---
+private fun extractAudioDetails(context: Context, songId: Any): AudioDetails? {
+    // Generate URI safely depending on whether songId is an ID or a string path
+    val uri = try {
+        val idAsLong = songId.toString().toLong()
+        ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, idAsLong)
+    } catch (e: Exception) {
+        Uri.parse(songId.toString())
+    }
+
+    return try {
+        val retriever = MediaMetadataRetriever()
+        retriever.setDataSource(context, uri)
+
+        // 1. Format (MIME)
+        val mime = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE) ?: ""
+        val formatStr = when {
+            mime.contains("flac", true) -> "FLAC"
+            mime.contains("mpeg", true) -> "MP3"
+            mime.contains("mp4", true) -> "M4A"
+            mime.contains("wav", true) -> "WAV"
+            mime.contains("ogg", true) -> "OGG"
+            mime.contains("aac", true) -> "AAC"
+            mime.isNotEmpty() -> mime.substringAfterLast("/").uppercase()
+            else -> "UNKNOWN"
+        }
+
+        // 2. Bitrate
+        val bitrateStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)
+        val bitrateKbps = bitrateStr?.toLongOrNull()?.div(1000)?.toString() ?: "Unknown"
+
+        val extractor = MediaExtractor()
+        extractor.setDataSource(context, uri, null)
+
+        var sampleRate = "Unknown"
+        var bitDepth = "16" // Common Default
+
+        if (extractor.trackCount > 0) {
+            val format = extractor.getTrackFormat(0)
+
+            // 3. Sample Rate
+            if (format.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
+                val sr = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                sampleRate = if (sr % 1000 == 0) "${sr / 1000}" else "${sr / 1000f}"
+            }
+
+            // 4. Bit Depth
+            if (format.containsKey("bits-per-sample")) {
+                bitDepth = format.getInteger("bits-per-sample").toString()
+            } else if (format.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
+                val pcm = format.getInteger(MediaFormat.KEY_PCM_ENCODING)
+                bitDepth = when (pcm) {
+                    AudioFormat.ENCODING_PCM_8BIT -> "8"
+                    AudioFormat.ENCODING_PCM_16BIT -> "16"
+                    AudioFormat.ENCODING_PCM_24BIT_PACKED -> "24"
+                    AudioFormat.ENCODING_PCM_32BIT, AudioFormat.ENCODING_PCM_FLOAT -> "32"
+                    else -> "16"
+                }
+            }
+        }
+
+        extractor.release()
+        retriever.release()
+
+        AudioDetails(formatStr, "${sampleRate} kHz", "$bitDepth Bit", "$bitrateKbps kbps")
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
 }
