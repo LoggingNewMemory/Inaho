@@ -88,36 +88,30 @@ class PlayerService : Service() {
     private fun setupMediaSession() {
         mediaSession = MediaSessionCompat(this, "Inaho_Media_Session").apply {
             setCallback(object : MediaSessionCompat.Callback() {
-
-                // Triggered when the user taps Play on the notification/lock screen
                 override fun onPlay() {
-                    if (_playerState.value.isPlaying == false) {
-                        togglePlayPause()
-                    }
+                    if (!_playerState.value.isPlaying) togglePlayPause()
                 }
 
-                // Triggered when the user taps Pause
                 override fun onPause() {
-                    if (_playerState.value.isPlaying == true) {
-                        togglePlayPause()
-                    }
+                    if (_playerState.value.isPlaying) togglePlayPause()
                 }
 
-                // Triggered when the user taps Next
                 override fun onSkipToNext() {
                     skipNext(isAutoCompletion = false)
                 }
 
-                // Triggered when the user taps Previous
                 override fun onSkipToPrevious() {
                     skipPrev()
                 }
 
-                // Triggered when the user drags the notification slider
                 override fun onSeekTo(pos: Long) {
                     seekTo(pos)
                     updateMediaSessionState() // Refresh the UI immediately
                     updateNotification()
+                }
+
+                override fun onStop() {
+                    stopPlayback()
                 }
             })
             isActive = true
@@ -135,13 +129,12 @@ class PlayerService : Service() {
     }
 
     // --- MediaSession Sync Methods ---
-    // These tell the Android system what to draw in the notification
 
     private fun updateMediaSessionState() {
         val state = _playerState.value
         val song = state.currentSong ?: return
 
-        // 1. Sync Playback State (enables the progress bar)
+        // 1. Sync Playback State
         val playbackState = if (state.isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
         val position = mediaPlayer?.currentPosition?.toLong() ?: 0L
         val playbackSpeed = if (state.isPlaying) 1f else 0f
@@ -152,7 +145,8 @@ class PlayerService : Service() {
                         PlaybackStateCompat.ACTION_PAUSE or
                         PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
                         PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
-                        PlaybackStateCompat.ACTION_SEEK_TO // This enables the drag functionality on the bar
+                        PlaybackStateCompat.ACTION_SEEK_TO or
+                        PlaybackStateCompat.ACTION_STOP
             )
             .setState(playbackState, position, playbackSpeed)
 
@@ -228,7 +222,6 @@ class PlayerService : Service() {
     }
 
     fun toggleShuffle() {
-        // (Shuffle logic remains the same)
         val state = _playerState.value
         val newShuffle = !state.isShuffled
         if (newShuffle) {
@@ -293,6 +286,7 @@ class PlayerService : Service() {
         val mp = mediaPlayer
         val position = mp?.currentPosition ?: 0
 
+        // If played more than 3 seconds, restart the current song
         if (position > 3000) {
             mp?.seekTo(0)
             _playerState.value = state.copy(positionMs = 0L)
@@ -339,7 +333,14 @@ class PlayerService : Service() {
         }
         mediaPlayer = null
         _playerState.value = PlayerState()
-        stopForeground(STOP_FOREGROUND_REMOVE)
+
+        // Remove the notification and stop the service
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
         stopSelf()
     }
 
@@ -415,40 +416,40 @@ class PlayerService : Service() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-        // Generate the 4 buttons matching your mockup
         return NotificationCompat.Builder(this, CHANNEL_ID)
+            // Uses your app's actual icon, fixing the weird play button on top
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle(song?.title ?: "Inaho")
-            .setContentText(song?.artist ?: "")
             .setContentIntent(openIntent)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            // 1. Prev Button
+            // 1. Prev
             .addAction(
                 android.R.drawable.ic_media_previous, "Previous",
                 actionIntent(ACTION_PREV, 1)
             )
-            // 2. Play/Pause Button
+            // 2. Play/Pause
             .addAction(
                 if (state.isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
                 if (state.isPlaying) "Pause" else "Play",
                 actionIntent(ACTION_PLAY_PAUSE, 2)
             )
-            // 3. Next Button
+            // 3. Next
             .addAction(
                 android.R.drawable.ic_media_next, "Next",
                 actionIntent(ACTION_NEXT, 3)
             )
-            // 4. Exit/Stop Button
+            // 4. Kill/Stop (Now correctly handled by MediaSession)
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel, "Close",
                 actionIntent(ACTION_STOP, 4)
             )
             .setStyle(
                 androidx.media.app.NotificationCompat.MediaStyle()
-                    // Show Prev, Play/Pause, and Next when the notification is collapsed
+                    // Shows Prev, Play, Next when notification is collapsed
                     .setShowActionsInCompactView(0, 1, 2)
                     .setMediaSession(mediaSession.sessionToken)
             )
+            .setOngoing(state.isPlaying)
             .build()
     }
 
