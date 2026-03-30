@@ -6,7 +6,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -37,16 +38,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 1. Enable drawing behind system bars
         enableEdgeToEdge()
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
-        // 2. Hide ONLY the Navigation Bar
         val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
-        // Allow the navigation bar to temporarily appear if the user swipes up from the bottom
         windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-
-        // Hide the navigation bar, but explicitly ensure the status bar remains visible
         windowInsetsController.hide(WindowInsetsCompat.Type.navigationBars())
         windowInsetsController.show(WindowInsetsCompat.Type.statusBars())
 
@@ -56,10 +52,54 @@ class MainActivity : ComponentActivity() {
                 var currentScreen by rememberSaveable { mutableStateOf(AppScreen.LIST) }
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    // innerPadding will now automatically protect your content from overlapping
-                    // with the visible status bar at the top!
                     Box(modifier = Modifier.padding(innerPadding)) {
-                        Crossfade(targetState = currentScreen, label = "Screen Transition") { screen ->
+
+                        // ANIMATED SCREEN TRANSITIONS
+                        AnimatedContent(
+                            targetState = currentScreen,
+                            transitionSpec = {
+                                when (targetState) {
+                                    AppScreen.PLAYER -> {
+                                        slideInVertically(
+                                            animationSpec = tween(400),
+                                            initialOffsetY = { it }
+                                        ) + fadeIn() togetherWith slideOutVertically(
+                                            animationSpec = tween(400),
+                                            targetOffsetY = { -it / 4 }
+                                        ) + fadeOut()
+                                    }
+                                    AppScreen.SETTINGS -> {
+                                        slideInHorizontally(
+                                            animationSpec = tween(300),
+                                            initialOffsetX = { it }
+                                        ) + fadeIn() togetherWith slideOutHorizontally(
+                                            animationSpec = tween(300),
+                                            targetOffsetX = { -it / 4 }
+                                        ) + fadeOut()
+                                    }
+                                    AppScreen.LIST -> {
+                                        if (initialState == AppScreen.PLAYER) {
+                                            slideInVertically(
+                                                animationSpec = tween(400),
+                                                initialOffsetY = { -it / 4 }
+                                            ) + fadeIn() togetherWith slideOutVertically(
+                                                animationSpec = tween(400),
+                                                targetOffsetY = { it }
+                                            ) + fadeOut()
+                                        } else {
+                                            slideInHorizontally(
+                                                animationSpec = tween(300),
+                                                initialOffsetX = { -it / 4 }
+                                            ) + fadeIn() togetherWith slideOutHorizontally(
+                                                animationSpec = tween(300),
+                                                targetOffsetX = { it }
+                                            ) + fadeOut()
+                                        }
+                                    }
+                                }
+                            },
+                            label = "Screen Transition"
+                        ) { screen ->
                             when (screen) {
                                 AppScreen.LIST -> {
                                     MusicListScreen(

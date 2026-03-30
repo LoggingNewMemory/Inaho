@@ -15,6 +15,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.content.ContentUris
 import android.net.Uri
+import androidx.compose.animation.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -110,8 +111,7 @@ class MusicPagingSource(
                 SortOption.DURATION_DESC -> "${MediaStore.Audio.Media.DURATION} DESC"
             }
 
-            var selection =
-                "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DURATION} > 10000"
+            var selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DURATION} > 10000"
             if (settings.onlyMusicFolder) {
                 selection += if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
                     " AND ${MediaStore.Audio.Media.RELATIVE_PATH} LIKE '%Music/%'"
@@ -128,10 +128,7 @@ class MusicPagingSource(
                 }
                 context.contentResolver.query(collection, projection, queryArgs, null)
             } else {
-                context.contentResolver.query(
-                    collection, projection, selection, null,
-                    "$sortOrder LIMIT $pageSize OFFSET $offset"
-                )
+                context.contentResolver.query(collection, projection, selection, null, "$sortOrder LIMIT $pageSize OFFSET $offset")
             }
 
             cursor?.use { c ->
@@ -145,8 +142,7 @@ class MusicPagingSource(
                     val dur = c.getLong(durationCol)
                     val title = c.getString(titleCol) ?: "Unknown Title"
                     val artist = c.getString(artistCol) ?: "Unknown Artist"
-                    val trackUri =
-                        ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
+                    val trackUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
                     songs.add(Song(id, title, artist, dur, trackUri, buildFormattedDuration(dur)))
                 }
             }
@@ -259,8 +255,6 @@ fun MusicListScreen(
         }
     }
 
-    // FIX: Load a lightweight list of the ENTIRE library into memory ONCE in the background.
-    // This avoids triggering Paging3 loading cascades and completely solves the OOM crash.
     var fullLibrary by remember { mutableStateOf<List<Song>>(emptyList()) }
 
     LaunchedEffect(hasPermission, songs.loadState.refresh, settings.sortOption, settings.onlyMusicFolder) {
@@ -315,7 +309,7 @@ fun MusicListScreen(
                         }
                     }
                     fullLibrary = tempList
-                    musicViewModel.recordLoadedSongs(tempList) // Update ViewModel state safely
+                    musicViewModel.recordLoadedSongs(tempList)
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
@@ -323,11 +317,8 @@ fun MusicListScreen(
         }
     }
 
-    // Filter using the lightweight fullLibrary. This ensures search works instantly
-    // across all files without forcing Paging3 to load everything.
     val filteredSongs = remember(searchQuery, fullLibrary, showFavoritesOnly, favorites) {
-        val base = if (showFavoritesOnly) fullLibrary.filter { favorites.contains(it.id) }
-        else fullLibrary
+        val base = if (showFavoritesOnly) fullLibrary.filter { favorites.contains(it.id) } else fullLibrary
 
         if (searchQuery.isBlank() && !showFavoritesOnly) null
         else {
@@ -345,184 +336,161 @@ fun MusicListScreen(
             .background(bgColor)
             .padding(start = 4.dp, end = 4.dp, top = 4.dp)
     ) {
-        // --- Top Bar ---
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (isSearchActive) {
+        // --- Top Bar (Animated Search) ---
+        AnimatedContent(
+            targetState = isSearchActive,
+            label = "SearchBarAnimation"
+        ) { active ->
+            if (active) {
                 Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .background(surfaceColor, RoundedCornerShape(10.dp))
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(surfaceColor, RoundedCornerShape(10.dp))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = Color(0xFFB8355B),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        BasicTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            singleLine = true,
+                            textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+                            cursorBrush = SolidColor(Color(0xFFB8355B)),
+                            decorationBox = { inner ->
+                                if (searchQuery.isEmpty()) {
+                                    Text("Search songs, artists…", color = Color(0xFF888888), fontSize = 16.sp)
+                                }
+                                inner()
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (searchQuery.isNotEmpty()) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Clear",
+                                tint = Color(0xFFAAAAAA),
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .clickable { searchQuery = "" }
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Cancel",
+                        color = Color(0xFFB8355B),
+                        fontSize = 14.sp,
+                        modifier = Modifier.clickable {
+                            isSearchActive = false
+                            searchQuery = ""
+                        }
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Inaho",
+                            color = Color(0xFFB8355B),
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (songs.itemCount > 0) {
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "${songs.itemCount}",
+                                color = Color(0xFF555555),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier
+                                    .background(surfaceColor, RoundedCornerShape(6.dp))
+                                    .padding(horizontal = 7.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
                     Icon(
                         imageVector = Icons.Default.Search,
-                        contentDescription = null,
-                        tint = Color(0xFFB8355B),
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    BasicTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        singleLine = true,
-                        textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
-                        cursorBrush = SolidColor(Color(0xFFB8355B)),
-                        decorationBox = { inner ->
-                            if (searchQuery.isEmpty()) {
-                                Text("Search songs, artists…", color = Color(0xFF888888), fontSize = 16.sp)
-                            }
-                            inner()
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (searchQuery.isNotEmpty()) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Clear",
-                            tint = Color(0xFFAAAAAA),
-                            modifier = Modifier
-                                .size(18.dp)
-                                .clickable { searchQuery = "" }
-                        )
-                    }
-                }
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = "Cancel",
-                    color = Color(0xFFB8355B),
-                    fontSize = 14.sp,
-                    modifier = Modifier.clickable {
-                        isSearchActive = false
-                        searchQuery = ""
-                    }
-                )
-            } else {
-                // Title + song count
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Inaho",
-                        color = Color(0xFFB8355B),
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    if (songs.itemCount > 0) {
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = "${songs.itemCount}",
-                            color = Color(0xFF555555),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier
-                                .background(surfaceColor, RoundedCornerShape(6.dp))
-                                .padding(horizontal = 7.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-
-                // Search icon
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = "Search",
-                    tint = Color.White,
-                    modifier = Modifier
-                        .size(26.dp)
-                        .clickable { isSearchActive = true }
-                )
-
-                Spacer(Modifier.width(20.dp))
-
-                // 3-dot overflow menu
-                Box {
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = "More options",
+                        contentDescription = "Search",
                         tint = Color.White,
                         modifier = Modifier
                             .size(26.dp)
-                            .clickable { showOverflowMenu = true }
+                            .clickable { isSearchActive = true }
                     )
-                    DropdownMenu(
-                        expanded = showOverflowMenu,
-                        onDismissRequest = { showOverflowMenu = false },
-                        modifier = Modifier.background(Color(0xFF2C2020))
-                    ) {
-                        // Favorites toggle
-                        DropdownMenuItem(
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = if (showFavoritesOnly) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                    contentDescription = null,
-                                    tint = if (showFavoritesOnly) Color(0xFFB8355B) else Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            },
-                            text = {
-                                Text(
-                                    text = if (showFavoritesOnly) "Show All" else "Favorites",
-                                    color = if (showFavoritesOnly) Color(0xFFB8355B) else Color.White
-                                )
-                            },
-                            onClick = {
-                                showFavoritesOnly = !showFavoritesOnly
-                                showOverflowMenu = false
-                            }
+
+                    Spacer(Modifier.width(20.dp))
+
+                    Box {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "More options",
+                            tint = Color.White,
+                            modifier = Modifier
+                                .size(26.dp)
+                                .clickable { showOverflowMenu = true }
                         )
-                        HorizontalDivider(color = Color(0xFF3C2828), thickness = 0.5.dp)
-                        // Reload
-                        DropdownMenuItem(
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = null,
-                                    tint = if (hasPermission && songs.loadState.refresh !is LoadState.Loading)
-                                        Color.White else Color.White.copy(alpha = 0.38f),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            },
-                            text = {
-                                Text(
-                                    text = "Reload",
-                                    color = if (hasPermission && songs.loadState.refresh !is LoadState.Loading)
-                                        Color.White else Color.White.copy(alpha = 0.38f)
-                                )
-                            },
-                            enabled = hasPermission && songs.loadState.refresh !is LoadState.Loading,
-                            onClick = {
-                                songs.refresh()
-                                showOverflowMenu = false
-                            }
-                        )
-                        HorizontalDivider(color = Color(0xFF3C2828), thickness = 0.5.dp)
-                        // Settings
-                        DropdownMenuItem(
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Settings,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            },
-                            text = {
-                                Text(text = "Settings", color = Color.White)
-                            },
-                            onClick = {
-                                showOverflowMenu = false
-                                onNavigateToSettings()
-                            }
-                        )
+                        DropdownMenu(
+                            expanded = showOverflowMenu,
+                            onDismissRequest = { showOverflowMenu = false },
+                            modifier = Modifier.background(Color(0xFF2C2020))
+                        ) {
+                            DropdownMenuItem(
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = if (showFavoritesOnly) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                        contentDescription = null,
+                                        tint = if (showFavoritesOnly) Color(0xFFB8355B) else Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                },
+                                text = { Text(text = if (showFavoritesOnly) "Show All" else "Favorites", color = if (showFavoritesOnly) Color(0xFFB8355B) else Color.White) },
+                                onClick = { showFavoritesOnly = !showFavoritesOnly; showOverflowMenu = false }
+                            )
+                            HorizontalDivider(color = Color(0xFF3C2828), thickness = 0.5.dp)
+                            DropdownMenuItem(
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = null,
+                                        tint = if (hasPermission && songs.loadState.refresh !is LoadState.Loading) Color.White else Color.White.copy(alpha = 0.38f),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                },
+                                text = { Text(text = "Reload", color = if (hasPermission && songs.loadState.refresh !is LoadState.Loading) Color.White else Color.White.copy(alpha = 0.38f)) },
+                                enabled = hasPermission && songs.loadState.refresh !is LoadState.Loading,
+                                onClick = { songs.refresh(); showOverflowMenu = false }
+                            )
+                            HorizontalDivider(color = Color(0xFF3C2828), thickness = 0.5.dp)
+                            DropdownMenuItem(
+                                leadingIcon = {
+                                    Icon(imageVector = Icons.Default.Settings, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                },
+                                text = { Text(text = "Settings", color = Color.White) },
+                                onClick = { showOverflowMenu = false; onNavigateToSettings() }
+                            )
+                        }
                     }
                 }
             }
         }
 
-        // Favorites header label
         if (showFavoritesOnly) {
             Row(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -549,16 +517,10 @@ fun MusicListScreen(
         Box(modifier = Modifier.weight(1f)) {
             when {
                 !hasPermission ->
-                    Text(
-                        "Storage permission is required to find your music.",
-                        color = Color.White,
-                        modifier = Modifier.padding(16.dp)
-                    )
+                    Text("Storage permission is required to find your music.", color = Color.White, modifier = Modifier.padding(16.dp))
 
                 songs.loadState.refresh is LoadState.Loading ->
-                    Box(Modifier.fillMaxSize(), Alignment.Center) {
-                        CircularProgressIndicator(color = Color(0xFFB8355B))
-                    }
+                    Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator(color = Color(0xFFB8355B)) }
 
                 songs.loadState.refresh is LoadState.Error ->
                     Box(Modifier.fillMaxSize(), Alignment.Center) {
@@ -569,48 +531,26 @@ fun MusicListScreen(
                     }
 
                 songs.itemCount == 0 ->
-                    Box(Modifier.fillMaxSize(), Alignment.Center) {
-                        Text("No music files found.", color = Color.LightGray)
-                    }
+                    Box(Modifier.fillMaxSize(), Alignment.Center) { Text("No music files found.", color = Color.LightGray) }
 
-                // Filtered / Favorites / Search results mode
                 filteredSongs != null -> {
                     if (filteredSongs.isEmpty()) {
                         Box(Modifier.fillMaxSize(), Alignment.Center) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 if (showFavoritesOnly && searchQuery.isBlank()) {
-                                    Icon(
-                                        imageVector = Icons.Default.FavoriteBorder,
-                                        contentDescription = null,
-                                        tint = Color(0xFF555555),
-                                        modifier = Modifier.size(48.dp)
-                                    )
+                                    Icon(imageVector = Icons.Default.FavoriteBorder, contentDescription = null, tint = Color(0xFF555555), modifier = Modifier.size(48.dp))
                                     Spacer(Modifier.height(8.dp))
-                                    Text(
-                                        "No favorites yet",
-                                        color = Color.LightGray,
-                                        fontSize = 16.sp
-                                    )
-                                    Text(
-                                        "Tap the heart on a song to add it",
-                                        color = Color(0xFF555555),
-                                        fontSize = 13.sp
-                                    )
+                                    Text("No favorites yet", color = Color.LightGray, fontSize = 16.sp)
+                                    Text("Tap the heart on a song to add it", color = Color(0xFF555555), fontSize = 13.sp)
                                 } else {
-                                    Text(
-                                        "No results for \"$searchQuery\"",
-                                        color = Color.LightGray
-                                    )
+                                    Text("No results for \"$searchQuery\"", color = Color.LightGray)
                                 }
                             }
                         }
                     } else {
                         LazyColumn(
                             verticalArrangement = Arrangement.spacedBy(16.dp),
-                            contentPadding = PaddingValues(
-                                bottom = if (playerState.currentSong != null) 88.dp else 8.dp,
-                                start = 8.dp, end = 8.dp
-                            )
+                            contentPadding = PaddingValues(bottom = if (playerState.currentSong != null) 88.dp else 8.dp, start = 8.dp, end = 8.dp)
                         ) {
                             items(filteredSongs.size, key = { filteredSongs[it].id }) { index ->
                                 val song = filteredSongs[index]
@@ -629,13 +569,9 @@ fun MusicListScreen(
                     }
                 }
 
-                // Normal paged mode
                 else -> LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
-                    contentPadding = PaddingValues(
-                        bottom = if (playerState.currentSong != null) 88.dp else 8.dp,
-                        start = 8.dp, end = 8.dp
-                    )
+                    contentPadding = PaddingValues(bottom = if (playerState.currentSong != null) 88.dp else 8.dp, start = 8.dp, end = 8.dp)
                 ) {
                     items(
                         count = songs.itemCount,
@@ -650,8 +586,6 @@ fun MusicListScreen(
                                 coverBitmap = artCache[song.id],
                                 isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
                                 onClick = {
-                                    // FIX: Pass the full background library queue instead of iterating the Pager.
-                                    // This guarantees the 'Next' button will work across the whole library without crashing.
                                     val safeQueue = if (fullLibrary.isNotEmpty()) fullLibrary else listOf(song)
                                     val queueIndex = safeQueue.indexOfFirst { it.id == song.id }.takeIf { it >= 0 } ?: 0
 
@@ -664,11 +598,7 @@ fun MusicListScreen(
 
                     if (songs.loadState.append is LoadState.Loading) {
                         item {
-                            Box(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(8.dp), Alignment.Center
-                            ) {
+                            Box(Modifier.fillMaxWidth().padding(8.dp), Alignment.Center) {
                                 CircularProgressIndicator(color = Color(0xFFB8355B))
                             }
                         }
@@ -677,7 +607,12 @@ fun MusicListScreen(
             }
         }
 
-        if (playerState.currentSong != null) {
+        // --- ANIMATED MINI PLAYER ---
+        AnimatedVisibility(
+            visible = playerState.currentSong != null,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+        ) {
             MiniPlayerBar(
                 playerState = playerState,
                 coverBitmap = playerState.currentSong?.let { artCache[it.id] },
@@ -691,7 +626,7 @@ fun MusicListScreen(
 }
 
 // ==========================================
-// 5. UI — MiniPlayerBar (with progress line)
+// 5. UI — MiniPlayerBar
 // ==========================================
 @Composable
 fun MiniPlayerBar(
@@ -716,23 +651,15 @@ fun MiniPlayerBar(
     ) {
         Column {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(2.dp)
-                    .background(Color(0xFF2C2C2C))
+                modifier = Modifier.fillMaxWidth().height(2.dp).background(Color(0xFF2C2C2C))
             ) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth(progress)
-                        .height(2.dp)
-                        .background(Color(0xFFB8355B))
+                    modifier = Modifier.fillMaxWidth(progress).height(2.dp).background(Color(0xFFB8355B))
                 )
             }
 
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (coverBitmap != null) {
@@ -740,46 +667,29 @@ fun MiniPlayerBar(
                         bitmap = coverBitmap.asImageBitmap(),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(6.dp))
+                        modifier = Modifier.size(44.dp).clip(RoundedCornerShape(6.dp))
                     )
                 } else {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFF2C2C2C))
-                    )
+                    Box(modifier = Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF2C2C2C)))
                 }
 
                 Spacer(Modifier.width(12.dp))
 
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        text = song.title,
-                        color = Color.White,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = song.artist,
-                        color = Color.LightGray,
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Text(text = song.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(text = song.artist, color = Color.LightGray, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
 
                 IconButton(onClick = onPlayPause) {
-                    Icon(
-                        imageVector = if (playerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (playerState.isPlaying) "Pause" else "Play",
-                        tint = Color.White,
-                        modifier = Modifier.size(28.dp)
-                    )
+                    // Animated Play/Pause icon
+                    AnimatedContent(targetState = playerState.isPlaying, label = "miniPlayPause") { isPlaying ->
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                 }
                 IconButton(onClick = onNext, enabled = playerState.hasNext) {
                     Icon(
@@ -815,17 +725,10 @@ fun SongListItem(
                 bitmap = coverBitmap.asImageBitmap(),
                 contentDescription = "Song Cover",
                 contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(50.dp)
-                    .clip(RoundedCornerShape(4.dp))
+                modifier = Modifier.size(50.dp).clip(RoundedCornerShape(4.dp))
             )
         } else {
-            Box(
-                modifier = Modifier
-                    .size(50.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(Color(0xFF2C2C2C))
-            )
+            Box(modifier = Modifier.size(50.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF2C2C2C)))
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -837,13 +740,7 @@ fun SongListItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Text(
-                text = song.artist,
-                color = Color.LightGray,
-                fontSize = 13.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Text(text = song.artist, color = Color.LightGray, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.width(4.dp))
         Text(text = song.formattedDuration, color = Color(0xFF888888), fontSize = 13.sp)

@@ -14,9 +14,10 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.MediaStore
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.*
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
@@ -35,6 +36,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -86,12 +88,9 @@ fun PlayerScreen(
     var showSpeedDialog     by remember { mutableStateOf(false) }
     var showSleepTimerDialog by remember { mutableStateOf(false) }
     var showQueueSheet      by remember { mutableStateOf(false) }
-    // ── NEW: Yamada EQ dialog ──────────────────────────────────────────────
     var showEqDialog        by remember { mutableStateOf(false) }
-    // ──────────────────────────────────────────────────────────────────────
     var sleepTimerRemainingMs by remember { mutableLongStateOf(-1L) }
 
-    // currentSpeedLabel resets to "1.0×" whenever the song changes
     val currentSongId = song?.id
     var currentSpeedLabel by remember { mutableStateOf("1.0×") }
     LaunchedEffect(currentSongId) { currentSpeedLabel = "1.0×" }
@@ -101,9 +100,7 @@ fun PlayerScreen(
     val maxVolume    = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat() }
 
     var volumeValue by remember {
-        mutableFloatStateOf(
-            audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume
-        )
+        mutableFloatStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume)
     }
 
     DisposableEffect(Unit) {
@@ -144,15 +141,12 @@ fun PlayerScreen(
 
     LaunchedEffect(song?.id) {
         if (song != null) {
-            withContext(Dispatchers.IO) {
-                audioDetails = extractAudioDetails(context, song.id)
-            }
+            withContext(Dispatchers.IO) { audioDetails = extractAudioDetails(context, song.id) }
         } else {
             audioDetails = null
         }
     }
 
-    // Sleep timer countdown
     LaunchedEffect(sleepTimerRemainingMs) {
         if (sleepTimerRemainingMs > 0) {
             delay(1000)
@@ -186,11 +180,7 @@ fun PlayerScreen(
                     .align(Alignment.CenterStart)
                     .offset(x = (-12).dp)
             ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = Color(0xFFB8355B)
-                )
+                Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color(0xFFB8355B))
             }
 
             audioDetails?.let { details ->
@@ -212,11 +202,7 @@ fun PlayerScreen(
                     .align(Alignment.CenterEnd)
                     .offset(x = 12.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.QueueMusic,
-                    contentDescription = "Queue",
-                    tint = if (showQueueSheet) Color(0xFFB8355B) else Color.White
-                )
+                Icon(imageVector = Icons.Default.QueueMusic, contentDescription = "Queue", tint = if (showQueueSheet) Color(0xFFB8355B) else Color.White)
             }
         }
 
@@ -237,11 +223,22 @@ fun PlayerScreen(
         }
 
         if (!showQueueSheet) {
-            // ── Cover Art ──
+            // ── ANIMATED Cover Art ──
+            // Scale subtly scales down when paused
+            val artScale by animateFloatAsState(
+                targetValue = if (playerState.isPlaying) 1f else 0.85f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessLow
+                ),
+                label = "AlbumArtScale"
+            )
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
+                    .scale(artScale)
                     .clip(RoundedCornerShape(12.dp))
                     .background(surfaceColor),
                 contentAlignment = Alignment.Center
@@ -254,12 +251,7 @@ fun PlayerScreen(
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = null,
-                        tint = Color(0xFF3D2020),
-                        modifier = Modifier.size(80.dp)
-                    )
+                    Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = Color(0xFF3D2020), modifier = Modifier.size(80.dp))
                 }
             }
         }
@@ -317,34 +309,19 @@ fun PlayerScreen(
                 playerService?.seekTo((seekValue * durationMs).toLong())
             },
             modifier = Modifier.fillMaxWidth(),
-            colors = SliderDefaults.colors(
-                thumbColor         = Color.White,
-                activeTrackColor   = Color.White,
-                inactiveTrackColor = Color(0xFF3D3030)
-            )
+            colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color(0xFF3D3030))
         )
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(formatMs(livePositionMs), color = Color(0xFFAAAAAA), fontSize = 12.sp)
-            Text(formatMs(durationMs),     color = Color(0xFFAAAAAA), fontSize = 12.sp)
+            Text(formatMs(durationMs), color = Color(0xFFAAAAAA), fontSize = 12.sp)
         }
 
         Spacer(modifier = Modifier.height(10.dp))
 
         // ── Volume Slider ──
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.VolumeDown,
-                contentDescription = null,
-                tint = Color(0xFF666666),
-                modifier = Modifier.size(18.dp)
-            )
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Icon(imageVector = Icons.Default.VolumeDown, contentDescription = null, tint = Color(0xFF666666), modifier = Modifier.size(18.dp))
             Slider(
                 value = volumeValue,
                 onValueChange = { v ->
@@ -355,100 +332,41 @@ fun PlayerScreen(
                         audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newStep, 0)
                     }
                 },
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 6.dp),
-                colors = SliderDefaults.colors(
-                    thumbColor         = Color(0xFFB8355B),
-                    activeTrackColor   = Color(0xFFB8355B),
-                    inactiveTrackColor = Color(0xFF3D3030)
-                )
+                modifier = Modifier.weight(1f).padding(horizontal = 6.dp),
+                colors = SliderDefaults.colors(thumbColor = Color(0xFFB8355B), activeTrackColor = Color(0xFFB8355B), inactiveTrackColor = Color(0xFF3D3030))
             )
-            Icon(
-                imageVector = Icons.Default.VolumeUp,
-                contentDescription = null,
-                tint = Color(0xFF666666),
-                modifier = Modifier.size(18.dp)
-            )
+            Icon(imageVector = Icons.Default.VolumeUp, contentDescription = null, tint = Color(0xFF666666), modifier = Modifier.size(18.dp))
         }
 
         Spacer(modifier = Modifier.weight(1f))
 
         // ── Extra Controls Row: Speed · EQ · Sleep Timer ──
-        // Derive EQ active state for chip highlight
-        val eqPreset by playerService?.eqManager?.currentPreset?.collectAsState()
-            ?: run { remember { mutableStateOf(EqPreset.OFF) } }.let { remember { it } }
-            .let { mutableStateOf(EqPreset.OFF) }.let { remember { it } }
-            // Simpler pattern below — safe even before service binds:
-        val eqActiveLabel = remember(eqPreset) {
-            if (eqPreset == EqPreset.OFF) "EQ" else eqPreset.displayName
-        }
+        val eqPreset by playerService?.eqManager?.currentPreset?.collectAsState() ?: run { remember { mutableStateOf(EqPreset.OFF) } }
+        val eqActiveLabel = remember(eqPreset) { if (eqPreset == EqPreset.OFF) "EQ" else eqPreset.displayName }
         val eqIsActive = eqPreset != EqPreset.OFF
 
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Speed chip
-            ExtraControlChip(
-                icon    = Icons.Default.Speed,
-                label   = currentSpeedLabel,
-                active  = currentSpeedLabel != "1.0×",
-                onClick = { showSpeedDialog = true }
-            )
-
-            // ── Yamada EQ chip ────────────────────────────────────────────
-            ExtraControlChip(
-                icon    = Icons.Default.Equalizer,
-                label   = eqActiveLabel,
-                active  = eqIsActive,
-                onClick = { showEqDialog = true }
-            )
-            // ─────────────────────────────────────────────────────────────
-
-            // Sleep timer chip
-            ExtraControlChip(
-                icon    = Icons.Default.Bedtime,
-                label   = if (sleepTimerRemainingMs > 0) formatMs(sleepTimerRemainingMs) else "Sleep",
-                active  = sleepTimerRemainingMs > 0,
-                onClick = { showSleepTimerDialog = true }
-            )
+            ExtraControlChip(icon = Icons.Default.Speed, label = currentSpeedLabel, active = currentSpeedLabel != "1.0×", onClick = { showSpeedDialog = true })
+            ExtraControlChip(icon = Icons.Default.Equalizer, label = eqActiveLabel, active = eqIsActive, onClick = { showEqDialog = true })
+            ExtraControlChip(icon = Icons.Default.Bedtime, label = if (sleepTimerRemainingMs > 0) formatMs(sleepTimerRemainingMs) else "Sleep", active = sleepTimerRemainingMs > 0, onClick = { showSleepTimerDialog = true })
         }
 
         // ── Main Controls Row ──
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 36.dp),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 36.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(
-                onClick  = { playerService?.toggleShuffle() },
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Shuffle,
-                    contentDescription = "Shuffle",
-                    tint = if (isShuffled) Color(0xFFB8355B) else Color.White,
-                    modifier = Modifier.size(26.dp)
-                )
+            IconButton(onClick  = { playerService?.toggleShuffle() }, modifier = Modifier.size(48.dp)) {
+                Icon(imageVector = Icons.Default.Shuffle, contentDescription = "Shuffle", tint = if (isShuffled) Color(0xFFB8355B) else Color.White, modifier = Modifier.size(26.dp))
             }
 
-            IconButton(
-                onClick  = { playerService?.skipPrev() },
-                enabled  = song != null,
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.SkipPrevious,
-                    contentDescription = "Previous",
-                    tint = if (song != null) Color.White else Color.White.copy(alpha = 0.3f),
-                    modifier = Modifier.size(34.dp)
-                )
+            IconButton(onClick  = { playerService?.skipPrev() }, enabled  = song != null, modifier = Modifier.size(48.dp)) {
+                Icon(imageVector = Icons.Default.SkipPrevious, contentDescription = "Previous", tint = if (song != null) Color.White else Color.White.copy(alpha = 0.3f), modifier = Modifier.size(34.dp))
             }
 
             Box(
@@ -463,94 +381,53 @@ fun PlayerScreen(
                     enabled  = song != null,
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    Icon(
-                        imageVector = if (playerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (playerState.isPlaying) "Pause" else "Play",
-                        tint = Color(0xFF0D0A0A),
-                        modifier = Modifier.size(36.dp)
-                    )
+                    // ── ANIMATED Play/Pause Crossfade ──
+                    AnimatedContent(
+                        targetState = playerState.isPlaying,
+                        transitionSpec = {
+                            scaleIn(spring()) + fadeIn() togetherWith scaleOut(spring()) + fadeOut()
+                        },
+                        label = "PlayPauseButton"
+                    ) { playing ->
+                        Icon(
+                            imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (playing) "Pause" else "Play",
+                            tint = Color(0xFF0D0A0A),
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
                 }
             }
 
-            IconButton(
-                onClick  = { playerService?.skipNext(isAutoCompletion = false) },
-                enabled  = playerState.hasNext,
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.SkipNext,
-                    contentDescription = "Next",
-                    tint = if (playerState.hasNext) Color.White else Color.White.copy(alpha = 0.3f),
-                    modifier = Modifier.size(34.dp)
-                )
+            IconButton(onClick  = { playerService?.skipNext(isAutoCompletion = false) }, enabled  = playerState.hasNext, modifier = Modifier.size(48.dp)) {
+                Icon(imageVector = Icons.Default.SkipNext, contentDescription = "Next", tint = if (playerState.hasNext) Color.White else Color.White.copy(alpha = 0.3f), modifier = Modifier.size(34.dp))
             }
 
-            IconButton(
-                onClick  = { playerService?.toggleRepeat() },
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Repeat,
-                    contentDescription = "Repeat",
-                    tint = if (repeatMode == RepeatMode.ONE) Color(0xFFB8355B) else Color.White,
-                    modifier = Modifier.size(26.dp)
-                )
+            IconButton(onClick  = { playerService?.toggleRepeat() }, modifier = Modifier.size(48.dp)) {
+                Icon(imageVector = Icons.Default.Repeat, contentDescription = "Repeat", tint = if (repeatMode == RepeatMode.ONE) Color(0xFFB8355B) else Color.White, modifier = Modifier.size(26.dp))
             }
         }
     }
 
-    // ── Dialogs ──
-
     if (showSpeedDialog) {
-        SpeedDialog(
-            currentLabel = currentSpeedLabel,
-            onSelect = { speed, label ->
-                currentSpeedLabel = label
-                playerService?.setPlaybackSpeed(speed)
-                showSpeedDialog = false
-            },
-            onDismiss = { showSpeedDialog = false }
-        )
+        SpeedDialog(currentLabel = currentSpeedLabel, onSelect = { speed, label -> currentSpeedLabel = label; playerService?.setPlaybackSpeed(speed); showSpeedDialog = false }, onDismiss = { showSpeedDialog = false })
     }
 
-    // ── Yamada EQ Dialog ──────────────────────────────────────────────────
     if (showEqDialog) {
         val service = playerService
         if (service != null) {
-            EqDialog(
-                eqManager = service.eqManager,
-                onDismiss = { showEqDialog = false }
-            )
+            EqDialog(eqManager = service.eqManager, onDismiss = { showEqDialog = false })
         } else {
-            // Service not yet bound — show a simple "unavailable" toast-style dialog
             Dialog(onDismissRequest = { showEqDialog = false }) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFF1A1010))
-                        .padding(24.dp),
-                    contentAlignment = Alignment.Center
-                ) {
+                Box(modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(Color(0xFF1A1010)).padding(24.dp), contentAlignment = Alignment.Center) {
                     Text("EQ unavailable — start playback first", color = Color(0xFF888888), fontSize = 14.sp)
                 }
             }
         }
     }
-    // ─────────────────────────────────────────────────────────────────────
 
     if (showSleepTimerDialog) {
-        SleepTimerDialog(
-            isActive = sleepTimerRemainingMs > 0,
-            onSelect = { minutes ->
-                sleepTimerRemainingMs = minutes * 60 * 1000L
-                showSleepTimerDialog  = false
-            },
-            onCancel = {
-                sleepTimerRemainingMs = -1L
-                showSleepTimerDialog  = false
-            },
-            onDismiss = { showSleepTimerDialog = false }
-        )
+        SleepTimerDialog(isActive = sleepTimerRemainingMs > 0, onSelect = { minutes -> sleepTimerRemainingMs = minutes * 60 * 1000L; showSleepTimerDialog  = false }, onCancel = { sleepTimerRemainingMs = -1L; showSleepTimerDialog  = false }, onDismiss = { showSleepTimerDialog = false })
     }
 }
 
@@ -573,19 +450,9 @@ private fun ExtraControlChip(
         contentAlignment = Alignment.Center
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = if (active) Color(0xFFB8355B) else Color(0xFF888888),
-                modifier = Modifier.size(16.dp)
-            )
+            Icon(imageVector = icon, contentDescription = label, tint = if (active) Color(0xFFB8355B) else Color(0xFF888888), modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
-            Text(
-                text = label,
-                color = if (active) Color(0xFFB8355B) else Color.White,
-                fontSize = 13.sp,
-                fontWeight = if (active) FontWeight.Bold else FontWeight.SemiBold
-            )
+            Text(text = label, color = if (active) Color(0xFFB8355B) else Color.White, fontSize = 13.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.SemiBold)
         }
     }
 }
@@ -616,23 +483,11 @@ fun QueuePanel(
             .background(Color(0xFF1A1010))
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Up Next",
-                color = Color.White,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                text = "${queue.size} songs",
-                color = Color(0xFF666666),
-                fontSize = 12.sp
-            )
+            Text(text = "Up Next", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text(text = "${queue.size} songs", color = Color(0xFF666666), fontSize = 12.sp)
         }
         HorizontalDivider(color = Color(0xFF2C2020), thickness = 0.5.dp)
 
@@ -649,53 +504,19 @@ fun QueuePanel(
                 ) {
                     val art = artCache[qSong.id]
                     if (art != null) {
-                        Image(
-                            bitmap = art.asImageBitmap(),
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                        )
+                        Image(bitmap = art.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(36.dp).clip(RoundedCornerShape(4.dp)))
                     } else {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Color(0xFF2C2C2C))
-                        )
+                        Box(modifier = Modifier.size(36.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF2C2C2C)))
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(
-                            text = qSong.title,
-                            color = if (isCurrentSong) Color(0xFFB8355B) else Color.White,
-                            fontSize = 14.sp,
-                            fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Normal,
-                            maxLines = 1,
-                            modifier = Modifier.basicMarquee()
-                        )
-                        Text(
-                            text = qSong.artist,
-                            color = Color(0xFF888888),
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Text(text = qSong.title, color = if (isCurrentSong) Color(0xFFB8355B) else Color.White, fontSize = 14.sp, fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Normal, maxLines = 1, modifier = Modifier.basicMarquee())
+                        Text(text = qSong.artist, color = Color(0xFF888888), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     if (isCurrentSong) {
-                        Icon(
-                            imageVector = Icons.Default.VolumeUp,
-                            contentDescription = "Now playing",
-                            tint = Color(0xFFB8355B),
-                            modifier = Modifier.size(16.dp)
-                        )
+                        Icon(imageVector = Icons.Default.VolumeUp, contentDescription = "Now playing", tint = Color(0xFFB8355B), modifier = Modifier.size(16.dp))
                     } else {
-                        Text(
-                            text = qSong.formattedDuration,
-                            color = Color(0xFF666666),
-                            fontSize = 12.sp
-                        )
+                        Text(text = qSong.formattedDuration, color = Color(0xFF666666), fontSize = 12.sp)
                     }
                 }
             }
@@ -714,33 +535,15 @@ fun SpeedDialog(
     onDismiss: () -> Unit
 ) {
     val speeds = listOf(
-        0.5f  to "0.5×",
-        0.75f to "0.75×",
-        1.0f  to "1.0×",
-        1.25f to "1.25×",
-        1.5f  to "1.5×",
-        2.0f  to "2.0×"
+        0.5f  to "0.5×", 0.75f to "0.75×", 1.0f  to "1.0×",
+        1.25f to "1.25×", 1.5f  to "1.5×", 2.0f  to "2.0×"
     )
 
     Dialog(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFF1E1414))
-                .padding(20.dp)
-        ) {
-            Text(
-                "Playback Speed",
-                color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
+        Column(modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(Color(0xFF1E1414)).padding(20.dp)) {
+            Text("Playback Speed", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
             speeds.chunked(3).forEach { row ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     row.forEach { (speed, label) ->
                         val isSelected = label == currentLabel
                         Box(
@@ -752,13 +555,7 @@ fun SpeedDialog(
                                 .padding(vertical = 12.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = label,
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                textAlign = TextAlign.Center
-                            )
+                            Text(text = label, color = Color.White, fontSize = 14.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, textAlign = TextAlign.Center)
                         }
                     }
                 }
@@ -781,34 +578,17 @@ fun SleepTimerDialog(
     val options = listOf(5L to "5 min", 10L to "10 min", 15L to "15 min", 20L to "20 min", 30L to "30 min", 60L to "1 hour")
 
     Dialog(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFF1E1414))
-                .padding(20.dp)
-        ) {
-            Text("Sleep Timer", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 4.dp))
-            Text("Pause music after…", color = Color(0xFF888888), fontSize = 13.sp,
-                modifier = Modifier.padding(bottom = 16.dp))
+        Column(modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(Color(0xFF1E1414)).padding(20.dp)) {
+            Text("Sleep Timer", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp))
+            Text("Pause music after…", color = Color(0xFF888888), fontSize = 13.sp, modifier = Modifier.padding(bottom = 16.dp))
 
             options.chunked(3).forEach { row ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     row.forEach { (minutes, label) ->
                         Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Color(0xFF2C2020))
-                                .clickable { onSelect(minutes) }
-                                .padding(vertical = 12.dp),
+                            modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(Color(0xFF2C2020)).clickable { onSelect(minutes) }.padding(vertical = 12.dp),
                             contentAlignment = Alignment.Center
-                        ) {
-                            Text(text = label, color = Color.White, fontSize = 13.sp, textAlign = TextAlign.Center)
-                        }
+                        ) { Text(text = label, color = Color.White, fontSize = 13.sp, textAlign = TextAlign.Center) }
                     }
                 }
                 Spacer(Modifier.height(10.dp))
@@ -817,16 +597,9 @@ fun SleepTimerDialog(
             if (isActive) {
                 Spacer(Modifier.height(4.dp))
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFF3D1515))
-                        .clickable { onCancel() }
-                        .padding(vertical = 12.dp),
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color(0xFF3D1515)).clickable { onCancel() }.padding(vertical = 12.dp),
                     contentAlignment = Alignment.Center
-                ) {
-                    Text("Cancel Timer", color = Color(0xFFFF6B6B), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                }
+                ) { Text("Cancel Timer", color = Color(0xFFFF6B6B), fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
             }
         }
     }
