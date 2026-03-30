@@ -23,16 +23,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -212,7 +211,7 @@ fun MusicListScreen(
     val bgColor = if (settings.amoledBlack) Color.Black else Color(0xFF120E0E)
     val surfaceColor = if (settings.amoledBlack) Color(0xFF0A0A0A) else Color(0xFF1E1414)
 
-    var showSortMenu by remember { mutableStateOf(false) }
+    var showOverflowMenu by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
     var showFavoritesOnly by remember { mutableStateOf(false) }
@@ -271,7 +270,7 @@ fun MusicListScreen(
 
     val filteredSongs = remember(searchQuery, allLoadedSongs, showFavoritesOnly, favorites) {
         val base = if (showFavoritesOnly) allLoadedSongs.filter { favorites.contains(it.id) }
-                   else null
+        else null
 
         if (searchQuery.isBlank() && !showFavoritesOnly) null // show paged list normally
         else {
@@ -279,7 +278,7 @@ fun MusicListScreen(
             if (searchQuery.isBlank()) source
             else source.filter {
                 it.title.contains(searchQuery, ignoreCase = true) ||
-                it.artist.contains(searchQuery, ignoreCase = true)
+                        it.artist.contains(searchQuery, ignoreCase = true)
             }
         }
     }
@@ -348,6 +347,7 @@ fun MusicListScreen(
                     }
                 )
             } else {
+                // Title + song count
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Inaho",
@@ -368,155 +368,98 @@ fun MusicListScreen(
                         )
                     }
                 }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(20.dp)
-                ) {
-                    // Favorites filter toggle
+
+                // Search icon
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = "Search",
+                    tint = Color.White,
+                    modifier = Modifier
+                        .size(26.dp)
+                        .clickable { isSearchActive = true }
+                )
+
+                Spacer(Modifier.width(20.dp))
+
+                // 3-dot overflow menu
+                Box {
                     Icon(
-                        imageVector = if (showFavoritesOnly) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = "Favorites",
-                        tint = if (showFavoritesOnly) Color(0xFFB8355B) else Color.White,
-                        modifier = Modifier
-                            .size(24.dp)
-                            .clickable { showFavoritesOnly = !showFavoritesOnly }
-                    )
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = "Search",
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "More options",
                         tint = Color.White,
                         modifier = Modifier
                             .size(26.dp)
-                            .clickable { isSearchActive = true }
+                            .clickable { showOverflowMenu = true }
                     )
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Refresh",
-                        tint = if (hasPermission && songs.loadState.refresh !is LoadState.Loading)
-                            Color.White else Color.White.copy(alpha = 0.38f),
-                        modifier = Modifier
-                            .size(26.dp)
-                            .clickable(
-                                enabled = hasPermission && songs.loadState.refresh !is LoadState.Loading,
-                                onClick = { songs.refresh() }
-                            )
-                    )
-                    Box {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.List,
-                            contentDescription = "Sort",
-                            tint = Color.White,
-                            modifier = Modifier
-                                .size(26.dp)
-                                .clickable { showSortMenu = true }
-                        )
-                        DropdownMenu(
-                            expanded = showSortMenu,
-                            onDismissRequest = { showSortMenu = false },
-                            modifier = Modifier.background(Color(0xFF2C2C2C))
-                        ) {
-                            SortOption.values().forEach { option ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = option.displayName,
-                                            color = if (settings.sortOption == option) Color(0xFFB8355B) else Color.White
-                                        )
-                                    },
-                                    onClick = {
-                                        musicViewModel.settingsManager.updateSortOption(option)
-                                        showSortMenu = false
-                                    }
+                    DropdownMenu(
+                        expanded = showOverflowMenu,
+                        onDismissRequest = { showOverflowMenu = false },
+                        modifier = Modifier.background(Color(0xFF2C2020))
+                    ) {
+                        // Favorites toggle
+                        DropdownMenuItem(
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = if (showFavoritesOnly) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    contentDescription = null,
+                                    tint = if (showFavoritesOnly) Color(0xFFB8355B) else Color.White,
+                                    modifier = Modifier.size(20.dp)
                                 )
+                            },
+                            text = {
+                                Text(
+                                    text = if (showFavoritesOnly) "Show All" else "Favorites",
+                                    color = if (showFavoritesOnly) Color(0xFFB8355B) else Color.White
+                                )
+                            },
+                            onClick = {
+                                showFavoritesOnly = !showFavoritesOnly
+                                showOverflowMenu = false
                             }
-                        }
-                    }
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Settings",
-                        tint = Color.White,
-                        modifier = Modifier
-                            .size(26.dp)
-                            .clickable { onNavigateToSettings() }
-                    )
-                }
-            }
-        }
-
-        // --- Quick Action Buttons: Play All / Shuffle All ---
-        if (!isSearchActive && songs.itemCount > 0 &&
-            songs.loadState.refresh !is LoadState.Loading &&
-            filteredSongs == null
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Play All
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(surfaceColor)
-                        .clickable {
-                            val queue = (0 until songs.itemCount).mapNotNull { songs[it] }
-                            if (queue.isNotEmpty()) {
-                                playerService?.playSong(queue[0], queue, 0)
-                                onNavigateToPlayer()
+                        )
+                        HorizontalDivider(color = Color(0xFF3C2828), thickness = 0.5.dp)
+                        // Reload
+                        DropdownMenuItem(
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    tint = if (hasPermission && songs.loadState.refresh !is LoadState.Loading)
+                                        Color.White else Color.White.copy(alpha = 0.38f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            },
+                            text = {
+                                Text(
+                                    text = "Reload",
+                                    color = if (hasPermission && songs.loadState.refresh !is LoadState.Loading)
+                                        Color.White else Color.White.copy(alpha = 0.38f)
+                                )
+                            },
+                            enabled = hasPermission && songs.loadState.refresh !is LoadState.Loading,
+                            onClick = {
+                                songs.refresh()
+                                showOverflowMenu = false
                             }
-                        }
-                        .padding(vertical = 10.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            tint = Color(0xFFB8355B),
-                            modifier = Modifier.size(18.dp)
                         )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = "Play All",
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-
-                // Shuffle All
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(surfaceColor)
-                        .clickable {
-                            val queue = (0 until songs.itemCount).mapNotNull { songs[it] }
-                            if (queue.isNotEmpty()) {
-                                val shuffled = queue.shuffled()
-                                playerService?.playSong(shuffled[0], shuffled, 0)
-                                onNavigateToPlayer()
+                        HorizontalDivider(color = Color(0xFF3C2828), thickness = 0.5.dp)
+                        // Settings
+                        DropdownMenuItem(
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            },
+                            text = {
+                                Text(text = "Settings", color = Color.White)
+                            },
+                            onClick = {
+                                showOverflowMenu = false
+                                onNavigateToSettings()
                             }
-                        }
-                        .padding(vertical = 10.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Shuffle,
-                            contentDescription = null,
-                            tint = Color(0xFFB8355B),
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = "Shuffle All",
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
@@ -660,8 +603,6 @@ fun MusicListScreen(
                                     onNavigateToPlayer()
                                 }
                             )
-                        } else {
-                            SongListItemPlaceholder()
                         }
                     }
 
@@ -862,38 +803,5 @@ fun SongListItem(
                 .size(20.dp)
                 .clickable(onClick = onFavoriteToggle)
         )
-    }
-}
-
-// ==========================================
-// 7. UI — Placeholder
-// ==========================================
-@Composable
-private fun SongListItemPlaceholder() {
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier
-                .size(50.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(Color(0xFF2C2C2C))
-        )
-        Spacer(Modifier.width(16.dp))
-        Column(Modifier.weight(1f)) {
-            Box(
-                Modifier
-                    .fillMaxWidth(0.6f)
-                    .height(16.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(Color(0xFF2C2C2C))
-            )
-            Spacer(Modifier.height(6.dp))
-            Box(
-                Modifier
-                    .fillMaxWidth(0.4f)
-                    .height(12.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(Color(0xFF2C2C2C))
-            )
-        }
     }
 }
