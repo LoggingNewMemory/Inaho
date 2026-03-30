@@ -70,7 +70,7 @@ enum class EqPreset(
         emoji = "◈",
         description = "Dynamic audio tunnel — boosts volume on beat drops and lifts",
         bands = intArrayOf(200, 100, 0, 100, 150),
-        loudnessGainMb = 800, // Boosted fallback loudness
+        loudnessGainMb = 400, // Balanced fallback loudness
         smartTunnel = true
     ),
     ROCK(
@@ -78,35 +78,35 @@ enum class EqPreset(
         emoji = "♟",
         description = "Punchy bass, scooped mids, crisp highs",
         bands = intArrayOf(500, 300, -200, 200, 400),
-        loudnessGainMb = 800 // Boosted from 200
+        loudnessGainMb = 500 // Increased from Classic to compensate for scooped mids
     ),
     JAZZ(
         displayName = "Jazz",
         emoji = "♩",
         description = "Warm low-mids, airy top end",
         bands = intArrayOf(300, 200, 100, 0, 200),
-        loudnessGainMb = 500 // Boosted from 100
+        loudnessGainMb = 400 // Slight bump over Classic
     ),
     CLASSIC(
         displayName = "Classic",
         emoji = "𝄞",
         description = "Flat response, natural dynamics",
         bands = intArrayOf(0, 0, 0, 0, 0),
-        loudnessGainMb = 300 // Given a gentle boost from 0 so it's not too quiet
+        loudnessGainMb = 300 // THE BASELINE SWEET SPOT
     ),
     POP(
         displayName = "Pop",
         emoji = "♪",
         description = "Boosted vocals & presence, tight bass",
         bands = intArrayOf(-100, 200, 300, 200, 100),
-        loudnessGainMb = 600 // Boosted from 150
+        loudnessGainMb = 400 // Slight bump over Classic
     ),
     BASS(
         displayName = "Bass",
         emoji = "◉",
         description = "Heavy sub & bass boost for earphones",
         bands = intArrayOf(800, 600, 0, -100, -100),
-        loudnessGainMb = 1000 // Boosted from 400 (Max heavy punch)
+        loudnessGainMb = 600 // Bass takes up headroom, needs the highest boost to sound equal
     )
 }
 
@@ -114,19 +114,6 @@ enum class EqPreset(
 // EQ MANAGER  (attach to MediaPlayer audio session)
 // ==========================================
 
-/**
- * YamadaEQManager
- *
- * Lifecycle: create once per [PlayerService], call [attach] when a new
- * MediaPlayer session starts, [release] when the player is torn down.
- *
- * Smart Audio Tunnel logic:
- * Android's [DynamicsProcessing] API (API 28+) is used to apply a
- * multi-band compressor that rides the gain: loud transients (beat hits)
- * are kept from clipping while quiet passages are gently lifted, giving
- * the perception that the music "breathes" with the beat.
- * On API < 28, a simple LoudnessEnhancer is used as a fallback.
- */
 class YamadaEQManager(private val context: Context) {
 
     private val _currentPreset = MutableStateFlow(EqPreset.OFF)
@@ -136,9 +123,8 @@ class YamadaEQManager(private val context: Context) {
 
     private var equalizer: Equalizer? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
-    private var dynamicsProcessor: Any? = null   // DynamicsProcessing (API 28+), kept as Any to avoid hard API ref
+    private var dynamicsProcessor: Any? = null
 
-    // ── Shared Preferences persistence ──
     private val prefs = context.getSharedPreferences("inaho_eq", Context.MODE_PRIVATE)
 
     init {
@@ -146,13 +132,11 @@ class YamadaEQManager(private val context: Context) {
         _currentPreset.value = runCatching { EqPreset.valueOf(savedName) }.getOrDefault(EqPreset.OFF)
     }
 
-    /** Called by PlayerService every time a new MediaPlayer is created. */
     fun attach(sessionId: Int) {
         audioSessionId = sessionId
         applyPreset(_currentPreset.value, sessionId)
     }
 
-    /** Call when MediaPlayer is released. */
     fun release() {
         tearDown()
         audioSessionId = 0
@@ -163,8 +147,6 @@ class YamadaEQManager(private val context: Context) {
         _currentPreset.value = preset
         if (audioSessionId != 0) applyPreset(preset, audioSessionId)
     }
-
-    // ── Private helpers ──
 
     private fun tearDown() {
         runCatching { equalizer?.release() }
@@ -180,7 +162,7 @@ class YamadaEQManager(private val context: Context) {
     private fun applyPreset(preset: EqPreset, sessionId: Int) {
         tearDown()
 
-        if (preset == EqPreset.OFF) return   // bypass — no effects attached
+        if (preset == EqPreset.OFF) return
 
         // 1. Equalizer bands
         runCatching {
@@ -188,7 +170,6 @@ class YamadaEQManager(private val context: Context) {
                 enabled = true
                 val bandCount = numberOfBands.toInt()
                 preset.bands.take(bandCount).forEachIndexed { i, gainMb ->
-                    // Android EQ band levels are in millibels; getBandLevelRange() gives [min, max]
                     val min = bandLevelRange[0].toInt()
                     val max = bandLevelRange[1].toInt()
                     setBandLevel(i.toShort(), gainMb.coerceIn(min, max).toShort())
@@ -203,47 +184,42 @@ class YamadaEQManager(private val context: Context) {
                     DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
                     /* channelCount */ 2,
                     /* preEqInUse   */ false, 0,
-                    /* mbcInUse     */ true,  1,   // 1-band MBC compressor
+                    /* mbcInUse     */ true,  1,
                     /* postEqInUse  */ false, 0,
                     /* limiterInUse */ true
                 ).build()
 
                 val dp = DynamicsProcessing(0, sessionId, config).apply {
-                    // Apply Dynamics Processing to BOTH channels (0 = Left, 1 = Right)
                     for (ch in 0..1) {
-                        // MBC band: attack fast on beats, slow release so gaps stay loud
                         val channel = getMbcBandByChannelIndex(ch, 0)
                         val tunedBand = DynamicsProcessing.MbcBand(channel).apply {
-                            attackTime    = 5f    // ms — snap to beat transient
-                            releaseTime   = 200f  // ms — gentle release
-                            ratio         = 2.0f  // softer compression ratio to save volume
-                            threshold     = -24f  // dB — compress lower signals too
-                            kneeWidth     = 6f    // dB — soft knee
+                            attackTime    = 5f
+                            releaseTime   = 200f
+                            ratio         = 2.2f
+                            threshold     = -20f
+                            kneeWidth     = 6f
                             noiseGateThreshold = -80f
                             expanderRatio = 1.0f
-                            preGain       = 8f    // CRANKED UP makeup gain
-                            postGain      = 6f    // CRANKED UP post gain
+                            preGain       = 3f    // Balanced input gain
+                            postGain      = 3f    // Clean makeup gain
                         }
                         setMbcBandByChannelIndex(ch, 0, tunedBand)
 
-                        // Limiter: prevent clipping after makeup gain
                         val lim = getLimiterByChannelIndex(ch)
                         val tunedLim = DynamicsProcessing.Limiter(lim).apply {
                             attackTime  = 1f
                             releaseTime = 50f
                             ratio       = 10f
-                            threshold   = -0.5f  // dB — hard ceiling just below 0 dBFS
-                            postGain    = 4f     // CRANKED UP master boost
+                            threshold   = -1f    // Hard ceiling
+                            postGain    = 1f     // Slight master lift, matches Classic
                         }
                         setLimiterByChannelIndex(ch, tunedLim)
                     }
-
                     enabled = true
                 }
                 dynamicsProcessor = dp
             }
         } else if (preset.loudnessGainMb > 0) {
-            // Fallback / non-smart presets: plain loudness boost
             runCatching {
                 loudnessEnhancer = LoudnessEnhancer(sessionId).apply {
                     setTargetGain(preset.loudnessGainMb)
@@ -252,7 +228,7 @@ class YamadaEQManager(private val context: Context) {
             }
         }
 
-        // 3. For Smart on API < 28, still apply loudness boost as fallback
+        // 3. For Smart on API < 28, apply fallback
         if (preset.smartTunnel && Build.VERSION.SDK_INT < Build.VERSION_CODES.P && preset.loudnessGainMb > 0) {
             runCatching {
                 loudnessEnhancer = LoudnessEnhancer(sessionId).apply {
@@ -268,11 +244,6 @@ class YamadaEQManager(private val context: Context) {
 // EQ DIALOG UI
 // ==========================================
 
-/**
- * EQ picker dialog — matches the dark red Inaho design language.
- * Shows OFF at the top, then 6 preset tiles in a 3-column grid,
- * with a band-level visualizer bar for the selected preset.
- */
 @Composable
 fun EqDialog(
     eqManager: YamadaEQManager,
@@ -287,7 +258,6 @@ fun EqDialog(
                 .background(Color(0xFF1A1010))
                 .padding(20.dp)
         ) {
-            // Header
             Text(
                 text = "Yamada EQ",
                 color = Color(0xFFB8355B),
@@ -302,24 +272,21 @@ fun EqDialog(
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
-            // Split OFF preset from the rest
             val presets = EqPreset.values().toList()
             val offPreset = presets.first { it == EqPreset.OFF }
             val otherPresets = presets.filter { it != EqPreset.OFF }
 
-            // 1. Full width OFF Preset
             Row(modifier = Modifier.fillMaxWidth()) {
                 EqPresetTile(
                     preset = offPreset,
                     isSelected = offPreset == currentPreset,
                     onClick = { eqManager.setPreset(offPreset) },
-                    modifier = Modifier.fillMaxWidth() // Takes up the whole row
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 2. Preset grid for the rest (3 columns)
             otherPresets.chunked(3).forEach { row ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -333,7 +300,6 @@ fun EqDialog(
                             modifier = Modifier.weight(1f)
                         )
                     }
-                    // Fill empty cells in last row
                     repeat(3 - row.size) {
                         Spacer(modifier = Modifier.weight(1f))
                     }
@@ -341,7 +307,6 @@ fun EqDialog(
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            // Band visualizer (hidden for OFF)
             if (currentPreset != EqPreset.OFF) {
                 Spacer(modifier = Modifier.height(8.dp))
                 EqBandVisualizer(preset = currentPreset)
@@ -393,14 +358,10 @@ private fun EqPresetTile(
     }
 }
 
-/**
- * Minimal 5-band bar chart showing the selected preset's EQ curve.
- * Bars are normalized so the tallest band = full height.
- */
 @Composable
 private fun EqBandVisualizer(preset: EqPreset) {
     val bandLabels = listOf("60", "230", "910", "3.6k", "14k")
-    val maxGain = 1000   // millibels — reference ceiling for bar height
+    val maxGain = 1000
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
@@ -423,7 +384,6 @@ private fun EqBandVisualizer(preset: EqPreset) {
                     modifier = Modifier.weight(1f),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Bar
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -438,7 +398,6 @@ private fun EqBandVisualizer(preset: EqPreset) {
                 }
             }
         }
-        // Labels
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
