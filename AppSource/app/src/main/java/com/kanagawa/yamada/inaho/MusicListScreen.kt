@@ -54,6 +54,8 @@ import androidx.paging.*
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 // ==========================================
 // 1. MODEL
@@ -207,7 +209,6 @@ fun MusicListScreen(
     val playerState by PlayerService.playerState.collectAsState()
     val playerService = rememberPlayerService()
 
-    // Background color driven by AMOLED setting
     val bgColor = if (settings.amoledBlack) Color.Black else Color(0xFF120E0E)
     val surfaceColor = if (settings.amoledBlack) Color(0xFF0A0A0A) else Color(0xFF1E1414)
 
@@ -258,32 +259,80 @@ fun MusicListScreen(
         }
     }
 
-    // FIX: Record loaded songs into the ViewModel as pages stream in.
-    // We only snapshot visible items from the pager — safe at any library size.
-    LaunchedEffect(songs.itemCount) {
-        // Collect only already-materialized items (non-null) without force-loading the full list.
-        val list = (0 until songs.itemCount).mapNotNull { i ->
-            // songs[i] returns null for items not yet loaded; mapNotNull safely skips them.
-            songs[i]
+    // FIX: Load a lightweight list of the ENTIRE library into memory ONCE in the background.
+    // This avoids triggering Paging3 loading cascades and completely solves the OOM crash.
+    var fullLibrary by remember { mutableStateOf<List<Song>>(emptyList()) }
+
+    LaunchedEffect(hasPermission, songs.loadState.refresh, settings.sortOption, settings.onlyMusicFolder) {
+        if (hasPermission && songs.loadState.refresh !is LoadState.Loading) {
+            withContext(Dispatchers.IO) {
+                try {
+                    val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+                    } else MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+
+                    val projection = arrayOf(
+                        MediaStore.Audio.Media._ID,
+                        MediaStore.Audio.Media.TITLE,
+                        MediaStore.Audio.Media.ARTIST,
+                        MediaStore.Audio.Media.DURATION
+                    )
+
+                    val sortOrder = when (settings.sortOption) {
+                        SortOption.TITLE_ASC -> "${MediaStore.Audio.Media.TITLE} ASC"
+                        SortOption.TITLE_DESC -> "${MediaStore.Audio.Media.TITLE} DESC"
+                        SortOption.ARTIST_ASC -> "${MediaStore.Audio.Media.ARTIST} ASC"
+                        SortOption.DATE_ADDED_DESC -> "${MediaStore.Audio.Media.DATE_ADDED} DESC"
+                        SortOption.DURATION_ASC -> "${MediaStore.Audio.Media.DURATION} ASC"
+                        SortOption.DURATION_DESC -> "${MediaStore.Audio.Media.DURATION} DESC"
+                    }
+
+                    var selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DURATION} > 10000"
+                    if (settings.onlyMusicFolder) {
+                        selection += if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                            " AND ${MediaStore.Audio.Media.RELATIVE_PATH} LIKE '%Music/%'"
+                        else
+                            " AND ${MediaStore.Audio.Media.DATA} LIKE '%/Music/%'"
+                    }
+
+                    val tempList = mutableListOf<Song>()
+                    context.contentResolver.query(collection, projection, selection, null, sortOrder)?.use { c ->
+                        val idCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                        val titleCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+                        val artistCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+                        val durationCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+
+                        while (c.moveToNext()) {
+                            val id = c.getLong(idCol)
+                            val dur = c.getLong(durationCol)
+                            val title = c.getString(titleCol) ?: "Unknown Title"
+                            val artist = c.getString(artistCol) ?: "Unknown Artist"
+                            val trackUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
+
+                            val totalSeconds = dur / 1000
+                            val formatted = String.format("%02d:%02d", totalSeconds / 60, totalSeconds % 60)
+                            tempList.add(Song(id, title, artist, dur, trackUri, formatted))
+                        }
+                    }
+                    fullLibrary = tempList
+                    musicViewModel.recordLoadedSongs(tempList) // Update ViewModel state safely
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
-        if (list.isNotEmpty()) musicViewModel.recordLoadedSongs(list)
     }
 
-    // FIX: Use the ViewModel's recorded snapshot as the search/filter base.
-    // This avoids iterating the PagingData source on every recomposition (which caused
-    // crashes on 1000+ song libraries due to excessive item access and index mismatches).
-    val allLoadedSongs by musicViewModel.loadedSongs.collectAsState()
+    // Filter using the lightweight fullLibrary. This ensures search works instantly
+    // across all files without forcing Paging3 to load everything.
+    val filteredSongs = remember(searchQuery, fullLibrary, showFavoritesOnly, favorites) {
+        val base = if (showFavoritesOnly) fullLibrary.filter { favorites.contains(it.id) }
+        else fullLibrary
 
-    // allLoadedSongs is now a collectAsState() — derive filteredSongs directly.
-    val filteredSongs = remember(searchQuery, allLoadedSongs, showFavoritesOnly, favorites) {
-        val base = if (showFavoritesOnly) allLoadedSongs.filter { favorites.contains(it.id) }
-        else null
-
-        if (searchQuery.isBlank() && !showFavoritesOnly) null // show paged list normally
+        if (searchQuery.isBlank() && !showFavoritesOnly) null
         else {
-            val source = base ?: allLoadedSongs
-            if (searchQuery.isBlank()) source
-            else source.filter {
+            if (searchQuery.isBlank()) base
+            else base.filter {
                 it.title.contains(searchQuery, ignoreCase = true) ||
                         it.artist.contains(searchQuery, ignoreCase = true)
             }
@@ -601,8 +650,12 @@ fun MusicListScreen(
                                 coverBitmap = artCache[song.id],
                                 isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
                                 onClick = {
-                                    val queue = (0 until songs.itemCount).mapNotNull { songs[it] }
-                                    playerService?.playSong(song, queue, index)
+                                    // FIX: Pass the full background library queue instead of iterating the Pager.
+                                    // This guarantees the 'Next' button will work across the whole library without crashing.
+                                    val safeQueue = if (fullLibrary.isNotEmpty()) fullLibrary else listOf(song)
+                                    val queueIndex = safeQueue.indexOfFirst { it.id == song.id }.takeIf { it >= 0 } ?: 0
+
+                                    playerService?.playSong(song, safeQueue, queueIndex)
                                     onNavigateToPlayer()
                                 }
                             )
