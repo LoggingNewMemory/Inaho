@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
+import android.support.v4.media.session.MediaSessionCompat
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -68,12 +69,14 @@ class PlayerService : Service() {
 
     private val binder = PlayerBinder()
     private var mediaPlayer: MediaPlayer? = null
+    private lateinit var mediaSession: MediaSessionCompat
 
     override fun onBind(intent: Intent): IBinder = binder
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        mediaSession = MediaSessionCompat(this, "Inaho_Media_Session")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -320,6 +323,7 @@ class PlayerService : Service() {
             .setContentTitle(song?.title ?: "Inaho")
             .setContentText(song?.artist ?: "")
             .setContentIntent(openIntent)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .addAction(
                 android.R.drawable.ic_media_previous, "Previous",
                 actionIntent(ACTION_PREV, 1)
@@ -336,6 +340,7 @@ class PlayerService : Service() {
             .setStyle(
                 androidx.media.app.NotificationCompat.MediaStyle()
                     .setShowActionsInCompactView(0, 1, 2)
+                    .setMediaSession(mediaSession.sessionToken)
             )
             .setOngoing(state.isPlaying)
             .build()
@@ -355,5 +360,6 @@ class PlayerService : Service() {
             release()
         }
         mediaPlayer = null
+        mediaSession.release()
     }
 }
