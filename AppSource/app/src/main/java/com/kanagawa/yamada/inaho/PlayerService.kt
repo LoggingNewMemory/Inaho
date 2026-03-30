@@ -77,7 +77,7 @@ class PlayerService : Service() {
     private var mediaPlayer: MediaPlayer? = null
     private lateinit var mediaSession: MediaSessionCompat
 
-    // Track current playback speed so we can re-apply after song change
+    // FIX: Track current playback speed — reset to 1.0f on every new song
     private var currentPlaybackSpeed: Float = 1.0f
 
     override fun onBind(intent: Intent): IBinder = binder
@@ -195,6 +195,9 @@ class PlayerService : Service() {
         }
         val currentIndex = if (isShuffled) 0 else index
 
+        // FIX: Reset speed to 1.0x every time a new song is explicitly selected
+        currentPlaybackSpeed = 1.0f
+
         _playerState.value = _playerState.value.copy(
             currentSong = song,
             originalQueue = queue,
@@ -270,6 +273,9 @@ class PlayerService : Service() {
             }
         }
 
+        // FIX: Reset speed to 1.0x on every auto/manual song advance
+        currentPlaybackSpeed = 1.0f
+
         val nextSong = state.activeQueue[nextIndex]
         _playerState.value = state.copy(
             currentSong = nextSong,
@@ -305,6 +311,9 @@ class PlayerService : Service() {
             }
         }
 
+        // FIX: Reset speed to 1.0x when going back to the previous song
+        currentPlaybackSpeed = 1.0f
+
         val prevSong = state.activeQueue[prevIndex]
         _playerState.value = state.copy(
             currentSong = prevSong,
@@ -330,6 +339,10 @@ class PlayerService : Service() {
         val state = _playerState.value
         if (index < 0 || index >= state.activeQueue.size) return
         val song = state.activeQueue[index]
+
+        // FIX: Reset speed to 1.0x when jumping via the queue panel
+        currentPlaybackSpeed = 1.0f
+
         _playerState.value = state.copy(
             currentSong = song,
             currentIndex = index,
@@ -395,7 +408,9 @@ class PlayerService : Service() {
             try {
                 setDataSource(applicationContext, uri)
                 setOnPreparedListener { mp ->
-                    // Apply stored speed before starting
+                    // currentPlaybackSpeed is already reset to 1.0f before every prepareAndPlay call
+                    // for new song navigations, so this block only re-applies a non-default speed
+                    // if setPlaybackSpeed() was called explicitly by the user in this session.
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && currentPlaybackSpeed != 1.0f) {
                         try {
                             mp.playbackParams = mp.playbackParams.setSpeed(currentPlaybackSpeed)

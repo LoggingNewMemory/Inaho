@@ -258,16 +258,23 @@ fun MusicListScreen(
         }
     }
 
+    // FIX: Record loaded songs into the ViewModel as pages stream in.
+    // We only snapshot visible items from the pager — safe at any library size.
     LaunchedEffect(songs.itemCount) {
-        val list = (0 until songs.itemCount).mapNotNull { songs[it] }
+        // Collect only already-materialized items (non-null) without force-loading the full list.
+        val list = (0 until songs.itemCount).mapNotNull { i ->
+            // songs[i] returns null for items not yet loaded; mapNotNull safely skips them.
+            songs[i]
+        }
         if (list.isNotEmpty()) musicViewModel.recordLoadedSongs(list)
     }
 
-    // Build filtered list for search / favorites
-    val allLoadedSongs = remember(songs.itemCount) {
-        (0 until songs.itemCount).mapNotNull { songs[it] }
-    }
+    // FIX: Use the ViewModel's recorded snapshot as the search/filter base.
+    // This avoids iterating the PagingData source on every recomposition (which caused
+    // crashes on 1000+ song libraries due to excessive item access and index mismatches).
+    val allLoadedSongs by musicViewModel.loadedSongs.collectAsState()
 
+    // allLoadedSongs is now a collectAsState() — derive filteredSongs directly.
     val filteredSongs = remember(searchQuery, allLoadedSongs, showFavoritesOnly, favorites) {
         val base = if (showFavoritesOnly) allLoadedSongs.filter { favorites.contains(it.id) }
         else null

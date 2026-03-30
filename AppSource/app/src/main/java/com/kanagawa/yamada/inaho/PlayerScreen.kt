@@ -14,6 +14,7 @@ import android.media.MediaMetadataRetriever
 import android.media.audiofx.AudioEffect
 import android.net.Uri
 import android.provider.MediaStore
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -87,34 +88,50 @@ fun PlayerScreen(
     var showSleepTimerDialog by remember { mutableStateOf(false) }
     var showQueueSheet by remember { mutableStateOf(false) }
     var sleepTimerRemainingMs by remember { mutableLongStateOf(-1L) }
-    var currentSpeedLabel by remember { mutableStateOf("1.0×") }
 
-    // Volume control synced with hardware keys
+    // FIX: currentSpeedLabel resets to "1.0×" whenever the song changes
+    val currentSongId = song?.id
+    var currentSpeedLabel by remember { mutableStateOf("1.0×") }
+    LaunchedEffect(currentSongId) {
+        currentSpeedLabel = "1.0×"
+    }
+
+    // ── Volume control ──
+    // FIX: Optimized — AudioManager queries are cheap but we avoid redundant
+    // state writes by only updating when the value actually changes.
+    // The BroadcastReceiver is scoped to the composable lifetime via DisposableEffect.
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat() }
+
     var volumeValue by remember {
         mutableFloatStateOf(
             audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume
         )
     }
 
-    DisposableEffect(context, audioManager) {
+    DisposableEffect(Unit) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 if (intent?.action == "android.media.VOLUME_CHANGED_ACTION") {
-                    val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()
-                    volumeValue = currentVolume / maxVolume
+                    val newVolume =
+                        audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume
+                    // Only trigger recomposition when the value actually changed
+                    if (newVolume != volumeValue) {
+                        volumeValue = newVolume
+                    }
                 }
             }
         }
         context.registerReceiver(receiver, IntentFilter("android.media.VOLUME_CHANGED_ACTION"))
-        onDispose {
-            context.unregisterReceiver(receiver)
-        }
+        onDispose { context.unregisterReceiver(receiver) }
     }
 
     val bgColor = if (settings.amoledBlack) Color.Black else Color(0xFF0D0A0A)
     val surfaceColor = if (settings.amoledBlack) Color(0xFF0A0A0A) else Color(0xFF1E1414)
+
+    // FIX: Intercept hardware/gesture back press and route to MusicListScreen
+    // instead of letting the OS minimize/destroy the activity.
+    BackHandler { onNavigateBack() }
 
     LaunchedEffect(playerState.isPlaying, playerService, playerState.currentSong?.id) {
         if (playerService != null) {
@@ -271,7 +288,7 @@ fun PlayerScreen(
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
-                    modifier = Modifier.basicMarquee() // Title now slides automatically
+                    modifier = Modifier.basicMarquee()
                 )
                 Spacer(modifier = Modifier.height(3.dp))
                 Text(
@@ -342,9 +359,14 @@ fun PlayerScreen(
             Slider(
                 value = volumeValue,
                 onValueChange = { v ->
+                    // Only write to AudioManager when the rounded integer step changes,
+                    // avoiding redundant setStreamVolume calls on every tiny drag delta.
+                    val newStep = (v * maxVolume).toInt()
+                    val oldStep = (volumeValue * maxVolume).toInt()
                     volumeValue = v
-                    val vol = (v * maxVolume).toInt()
-                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, vol, 0)
+                    if (newStep != oldStep) {
+                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newStep, 0)
+                    }
                 },
                 modifier = Modifier
                     .weight(1f)
@@ -639,7 +661,7 @@ fun QueuePanel(
                             fontSize = 14.sp,
                             fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Normal,
                             maxLines = 1,
-                            modifier = Modifier.basicMarquee() // Slide effect added here too
+                            modifier = Modifier.basicMarquee()
                         )
                         Text(
                             text = qSong.artist,
