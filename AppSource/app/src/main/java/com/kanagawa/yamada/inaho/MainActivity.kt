@@ -14,6 +14,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
@@ -33,13 +36,28 @@ enum class AppScreen {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 1. Enable drawing behind system bars
         enableEdgeToEdge()
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        // 2. Hide ONLY the Navigation Bar
+        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
+        // Allow the navigation bar to temporarily appear if the user swipes up from the bottom
+        windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+
+        // Hide the navigation bar, but explicitly ensure the status bar remains visible
+        windowInsetsController.hide(WindowInsetsCompat.Type.navigationBars())
+        windowInsetsController.show(WindowInsetsCompat.Type.statusBars())
+
         setContent {
             HaloMusicTheme {
                 val musicViewModel: MusicViewModel = viewModel()
                 var currentScreen by rememberSaveable { mutableStateOf(AppScreen.LIST) }
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    // innerPadding will now automatically protect your content from overlapping
+                    // with the visible status bar at the top!
                     Box(modifier = Modifier.padding(innerPadding)) {
                         Crossfade(targetState = currentScreen, label = "Screen Transition") { screen ->
                             when (screen) {
