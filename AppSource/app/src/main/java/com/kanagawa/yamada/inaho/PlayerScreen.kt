@@ -9,9 +9,16 @@ import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.MediaStore
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -27,9 +34,11 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -64,8 +73,14 @@ fun PlayerScreen(
     var seekValue by remember { mutableFloatStateOf(0f) }
     var livePositionMs by remember { mutableLongStateOf(0L) }
 
-    // State for our Format Detector
     var audioDetails by remember { mutableStateOf<AudioDetails?>(null) }
+
+    // — New feature states —
+    var showSpeedDialog by remember { mutableStateOf(false) }
+    var showSleepTimerDialog by remember { mutableStateOf(false) }
+    var showQueueSheet by remember { mutableStateOf(false) }
+    var sleepTimerRemainingMs by remember { mutableLongStateOf(-1L) } // -1 = off
+    var currentSpeedLabel by remember { mutableStateOf("1.0×") }
 
     LaunchedEffect(playerState.isPlaying, playerService, playerState.currentSong?.id) {
         if (playerService != null) {
@@ -86,7 +101,6 @@ fun PlayerScreen(
         }
     }
 
-    // Effect to extract actual audio metadata when the song changes
     LaunchedEffect(song?.id) {
         if (song != null) {
             withContext(Dispatchers.IO) {
@@ -97,6 +111,22 @@ fun PlayerScreen(
         }
     }
 
+    // Sleep timer countdown
+    LaunchedEffect(sleepTimerRemainingMs) {
+        if (sleepTimerRemainingMs > 0) {
+            delay(1000)
+            val next = sleepTimerRemainingMs - 1000
+            if (next <= 0) {
+                sleepTimerRemainingMs = -1L
+                playerService?.togglePlayPause()
+                // Ensure we pause, not toggle to play
+                if (playerState.isPlaying) playerService?.togglePlayPause()
+            } else {
+                sleepTimerRemainingMs = next
+            }
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -104,7 +134,7 @@ fun PlayerScreen(
             .padding(horizontal = 20.dp)
             .navigationBarsPadding()
     ) {
-        // Updated Top Bar using a Box for perfect centering
+        // Top Bar
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -114,7 +144,7 @@ fun PlayerScreen(
                 onClick = onNavigateBack,
                 modifier = Modifier
                     .align(Alignment.CenterStart)
-                    .offset(x = (-12).dp) // Offset to align perfectly with cover edge
+                    .offset(x = (-12).dp)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -123,7 +153,6 @@ fun PlayerScreen(
                 )
             }
 
-            // FLAC / Audio Detector Badge
             audioDetails?.let { details ->
                 Text(
                     text = "${details.format} • ${details.sampleRate} • ${details.bitDepth} • ${details.bitRate}",
@@ -138,41 +167,60 @@ fun PlayerScreen(
             }
 
             IconButton(
-                onClick = { /* More options placeholder */ },
+                onClick = { showQueueSheet = !showQueueSheet },
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .offset(x = 12.dp) // Offset to align perfectly with cover edge
+                    .offset(x = 12.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.MoreVert,
-                    contentDescription = "More",
-                    tint = Color(0xFFB8355B)
+                    imageVector = Icons.Default.QueueMusic,
+                    contentDescription = "Queue",
+                    tint = if (showQueueSheet) Color(0xFFB8355B) else Color.White
                 )
             }
         }
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFF1E1414)),
-            contentAlignment = Alignment.Center
+        // Queue Sheet (animated, inline above artwork)
+        AnimatedVisibility(
+            visible = showQueueSheet,
+            enter = expandVertically(),
+            exit = shrinkVertically()
         ) {
-            if (coverBitmap != null) {
-                Image(
-                    bitmap = coverBitmap.asImageBitmap(),
-                    contentDescription = "Album Art",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.MusicNote,
-                    contentDescription = null,
-                    tint = Color(0xFF3D2020),
-                    modifier = Modifier.size(80.dp)
-                )
+            QueuePanel(
+                playerState = playerState,
+                artCache = artCache,
+                onSongClick = { song, index ->
+                    playerService?.jumpToQueueIndex(index)
+                    showQueueSheet = false
+                }
+            )
+        }
+
+        if (!showQueueSheet) {
+            // Cover Art
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF1E1414)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (coverBitmap != null) {
+                    Image(
+                        bitmap = coverBitmap.asImageBitmap(),
+                        contentDescription = "Album Art",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = Color(0xFF3D2020),
+                        modifier = Modifier.size(80.dp)
+                    )
+                }
             }
         }
 
@@ -228,6 +276,70 @@ fun PlayerScreen(
 
         Spacer(modifier = Modifier.weight(1f))
 
+        // — Extra Controls Row: Speed + Sleep Timer —
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Speed button
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFF1E1414))
+                    .clickable { showSpeedDialog = true }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Speed,
+                        contentDescription = "Speed",
+                        tint = Color(0xFFB8355B),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = currentSpeedLabel,
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            // Sleep timer button
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFF1E1414))
+                    .clickable { showSleepTimerDialog = true }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Bedtime,
+                        contentDescription = "Sleep Timer",
+                        tint = if (sleepTimerRemainingMs > 0) Color(0xFFB8355B) else Color(0xFFAAAAAA),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = if (sleepTimerRemainingMs > 0)
+                            formatMs(sleepTimerRemainingMs)
+                        else "Sleep",
+                        color = if (sleepTimerRemainingMs > 0) Color(0xFFB8355B) else Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+
+        // Main Controls Row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -308,16 +420,310 @@ fun PlayerScreen(
             }
         }
     }
+
+    // ---- Dialogs ----
+
+    if (showSpeedDialog) {
+        SpeedDialog(
+            currentLabel = currentSpeedLabel,
+            onSelect = { speed, label ->
+                currentSpeedLabel = label
+                playerService?.setPlaybackSpeed(speed)
+                showSpeedDialog = false
+            },
+            onDismiss = { showSpeedDialog = false }
+        )
+    }
+
+    if (showSleepTimerDialog) {
+        SleepTimerDialog(
+            isActive = sleepTimerRemainingMs > 0,
+            onSelect = { minutes ->
+                sleepTimerRemainingMs = minutes * 60 * 1000L
+                showSleepTimerDialog = false
+            },
+            onCancel = {
+                sleepTimerRemainingMs = -1L
+                showSleepTimerDialog = false
+            },
+            onDismiss = { showSleepTimerDialog = false }
+        )
+    }
 }
 
+// ==========================================
+// QUEUE PANEL
+// ==========================================
+@Composable
+fun QueuePanel(
+    playerState: PlayerState,
+    artCache: Map<Long, Bitmap?>,
+    onSongClick: (Song, Int) -> Unit
+) {
+    val listState = rememberLazyListState()
+    val queue = playerState.activeQueue
+
+    LaunchedEffect(playerState.currentIndex) {
+        if (playerState.currentIndex >= 0 && playerState.currentIndex < queue.size) {
+            listState.animateScrollToItem(playerState.currentIndex)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 260.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFF1A1010))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Up Next",
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = "${queue.size} songs",
+                color = Color(0xFF666666),
+                fontSize = 12.sp
+            )
+        }
+        HorizontalDivider(color = Color(0xFF2C2020), thickness = 0.5.dp)
+
+        LazyColumn(state = listState) {
+            itemsIndexed(queue) { index, qSong ->
+                val isCurrentSong = index == playerState.currentIndex
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSongClick(qSong, index) }
+                        .background(if (isCurrentSong) Color(0xFF2A1515) else Color.Transparent)
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val art = artCache[qSong.id]
+                    if (art != null) {
+                        Image(
+                            bitmap = art.asImageBitmap(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xFF2C2C2C))
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            qSong.title,
+                            color = if (isCurrentSong) Color(0xFFB8355B) else Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            qSong.artist,
+                            color = Color(0xFF888888),
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    if (isCurrentSong) {
+                        Icon(
+                            imageVector = Icons.Default.VolumeUp,
+                            contentDescription = "Now playing",
+                            tint = Color(0xFFB8355B),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    } else {
+                        Text(
+                            qSong.formattedDuration,
+                            color = Color(0xFF666666),
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    Spacer(Modifier.height(12.dp))
+}
+
+// ==========================================
+// SPEED DIALOG
+// ==========================================
+@Composable
+fun SpeedDialog(
+    currentLabel: String,
+    onSelect: (Float, String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val speeds = listOf(
+        0.5f to "0.5×",
+        0.75f to "0.75×",
+        1.0f to "1.0×",
+        1.25f to "1.25×",
+        1.5f to "1.5×",
+        2.0f to "2.0×"
+    )
+
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color(0xFF1E1414))
+                .padding(20.dp)
+        ) {
+            Text(
+                "Playback Speed",
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+            speeds.chunked(3).forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    row.forEach { (speed, label) ->
+                        val isSelected = label == currentLabel
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    if (isSelected) Color(0xFFB8355B) else Color(0xFF2C2020)
+                                )
+                                .clickable { onSelect(speed, label) }
+                                .padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+            }
+        }
+    }
+}
+
+// ==========================================
+// SLEEP TIMER DIALOG
+// ==========================================
+@Composable
+fun SleepTimerDialog(
+    isActive: Boolean,
+    onSelect: (Long) -> Unit,
+    onCancel: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val options = listOf(5L to "5 min", 10L to "10 min", 15L to "15 min", 20L to "20 min", 30L to "30 min", 60L to "1 hour")
+
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color(0xFF1E1414))
+                .padding(20.dp)
+        ) {
+            Text(
+                "Sleep Timer",
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+            Text(
+                "Pause music after…",
+                color = Color(0xFF888888),
+                fontSize = 13.sp,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            options.chunked(3).forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    row.forEach { (minutes, label) ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFF2C2020))
+                                .clickable { onSelect(minutes) }
+                                .padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+            }
+
+            if (isActive) {
+                Spacer(Modifier.height(4.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF3D1515))
+                        .clickable { onCancel() }
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "Cancel Timer",
+                        color = Color(0xFFFF6B6B),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ==========================================
+// HELPERS
+// ==========================================
 private fun formatMs(ms: Long): String {
     val totalSeconds = (ms / 1000).coerceAtLeast(0)
     return String.format("%02d:%02d", totalSeconds / 60, totalSeconds % 60)
 }
 
-// --- Audio Metadata Extractor ---
 private fun extractAudioDetails(context: Context, songId: Any): AudioDetails? {
-    // Generate URI safely depending on whether songId is an ID or a string path
     val uri = try {
         val idAsLong = songId.toString().toLong()
         ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, idAsLong)
@@ -329,7 +735,6 @@ private fun extractAudioDetails(context: Context, songId: Any): AudioDetails? {
         val retriever = MediaMetadataRetriever()
         retriever.setDataSource(context, uri)
 
-        // 1. Format (MIME)
         val mime = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE) ?: ""
         val formatStr = when {
             mime.contains("flac", true) -> "FLAC"
@@ -342,7 +747,6 @@ private fun extractAudioDetails(context: Context, songId: Any): AudioDetails? {
             else -> "UNKNOWN"
         }
 
-        // 2. Bitrate
         val bitrateStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)
         val bitrateKbps = bitrateStr?.toLongOrNull()?.div(1000)?.toString() ?: "Unknown"
 
@@ -350,18 +754,14 @@ private fun extractAudioDetails(context: Context, songId: Any): AudioDetails? {
         extractor.setDataSource(context, uri, null)
 
         var sampleRate = "Unknown"
-        var bitDepth = "16" // Common Default
+        var bitDepth = "16"
 
         if (extractor.trackCount > 0) {
             val format = extractor.getTrackFormat(0)
-
-            // 3. Sample Rate
             if (format.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
                 val sr = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
                 sampleRate = if (sr % 1000 == 0) "${sr / 1000}" else "${sr / 1000f}"
             }
-
-            // 4. Bit Depth
             if (format.containsKey("bits-per-sample")) {
                 bitDepth = format.getInteger("bits-per-sample").toString()
             } else if (format.containsKey(MediaFormat.KEY_PCM_ENCODING)) {

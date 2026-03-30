@@ -77,6 +77,9 @@ class PlayerService : Service() {
     private var mediaPlayer: MediaPlayer? = null
     private lateinit var mediaSession: MediaSessionCompat
 
+    // Track current playback speed so we can re-apply after song change
+    private var currentPlaybackSpeed: Float = 1.0f
+
     override fun onBind(intent: Intent): IBinder = binder
 
     override fun onCreate() {
@@ -106,7 +109,7 @@ class PlayerService : Service() {
 
                 override fun onSeekTo(pos: Long) {
                     seekTo(pos)
-                    updateMediaSessionState() // Refresh the UI immediately
+                    updateMediaSessionState()
                     updateNotification()
                 }
 
@@ -128,16 +131,15 @@ class PlayerService : Service() {
         return START_STICKY
     }
 
-    // --- MediaSession Sync Methods ---
+    // --- MediaSession Sync ---
 
     private fun updateMediaSessionState() {
         val state = _playerState.value
         val song = state.currentSong ?: return
 
-        // 1. Sync Playback State
         val playbackState = if (state.isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
         val position = mediaPlayer?.currentPosition?.toLong() ?: 0L
-        val playbackSpeed = if (state.isPlaying) 1f else 0f
+        val playbackSpeed = if (state.isPlaying) currentPlaybackSpeed else 0f
 
         val stateBuilder = PlaybackStateCompat.Builder()
             .setActions(
@@ -152,13 +154,11 @@ class PlayerService : Service() {
 
         mediaSession.setPlaybackState(stateBuilder.build())
 
-        // 2. Sync Metadata (Cover, Title, Artist, Duration)
         val metadataBuilder = MediaMetadataCompat.Builder()
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, song.title)
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, song.artist)
             .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, state.durationMs)
 
-        // Try to fetch album art for the left-side cover
         val bitmap = getAlbumArtBitmap(applicationContext, song.trackUri)
         if (bitmap != null) {
             metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, bitmap)
@@ -167,7 +167,6 @@ class PlayerService : Service() {
         mediaSession.setMetadata(metadataBuilder.build())
     }
 
-    // Helper function to extract album cover from the audio file
     private fun getAlbumArtBitmap(context: Context, uri: Uri): Bitmap? {
         var retriever: MediaMetadataRetriever? = null
         return try {
@@ -286,7 +285,6 @@ class PlayerService : Service() {
         val mp = mediaPlayer
         val position = mp?.currentPosition ?: 0
 
-        // If played more than 3 seconds, restart the current song
         if (position > 3000) {
             mp?.seekTo(0)
             _playerState.value = state.copy(positionMs = 0L)
@@ -325,6 +323,38 @@ class PlayerService : Service() {
 
     fun getCurrentPosition(): Long = mediaPlayer?.currentPosition?.toLong() ?: 0L
 
+    /**
+     * Jump to a specific index in the active queue (used by the Queue panel).
+     */
+    fun jumpToQueueIndex(index: Int) {
+        val state = _playerState.value
+        if (index < 0 || index >= state.activeQueue.size) return
+        val song = state.activeQueue[index]
+        _playerState.value = state.copy(
+            currentSong = song,
+            currentIndex = index,
+            positionMs = 0L,
+            durationMs = song.durationMs
+        )
+        prepareAndPlay(song.trackUri)
+    }
+
+    /**
+     * Change playback speed. Supported values: 0.5, 0.75, 1.0, 1.25, 1.5, 2.0.
+     * Requires API 23+; silently ignored on older versions.
+     */
+    fun setPlaybackSpeed(speed: Float) {
+        currentPlaybackSpeed = speed
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                mediaPlayer?.playbackParams = mediaPlayer?.playbackParams?.setSpeed(speed)
+                    ?: return
+            } catch (e: Exception) {
+                // Unsupported on some devices — fail gracefully
+            }
+        }
+    }
+
     fun stopPlayback() {
         mediaPlayer?.apply {
             if (isPlaying) stop()
@@ -334,7 +364,6 @@ class PlayerService : Service() {
         mediaPlayer = null
         _playerState.value = PlayerState()
 
-        // Remove the notification and stop the service
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)
         } else {
@@ -366,6 +395,12 @@ class PlayerService : Service() {
             try {
                 setDataSource(applicationContext, uri)
                 setOnPreparedListener { mp ->
+                    // Apply stored speed before starting
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && currentPlaybackSpeed != 1.0f) {
+                        try {
+                            mp.playbackParams = mp.playbackParams.setSpeed(currentPlaybackSpeed)
+                        } catch (_: Exception) {}
+                    }
                     mp.start()
                     _playerState.value = _playerState.value.copy(
                         isPlaying = true,
@@ -417,35 +452,20 @@ class PlayerService : Service() {
             )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            // Uses your app's actual icon, fixing the weird play button on top
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle(song?.title ?: "Inaho")
             .setContentIntent(openIntent)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            // 1. Prev
-            .addAction(
-                android.R.drawable.ic_media_previous, "Previous",
-                actionIntent(ACTION_PREV, 1)
-            )
-            // 2. Play/Pause
+            .addAction(android.R.drawable.ic_media_previous, "Previous", actionIntent(ACTION_PREV, 1))
             .addAction(
                 if (state.isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
                 if (state.isPlaying) "Pause" else "Play",
                 actionIntent(ACTION_PLAY_PAUSE, 2)
             )
-            // 3. Next
-            .addAction(
-                android.R.drawable.ic_media_next, "Next",
-                actionIntent(ACTION_NEXT, 3)
-            )
-            // 4. Kill/Stop (Now correctly handled by MediaSession)
-            .addAction(
-                android.R.drawable.ic_menu_close_clear_cancel, "Close",
-                actionIntent(ACTION_STOP, 4)
-            )
+            .addAction(android.R.drawable.ic_media_next, "Next", actionIntent(ACTION_NEXT, 3))
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Close", actionIntent(ACTION_STOP, 4))
             .setStyle(
                 androidx.media.app.NotificationCompat.MediaStyle()
-                    // Shows Prev, Play, Next when notification is collapsed
                     .setShowActionsInCompactView(0, 1, 2)
                     .setMediaSession(mediaSession.sessionToken)
             )
