@@ -87,8 +87,33 @@ class PlayerService : Service() {
 
     private fun setupMediaSession() {
         mediaSession = MediaSessionCompat(this, "Inaho_Media_Session").apply {
-            // Allow the user to drag the seekbar from the notification
             setCallback(object : MediaSessionCompat.Callback() {
+
+                // Triggered when the user taps Play on the notification/lock screen
+                override fun onPlay() {
+                    if (_playerState.value.isPlaying == false) {
+                        togglePlayPause()
+                    }
+                }
+
+                // Triggered when the user taps Pause
+                override fun onPause() {
+                    if (_playerState.value.isPlaying == true) {
+                        togglePlayPause()
+                    }
+                }
+
+                // Triggered when the user taps Next
+                override fun onSkipToNext() {
+                    skipNext(isAutoCompletion = false)
+                }
+
+                // Triggered when the user taps Previous
+                override fun onSkipToPrevious() {
+                    skipPrev()
+                }
+
+                // Triggered when the user drags the notification slider
                 override fun onSeekTo(pos: Long) {
                     seekTo(pos)
                     updateMediaSessionState() // Refresh the UI immediately
