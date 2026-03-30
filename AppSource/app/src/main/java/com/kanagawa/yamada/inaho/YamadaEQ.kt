@@ -70,7 +70,7 @@ enum class EqPreset(
         emoji = "◈",
         description = "Dynamic audio tunnel — boosts volume on beat drops and lifts",
         bands = intArrayOf(200, 100, 0, 100, 150),
-        loudnessGainMb = 400, // Balanced fallback loudness
+        loudnessGainMb = 600, // Boosted fallback to match the new dynamic gains
         smartTunnel = true
     ),
     ROCK(
@@ -78,14 +78,14 @@ enum class EqPreset(
         emoji = "♟",
         description = "Punchy bass, scooped mids, crisp highs",
         bands = intArrayOf(500, 300, -200, 200, 400),
-        loudnessGainMb = 500 // Increased from Classic to compensate for scooped mids
+        loudnessGainMb = 500
     ),
     JAZZ(
         displayName = "Jazz",
         emoji = "♩",
         description = "Warm low-mids, airy top end",
         bands = intArrayOf(300, 200, 100, 0, 200),
-        loudnessGainMb = 400 // Slight bump over Classic
+        loudnessGainMb = 400
     ),
     CLASSIC(
         displayName = "Classic",
@@ -99,14 +99,14 @@ enum class EqPreset(
         emoji = "♪",
         description = "Boosted vocals & presence, tight bass",
         bands = intArrayOf(-100, 200, 300, 200, 100),
-        loudnessGainMb = 400 // Slight bump over Classic
+        loudnessGainMb = 400
     ),
     BASS(
         displayName = "Bass",
         emoji = "◉",
         description = "Heavy sub & bass boost for earphones",
         bands = intArrayOf(800, 600, 0, -100, -100),
-        loudnessGainMb = 600 // Bass takes up headroom, needs the highest boost to sound equal
+        loudnessGainMb = 600
     )
 }
 
@@ -200,8 +200,8 @@ class YamadaEQManager(private val context: Context) {
                             kneeWidth     = 6f
                             noiseGateThreshold = -80f
                             expanderRatio = 1.0f
-                            preGain       = 3f    // Balanced input gain
-                            postGain      = 3f    // Clean makeup gain
+                            preGain       = 5f    // BOOSTED: Drive more signal into the compressor
+                            postGain      = 5f    // BOOSTED: Makeup gain for what the compressor eats
                         }
                         setMbcBandByChannelIndex(ch, 0, tunedBand)
 
@@ -210,8 +210,8 @@ class YamadaEQManager(private val context: Context) {
                             attackTime  = 1f
                             releaseTime = 50f
                             ratio       = 10f
-                            threshold   = -1f    // Hard ceiling
-                            postGain    = 1f     // Slight master lift, matches Classic
+                            threshold   = -0.5f  // Slightly higher ceiling before brickwalling
+                            postGain    = 2.5f   // BOOSTED: Extra master lift to stand shoulder-to-shoulder with Classic
                         }
                         setLimiterByChannelIndex(ch, tunedLim)
                     }
