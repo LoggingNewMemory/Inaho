@@ -5,11 +5,14 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.net.Uri
@@ -86,6 +89,19 @@ class PlayerService : Service() {
         private set
     // ──────────────────────────────────────────────────────────────────────────
 
+    // ── Audio Becoming Noisy Receiver (Auto-Pause) ────────────────────────────
+    private val noisyAudioReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
+                // Earphones/Bluetooth disconnected! Pause immediately.
+                if (_playerState.value.isPlaying) {
+                    togglePlayPause()
+                }
+            }
+        }
+    }
+    // ──────────────────────────────────────────────────────────────────────────
+
     override fun onBind(intent: Intent): IBinder = binder
 
     override fun onCreate() {
@@ -94,6 +110,14 @@ class PlayerService : Service() {
         setupMediaSession()
         // Initialise EQ manager — session will be attached once MediaPlayer is ready
         eqManager = YamadaEQManager(applicationContext)
+
+        // Register the auto-pause broadcast receiver
+        val filter = IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(noisyAudioReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(noisyAudioReceiver, filter)
+        }
     }
 
     private fun setupMediaSession() {
@@ -134,11 +158,11 @@ class PlayerService : Service() {
             PlaybackStateCompat.Builder()
                 .setActions(
                     PlaybackStateCompat.ACTION_PLAY or
-                    PlaybackStateCompat.ACTION_PAUSE or
-                    PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
-                    PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
-                    PlaybackStateCompat.ACTION_SEEK_TO or
-                    PlaybackStateCompat.ACTION_STOP
+                            PlaybackStateCompat.ACTION_PAUSE or
+                            PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                            PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                            PlaybackStateCompat.ACTION_SEEK_TO or
+                            PlaybackStateCompat.ACTION_STOP
                 )
                 .setState(playbackState, position, playbackSpeed)
                 .build()
@@ -464,6 +488,9 @@ class PlayerService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // Unregister the auto-pause receiver to prevent memory leaks
+        runCatching { unregisterReceiver(noisyAudioReceiver) }
+
         eqManager.release()
         mediaPlayer?.apply {
             setOnCompletionListener(null)
