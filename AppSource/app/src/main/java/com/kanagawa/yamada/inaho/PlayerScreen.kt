@@ -114,7 +114,7 @@ fun PlayerScreen(
                 onClick = onNavigateBack,
                 modifier = Modifier
                     .align(Alignment.CenterStart)
-                    .offset(x = (-8).dp)
+                    .offset(x = (-12).dp) // Offset to align perfectly with cover edge
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -139,7 +139,9 @@ fun PlayerScreen(
 
             IconButton(
                 onClick = { /* More options placeholder */ },
-                modifier = Modifier.align(Alignment.CenterEnd)
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .offset(x = 12.dp) // Offset to align perfectly with cover edge
             ) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
