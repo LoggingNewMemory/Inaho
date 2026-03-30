@@ -69,8 +69,8 @@ enum class EqPreset(
         displayName = "Smart",
         emoji = "◈",
         description = "Dynamic audio tunnel — boosts volume on beat drops and lifts",
-        bands = intArrayOf(200, 100, 0, 100, 150),   // gentle V-shape
-        loudnessGainMb = 300,
+        bands = intArrayOf(200, 100, 0, 100, 150),
+        loudnessGainMb = 800, // Boosted fallback loudness
         smartTunnel = true
     ),
     ROCK(
@@ -78,35 +78,35 @@ enum class EqPreset(
         emoji = "♟",
         description = "Punchy bass, scooped mids, crisp highs",
         bands = intArrayOf(500, 300, -200, 200, 400),
-        loudnessGainMb = 200
+        loudnessGainMb = 800 // Boosted from 200
     ),
     JAZZ(
         displayName = "Jazz",
         emoji = "♩",
         description = "Warm low-mids, airy top end",
         bands = intArrayOf(300, 200, 100, 0, 200),
-        loudnessGainMb = 100
+        loudnessGainMb = 500 // Boosted from 100
     ),
     CLASSIC(
         displayName = "Classic",
         emoji = "𝄞",
         description = "Flat response, natural dynamics",
         bands = intArrayOf(0, 0, 0, 0, 0),
-        loudnessGainMb = 0
+        loudnessGainMb = 300 // Given a gentle boost from 0 so it's not too quiet
     ),
     POP(
         displayName = "Pop",
         emoji = "♪",
         description = "Boosted vocals & presence, tight bass",
         bands = intArrayOf(-100, 200, 300, 200, 100),
-        loudnessGainMb = 150
+        loudnessGainMb = 600 // Boosted from 150
     ),
     BASS(
         displayName = "Bass",
         emoji = "◉",
         description = "Heavy sub & bass boost for earphones",
         bands = intArrayOf(800, 600, 0, -100, -100),
-        loudnessGainMb = 400
+        loudnessGainMb = 1000 // Boosted from 400 (Max heavy punch)
     )
 }
 
@@ -221,8 +221,8 @@ class YamadaEQManager(private val context: Context) {
                             kneeWidth     = 6f    // dB — soft knee
                             noiseGateThreshold = -80f
                             expanderRatio = 1.0f
-                            preGain       = 6f    // FIXED: Increased makeup gain
-                            postGain      = 4f    // FIXED: Increased post gain
+                            preGain       = 8f    // CRANKED UP makeup gain
+                            postGain      = 6f    // CRANKED UP post gain
                         }
                         setMbcBandByChannelIndex(ch, 0, tunedBand)
 
@@ -233,7 +233,7 @@ class YamadaEQManager(private val context: Context) {
                             releaseTime = 50f
                             ratio       = 10f
                             threshold   = -0.5f  // dB — hard ceiling just below 0 dBFS
-                            postGain    = 2f     // FIXED: Slight master boost
+                            postGain    = 4f     // CRANKED UP master boost
                         }
                         setLimiterByChannelIndex(ch, tunedLim)
                     }
