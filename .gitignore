@@ -14,3 +14,6 @@
 .cxx
 local.properties
 /Designs/Exported
+*.jks
+/AppSource/app/build
+/AppSource/app/release
