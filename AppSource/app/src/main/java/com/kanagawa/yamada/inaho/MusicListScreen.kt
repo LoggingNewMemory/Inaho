@@ -490,6 +490,7 @@ fun MusicListScreen(
                                 onClick = {
                                     val queue = (0 until songs.itemCount).mapNotNull { songs[it] }
                                     playerService?.playSong(song, queue, index)
+                                    onNavigateToPlayer()
                                 }
                             )
                         } else {
