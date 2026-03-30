@@ -17,7 +17,6 @@ import android.content.ContentUris
 import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -703,7 +702,7 @@ fun MiniPlayerBar(
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
-                        modifier = Modifier.basicMarquee() // Title now slides
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = song.artist,
@@ -776,7 +775,7 @@ fun SongListItem(
                 fontSize = 16.sp,
                 fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Normal,
                 maxLines = 1,
-                modifier = Modifier.basicMarquee() // Title now slides
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = song.artist,
