@@ -25,11 +25,14 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -102,6 +105,8 @@ class MusicPagingSource(
                 SortOption.TITLE_DESC -> "${MediaStore.Audio.Media.TITLE} DESC"
                 SortOption.ARTIST_ASC -> "${MediaStore.Audio.Media.ARTIST} ASC"
                 SortOption.DATE_ADDED_DESC -> "${MediaStore.Audio.Media.DATE_ADDED} DESC"
+                SortOption.DURATION_ASC -> "${MediaStore.Audio.Media.DURATION} ASC"
+                SortOption.DURATION_DESC -> "${MediaStore.Audio.Media.DURATION} DESC"
             }
 
             var selection =
@@ -199,12 +204,18 @@ fun MusicListScreen(
     val songs: LazyPagingItems<Song> = musicViewModel.songs.collectAsLazyPagingItems()
     val artCache by musicViewModel.artCache.collectAsState()
     val settings by musicViewModel.settingsManager.settingsFlow.collectAsState()
+    val favorites by musicViewModel.favoritesManager.favoritesFlow.collectAsState()
     val playerState by PlayerService.playerState.collectAsState()
     val playerService = rememberPlayerService()
+
+    // Background color driven by AMOLED setting
+    val bgColor = if (settings.amoledBlack) Color.Black else Color(0xFF120E0E)
+    val surfaceColor = if (settings.amoledBlack) Color(0xFF0A0A0A) else Color(0xFF1E1414)
 
     var showSortMenu by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
+    var showFavoritesOnly by remember { mutableStateOf(false) }
 
     var hasPermission by remember {
         mutableStateOf(
@@ -253,22 +264,30 @@ fun MusicListScreen(
         if (list.isNotEmpty()) musicViewModel.recordLoadedSongs(list)
     }
 
-    // Build filtered list for search
+    // Build filtered list for search / favorites
     val allLoadedSongs = remember(songs.itemCount) {
         (0 until songs.itemCount).mapNotNull { songs[it] }
     }
-    val filteredSongs = remember(searchQuery, allLoadedSongs) {
-        if (searchQuery.isBlank()) null // null = show paged list normally
-        else allLoadedSongs.filter {
-            it.title.contains(searchQuery, ignoreCase = true) ||
-            it.artist.contains(searchQuery, ignoreCase = true)
+
+    val filteredSongs = remember(searchQuery, allLoadedSongs, showFavoritesOnly, favorites) {
+        val base = if (showFavoritesOnly) allLoadedSongs.filter { favorites.contains(it.id) }
+                   else null
+
+        if (searchQuery.isBlank() && !showFavoritesOnly) null // show paged list normally
+        else {
+            val source = base ?: allLoadedSongs
+            if (searchQuery.isBlank()) source
+            else source.filter {
+                it.title.contains(searchQuery, ignoreCase = true) ||
+                it.artist.contains(searchQuery, ignoreCase = true)
+            }
         }
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF120E0E))
+            .background(bgColor)
             .padding(start = 4.dp, end = 4.dp, top = 4.dp)
     ) {
         // --- Top Bar ---
@@ -279,11 +298,10 @@ fun MusicListScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (isSearchActive) {
-                // Inline search bar
                 Row(
                     modifier = Modifier
                         .weight(1f)
-                        .background(Color(0xFF1E1414), RoundedCornerShape(10.dp))
+                        .background(surfaceColor, RoundedCornerShape(10.dp))
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -330,7 +348,6 @@ fun MusicListScreen(
                     }
                 )
             } else {
-                // Normal title + icons
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Inaho",
@@ -346,7 +363,7 @@ fun MusicListScreen(
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier
-                                .background(Color(0xFF1E1414), RoundedCornerShape(6.dp))
+                                .background(surfaceColor, RoundedCornerShape(6.dp))
                                 .padding(horizontal = 7.dp, vertical = 2.dp)
                         )
                     }
@@ -355,6 +372,15 @@ fun MusicListScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
+                    // Favorites filter toggle
+                    Icon(
+                        imageVector = if (showFavoritesOnly) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = "Favorites",
+                        tint = if (showFavoritesOnly) Color(0xFFB8355B) else Color.White,
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clickable { showFavoritesOnly = !showFavoritesOnly }
+                    )
                     Icon(
                         imageVector = Icons.Default.Search,
                         contentDescription = "Search",
@@ -417,6 +443,108 @@ fun MusicListScreen(
             }
         }
 
+        // --- Quick Action Buttons: Play All / Shuffle All ---
+        if (!isSearchActive && songs.itemCount > 0 &&
+            songs.loadState.refresh !is LoadState.Loading &&
+            filteredSongs == null
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Play All
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(surfaceColor)
+                        .clickable {
+                            val queue = (0 until songs.itemCount).mapNotNull { songs[it] }
+                            if (queue.isNotEmpty()) {
+                                playerService?.playSong(queue[0], queue, 0)
+                                onNavigateToPlayer()
+                            }
+                        }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = Color(0xFFB8355B),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Play All",
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                // Shuffle All
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(surfaceColor)
+                        .clickable {
+                            val queue = (0 until songs.itemCount).mapNotNull { songs[it] }
+                            if (queue.isNotEmpty()) {
+                                val shuffled = queue.shuffled()
+                                playerService?.playSong(shuffled[0], shuffled, 0)
+                                onNavigateToPlayer()
+                            }
+                        }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Shuffle,
+                            contentDescription = null,
+                            tint = Color(0xFFB8355B),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Shuffle All",
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+        }
+
+        // Favorites header label
+        if (showFavoritesOnly) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Favorite,
+                    contentDescription = null,
+                    tint = Color(0xFFB8355B),
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "Favorites${if (filteredSongs != null) " · ${filteredSongs.size}" else ""}",
+                    color = Color(0xFFB8355B),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.height(4.dp))
 
         Box(modifier = Modifier.weight(1f)) {
@@ -446,11 +574,36 @@ fun MusicListScreen(
                         Text("No music files found.", color = Color.LightGray)
                     }
 
-                // Search results mode
+                // Filtered / Favorites / Search results mode
                 filteredSongs != null -> {
                     if (filteredSongs.isEmpty()) {
                         Box(Modifier.fillMaxSize(), Alignment.Center) {
-                            Text("No results for \"$searchQuery\"", color = Color.LightGray)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                if (showFavoritesOnly && searchQuery.isBlank()) {
+                                    Icon(
+                                        imageVector = Icons.Default.FavoriteBorder,
+                                        contentDescription = null,
+                                        tint = Color(0xFF555555),
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(
+                                        "No favorites yet",
+                                        color = Color.LightGray,
+                                        fontSize = 16.sp
+                                    )
+                                    Text(
+                                        "Tap the heart on a song to add it",
+                                        color = Color(0xFF555555),
+                                        fontSize = 13.sp
+                                    )
+                                } else {
+                                    Text(
+                                        "No results for \"$searchQuery\"",
+                                        color = Color.LightGray
+                                    )
+                                }
+                            }
                         }
                     } else {
                         LazyColumn(
@@ -467,6 +620,8 @@ fun MusicListScreen(
                                     song = song,
                                     coverBitmap = artCache[song.id],
                                     isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
+                                    isFavorite = favorites.contains(song.id),
+                                    onFavoriteToggle = { musicViewModel.favoritesManager.toggle(song.id) },
                                     onClick = {
                                         playerService?.playSong(song, filteredSongs, index)
                                         onNavigateToPlayer()
@@ -497,6 +652,8 @@ fun MusicListScreen(
                                 song = song,
                                 coverBitmap = artCache[song.id],
                                 isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
+                                isFavorite = favorites.contains(song.id),
+                                onFavoriteToggle = { musicViewModel.favoritesManager.toggle(song.id) },
                                 onClick = {
                                     val queue = (0 until songs.itemCount).mapNotNull { songs[it] }
                                     playerService?.playSong(song, queue, index)
@@ -529,7 +686,8 @@ fun MusicListScreen(
                 coverBitmap = playerState.currentSong?.let { artCache[it.id] },
                 onPlayPause = { playerService?.togglePlayPause() },
                 onNext = { playerService?.skipNext() },
-                onExpand = onNavigateToPlayer
+                onExpand = onNavigateToPlayer,
+                surfaceColor = surfaceColor
             )
         }
     }
@@ -544,7 +702,8 @@ fun MiniPlayerBar(
     coverBitmap: Bitmap?,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
-    onExpand: () -> Unit
+    onExpand: () -> Unit,
+    surfaceColor: Color = Color(0xFF1E1414)
 ) {
     val song = playerState.currentSong ?: return
     val progress = if (playerState.durationMs > 0)
@@ -555,11 +714,10 @@ fun MiniPlayerBar(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onExpand() },
-        color = Color(0xFF1E1414),
+        color = surfaceColor,
         tonalElevation = 4.dp
     ) {
         Column {
-            // Thin progress line at top of mini player
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -647,6 +805,8 @@ fun SongListItem(
     song: Song,
     coverBitmap: Bitmap?,
     isPlaying: Boolean = false,
+    isFavorite: Boolean = false,
+    onFavoriteToggle: () -> Unit = {},
     onClick: () -> Unit
 ) {
     Row(
@@ -672,12 +832,12 @@ fun SongListItem(
                     .background(Color(0xFF2C2C2C))
             )
         }
-        Spacer(Modifier.width(16.dp))
+        Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 song.title,
                 color = if (isPlaying) Color(0xFFB8355B) else Color.White,
-                fontSize = 18.sp,
+                fontSize = 16.sp,
                 fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Normal,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -685,13 +845,23 @@ fun SongListItem(
             Text(
                 song.artist,
                 color = Color.LightGray,
-                fontSize = 14.sp,
+                fontSize = 13.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }
-        Spacer(Modifier.width(8.dp))
-        Text(song.formattedDuration, color = Color.White, fontSize = 14.sp)
+        Spacer(Modifier.width(4.dp))
+        Text(song.formattedDuration, color = Color(0xFF888888), fontSize = 13.sp)
+        Spacer(Modifier.width(4.dp))
+        // Favorite heart
+        Icon(
+            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+            contentDescription = "Favorite",
+            tint = if (isFavorite) Color(0xFFB8355B) else Color(0xFF444444),
+            modifier = Modifier
+                .size(20.dp)
+                .clickable(onClick = onFavoriteToggle)
+        )
     }
 }
 

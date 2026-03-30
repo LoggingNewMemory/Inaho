@@ -31,8 +31,6 @@ private fun artCacheFile(context: Context, songId: Long): File {
     return File(dir, "$songId.png")
 }
 
-// A separate sentinel file marks that we've confirmed a song has NO embedded art.
-// This prevents re-extracting on every launch for art-less songs.
 private fun artAbsentFile(context: Context, songId: Long): File {
     val dir = File(context.cacheDir, "art").also { it.mkdirs() }
     return File(dir, "${songId}.noart")
@@ -46,7 +44,6 @@ internal fun loadBitmapFromDisk(context: Context, songId: Long): Bitmap? {
 
 internal fun saveBitmapToDisk(context: Context, songId: Long, bitmap: Bitmap?) {
     if (bitmap == null) {
-        // Write a sentinel so we know the song genuinely has no art (don't re-extract next time)
         try { artAbsentFile(context, songId).createNewFile() } catch (_: Exception) {}
         return
     }
@@ -56,10 +53,6 @@ internal fun saveBitmapToDisk(context: Context, songId: Long, bitmap: Bitmap?) {
     } catch (_: Exception) { }
 }
 
-/**
- * Returns true only when we already have a definitive answer for this song:
- * either a bitmap is saved on disk, or we've confirmed the song has no art.
- */
 internal fun isArtResolved(context: Context, songId: Long): Boolean =
     artCacheFile(context, songId).exists() || artAbsentFile(context, songId).exists()
 
@@ -111,6 +104,7 @@ internal fun extractAndDownsample(context: Context, uri: Uri, targetPx: Int): Bi
 class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     val settingsManager = SettingsManager(application)
+    val favoritesManager = FavoritesManager(application)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val songs = settingsManager.settingsFlow.flatMapLatest { settings ->
@@ -126,13 +120,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val _loadedSongs = MutableStateFlow<List<Song>>(emptyList())
     val loadedSongs = _loadedSongs.asStateFlow()
 
-    // A mutex to serialize all writes to _artCache, preventing the
-    // concurrent read-modify-write race that caused covers to disappear
-    // when rapidly skipping tracks.
     private val artCacheMutex = Mutex()
-
-    // Tracks in-flight loads so we never launch two coroutines for the
-    // same song ID simultaneously (another source of the rapid-skip bug).
     private val inFlightIds = mutableSetOf<Long>()
 
     fun recordLoadedSongs(songs: List<Song>) {
@@ -140,11 +128,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun loadArtIfNeeded(song: Song) {
-        // Fast-path: already in memory cache — nothing to do.
         if (_artCache.value.containsKey(song.id)) return
 
         viewModelScope.launch(Dispatchers.IO) {
-            // Double-checked locking under the mutex to prevent duplicate launches.
             artCacheMutex.withLock {
                 if (_artCache.value.containsKey(song.id)) return@launch
                 if (inFlightIds.contains(song.id)) return@launch
@@ -154,17 +140,13 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             val context: Context = getApplication()
             try {
                 val bitmap: Bitmap? = if (isArtResolved(context, song.id)) {
-                    // Disk hit: load the bitmap (or null for art-absent songs).
                     loadBitmapFromDisk(context, song.id)
                 } else {
-                    // Cache miss: extract from the audio file and persist.
                     val extracted = extractAndDownsample(context, song.trackUri, targetPx = 800)
                     saveBitmapToDisk(context, song.id, extracted)
                     extracted
                 }
 
-                // Atomic update — read the latest map inside the lock so no
-                // concurrent write from another song's coroutine can be lost.
                 artCacheMutex.withLock {
                     _artCache.value = _artCache.value + (song.id to bitmap)
                     inFlightIds.remove(song.id)

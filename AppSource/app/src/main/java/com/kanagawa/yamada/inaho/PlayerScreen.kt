@@ -2,11 +2,14 @@ package com.kanagawa.yamada.inaho
 
 import android.content.ContentUris
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
+import android.media.audiofx.AudioEffect
 import android.net.Uri
 import android.provider.MediaStore
 import androidx.compose.animation.AnimatedVisibility
@@ -59,7 +62,9 @@ fun PlayerScreen(
     val context = LocalContext.current
     val playerState by PlayerService.playerState.collectAsState()
     val artCache by musicViewModel.artCache.collectAsState()
+    val favorites by musicViewModel.favoritesManager.favoritesFlow.collectAsState()
     val playerService = rememberPlayerService()
+    val settings by musicViewModel.settingsManager.settingsFlow.collectAsState()
 
     val song = playerState.currentSong
     val coverBitmap: Bitmap? = song?.let { artCache[it.id] }
@@ -75,12 +80,23 @@ fun PlayerScreen(
 
     var audioDetails by remember { mutableStateOf<AudioDetails?>(null) }
 
-    // — New feature states —
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showSleepTimerDialog by remember { mutableStateOf(false) }
     var showQueueSheet by remember { mutableStateOf(false) }
-    var sleepTimerRemainingMs by remember { mutableLongStateOf(-1L) } // -1 = off
+    var sleepTimerRemainingMs by remember { mutableLongStateOf(-1L) }
     var currentSpeedLabel by remember { mutableStateOf("1.0×") }
+
+    // Volume control
+    val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+    val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat() }
+    var volumeValue by remember {
+        mutableFloatStateOf(
+            audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume
+        )
+    }
+
+    val bgColor = if (settings.amoledBlack) Color.Black else Color(0xFF0D0A0A)
+    val surfaceColor = if (settings.amoledBlack) Color(0xFF0A0A0A) else Color(0xFF1E1414)
 
     LaunchedEffect(playerState.isPlaying, playerService, playerState.currentSong?.id) {
         if (playerService != null) {
@@ -119,7 +135,6 @@ fun PlayerScreen(
             if (next <= 0) {
                 sleepTimerRemainingMs = -1L
                 playerService?.togglePlayPause()
-                // Ensure we pause, not toggle to play
                 if (playerState.isPlaying) playerService?.togglePlayPause()
             } else {
                 sleepTimerRemainingMs = next
@@ -130,11 +145,11 @@ fun PlayerScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0D0A0A))
+            .background(bgColor)
             .padding(horizontal = 20.dp)
             .navigationBarsPadding()
     ) {
-        // Top Bar
+        // ── Top Bar ──
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -161,7 +176,7 @@ fun PlayerScreen(
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier
                         .align(Alignment.Center)
-                        .background(Color(0xFF1E1414), RoundedCornerShape(12.dp))
+                        .background(surfaceColor, RoundedCornerShape(12.dp))
                         .padding(horizontal = 12.dp, vertical = 6.dp)
                 )
             }
@@ -180,7 +195,7 @@ fun PlayerScreen(
             }
         }
 
-        // Queue Sheet (animated, inline above artwork)
+        // ── Queue Sheet ──
         AnimatedVisibility(
             visible = showQueueSheet,
             enter = expandVertically(),
@@ -189,7 +204,7 @@ fun PlayerScreen(
             QueuePanel(
                 playerState = playerState,
                 artCache = artCache,
-                onSongClick = { song, index ->
+                onSongClick = { _, index ->
                     playerService?.jumpToQueueIndex(index)
                     showQueueSheet = false
                 }
@@ -197,13 +212,13 @@ fun PlayerScreen(
         }
 
         if (!showQueueSheet) {
-            // Cover Art
+            // ── Cover Art ──
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF1E1414)),
+                    .background(surfaceColor),
                 contentAlignment = Alignment.Center
             ) {
                 if (coverBitmap != null) {
@@ -224,29 +239,48 @@ fun PlayerScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        Text(
-            text = song?.title ?: "No song selected",
-            color = Color.White,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = song?.artist ?: "",
-            color = Color(0xFFAAAAAA),
-            fontSize = 14.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.fillMaxWidth()
-        )
+        // ── Title + Favorite ──
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = song?.title ?: "No song selected",
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    text = song?.artist ?: "",
+                    color = Color(0xFFAAAAAA),
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            // Favorite heart button
+            if (song != null) {
+                val isFav = favorites.contains(song.id)
+                IconButton(onClick = { musicViewModel.favoritesManager.toggle(song.id) }) {
+                    Icon(
+                        imageVector = if (isFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = "Favorite",
+                        tint = if (isFav) Color(0xFFB8355B) else Color(0xFF555555),
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+            }
+        }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
+        // ── Seek Bar ──
         Slider(
             value = seekValue,
             onValueChange = { value ->
@@ -274,9 +308,46 @@ fun PlayerScreen(
             Text(formatMs(durationMs), color = Color(0xFFAAAAAA), fontSize = 12.sp)
         }
 
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // ── Volume Slider ──
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.VolumeDown,
+                contentDescription = null,
+                tint = Color(0xFF666666),
+                modifier = Modifier.size(18.dp)
+            )
+            Slider(
+                value = volumeValue,
+                onValueChange = { v ->
+                    volumeValue = v
+                    val vol = (v * maxVolume).toInt()
+                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, vol, 0)
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 6.dp),
+                colors = SliderDefaults.colors(
+                    thumbColor = Color(0xFFB8355B),
+                    activeTrackColor = Color(0xFFB8355B),
+                    inactiveTrackColor = Color(0xFF3D3030)
+                )
+            )
+            Icon(
+                imageVector = Icons.Default.VolumeUp,
+                contentDescription = null,
+                tint = Color(0xFF666666),
+                modifier = Modifier.size(18.dp)
+            )
+        }
+
         Spacer(modifier = Modifier.weight(1f))
 
-        // — Extra Controls Row: Speed + Sleep Timer —
+        // ── Extra Controls Row: Speed + Equalizer + Sleep Timer ──
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -285,65 +356,45 @@ fun PlayerScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Speed button
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFF1E1414))
-                    .clickable { showSpeedDialog = true }
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Speed,
-                        contentDescription = "Speed",
-                        tint = Color(0xFFB8355B),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = currentSpeedLabel,
-                        color = Color.White,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+            ExtraControlChip(
+                icon = Icons.Default.Speed,
+                label = currentSpeedLabel,
+                active = currentSpeedLabel != "1.0×",
+                onClick = { showSpeedDialog = true }
+            )
+
+            // Equalizer button
+            ExtraControlChip(
+                icon = Icons.Default.Equalizer,
+                label = "EQ",
+                active = false,
+                onClick = {
+                    try {
+                        val intent = Intent(AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL).apply {
+                            putExtra(AudioEffect.EXTRA_AUDIO_SESSION, 0)
+                            putExtra(AudioEffect.EXTRA_CONTENT_TYPE, AudioEffect.CONTENT_TYPE_MUSIC)
+                        }
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        // Equalizer not available on this device — silently ignore
+                    }
                 }
-            }
+            )
 
             // Sleep timer button
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFF1E1414))
-                    .clickable { showSleepTimerDialog = true }
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Bedtime,
-                        contentDescription = "Sleep Timer",
-                        tint = if (sleepTimerRemainingMs > 0) Color(0xFFB8355B) else Color(0xFFAAAAAA),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = if (sleepTimerRemainingMs > 0)
-                            formatMs(sleepTimerRemainingMs)
-                        else "Sleep",
-                        color = if (sleepTimerRemainingMs > 0) Color(0xFFB8355B) else Color.White,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
+            ExtraControlChip(
+                icon = Icons.Default.Bedtime,
+                label = if (sleepTimerRemainingMs > 0) formatMs(sleepTimerRemainingMs) else "Sleep",
+                active = sleepTimerRemainingMs > 0,
+                onClick = { showSleepTimerDialog = true }
+            )
         }
 
-        // Main Controls Row
+        // ── Main Controls Row ──
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 40.dp),
+                .padding(bottom = 36.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -421,7 +472,7 @@ fun PlayerScreen(
         }
     }
 
-    // ---- Dialogs ----
+    // ── Dialogs ──
 
     if (showSpeedDialog) {
         SpeedDialog(
@@ -448,6 +499,42 @@ fun PlayerScreen(
             },
             onDismiss = { showSleepTimerDialog = false }
         )
+    }
+}
+
+// ==========================================
+// EXTRA CONTROL CHIP
+// ==========================================
+@Composable
+private fun ExtraControlChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    active: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (active) Color(0xFF2A1020) else Color(0xFF1E1414))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = if (active) Color(0xFFB8355B) else Color(0xFF888888),
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = label,
+                color = if (active) Color(0xFFB8355B) else Color.White,
+                fontSize = 13.sp,
+                fontWeight = if (active) FontWeight.Bold else FontWeight.SemiBold
+            )
+        }
     }
 }
 
