@@ -59,6 +59,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.io.FileOutputStream
 
@@ -178,6 +180,13 @@ private fun artCacheFile(context: Context, songId: Long): File {
     return File(dir, "$songId.png")
 }
 
+// A separate sentinel file marks that we've confirmed a song has NO embedded art.
+// This prevents re-extracting on every launch for art-less songs.
+private fun artAbsentFile(context: Context, songId: Long): File {
+    val dir = File(context.cacheDir, "art").also { it.mkdirs() }
+    return File(dir, "${songId}.noart")
+}
+
 private fun loadBitmapFromDisk(context: Context, songId: Long): Bitmap? {
     val file = artCacheFile(context, songId)
     if (!file.exists()) return null
@@ -185,15 +194,23 @@ private fun loadBitmapFromDisk(context: Context, songId: Long): Bitmap? {
 }
 
 private fun saveBitmapToDisk(context: Context, songId: Long, bitmap: Bitmap?) {
+    if (bitmap == null) {
+        // Write a sentinel so we know the song genuinely has no art (don't re-extract next time)
+        try { artAbsentFile(context, songId).createNewFile() } catch (_: Exception) {}
+        return
+    }
     val file = artCacheFile(context, songId)
     try {
-        if (bitmap == null) file.createNewFile()
-        else FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     } catch (_: Exception) { }
 }
 
-private fun isCachedOnDisk(context: Context, songId: Long): Boolean =
-    artCacheFile(context, songId).exists()
+/**
+ * Returns true only when we already have a definitive answer for this song:
+ * either a bitmap is saved on disk, or we've confirmed the song has no art.
+ */
+private fun isArtResolved(context: Context, songId: Long): Boolean =
+    artCacheFile(context, songId).exists() || artAbsentFile(context, songId).exists()
 
 // ==========================================
 // 4. VIEWMODEL
@@ -216,22 +233,52 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val _loadedSongs = MutableStateFlow<List<Song>>(emptyList())
     val loadedSongs = _loadedSongs.asStateFlow()
 
+    // FIX: A mutex to serialize all writes to _artCache, preventing the
+    // concurrent read-modify-write race that caused covers to disappear
+    // when rapidly skipping tracks.
+    private val artCacheMutex = Mutex()
+
+    // FIX: Tracks in-flight loads so we never launch two coroutines for the
+    // same song ID simultaneously (another source of the rapid-skip bug).
+    private val inFlightIds = mutableSetOf<Long>()
+
     fun recordLoadedSongs(songs: List<Song>) {
         _loadedSongs.value = songs
     }
 
     fun loadArtIfNeeded(song: Song) {
+        // Fast-path: already in memory cache — nothing to do.
         if (_artCache.value.containsKey(song.id)) return
+
         viewModelScope.launch(Dispatchers.IO) {
-            val context: Context = getApplication()
-            if (isCachedOnDisk(context, song.id)) {
-                val bitmap = loadBitmapFromDisk(context, song.id)
-                _artCache.value = _artCache.value + (song.id to bitmap)
-                return@launch
+            // Double-checked locking under the mutex to prevent duplicate launches.
+            artCacheMutex.withLock {
+                if (_artCache.value.containsKey(song.id)) return@launch
+                if (inFlightIds.contains(song.id)) return@launch
+                inFlightIds.add(song.id)
             }
-            val bitmap = extractAndDownsample(context, song.trackUri, targetPx = 800)
-            saveBitmapToDisk(context, song.id, bitmap)
-            _artCache.value = _artCache.value + (song.id to bitmap)
+
+            val context: Context = getApplication()
+            try {
+                val bitmap: Bitmap? = if (isArtResolved(context, song.id)) {
+                    // Disk hit: load the bitmap (or null for art-absent songs).
+                    loadBitmapFromDisk(context, song.id)
+                } else {
+                    // Cache miss: extract from the audio file and persist.
+                    val extracted = extractAndDownsample(context, song.trackUri, targetPx = 800)
+                    saveBitmapToDisk(context, song.id, extracted)
+                    extracted
+                }
+
+                // FIX: Atomic update — read the latest map inside the lock so no
+                // concurrent write from another song's coroutine can be lost.
+                artCacheMutex.withLock {
+                    _artCache.value = _artCache.value + (song.id to bitmap)
+                    inFlightIds.remove(song.id)
+                }
+            } catch (e: Exception) {
+                artCacheMutex.withLock { inFlightIds.remove(song.id) }
+            }
         }
     }
 }
@@ -482,9 +529,15 @@ fun MusicListScreen(
                     ) { index ->
                         val song = songs[index]
                         if (song != null) {
+                            // FIX: Trigger art loading for this song ID.
+                            // Using LaunchedEffect(song.id) means it re-fires if the
+                            // paging source replaces the item with a new Song object
+                            // for the same ID, which covers the startup recomposition case.
                             LaunchedEffect(song.id) { musicViewModel.loadArtIfNeeded(song) }
                             SongListItem(
                                 song = song,
+                                // FIX: Read artCache[song.id] directly so this item
+                                // recomposes as soon as its bitmap lands in the cache.
                                 coverBitmap = artCache[song.id],
                                 isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
                                 onClick = {
