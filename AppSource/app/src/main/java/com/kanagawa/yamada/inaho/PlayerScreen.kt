@@ -11,7 +11,6 @@ import android.media.AudioManager
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
-import android.media.audiofx.AudioEffect
 import android.net.Uri
 import android.provider.MediaStore
 import androidx.activity.compose.BackHandler
@@ -65,43 +64,41 @@ fun PlayerScreen(
 ) {
     val context = LocalContext.current
     val playerState by PlayerService.playerState.collectAsState()
-    val artCache by musicViewModel.artCache.collectAsState()
-    val favorites by musicViewModel.favoritesManager.favoritesFlow.collectAsState()
+    val artCache   by musicViewModel.artCache.collectAsState()
+    val favorites  by musicViewModel.favoritesManager.favoritesFlow.collectAsState()
     val playerService = rememberPlayerService()
-    val settings by musicViewModel.settingsManager.settingsFlow.collectAsState()
+    val settings   by musicViewModel.settingsManager.settingsFlow.collectAsState()
 
-    val song = playerState.currentSong
+    val song        = playerState.currentSong
     val coverBitmap: Bitmap? = song?.let { artCache[it.id] }
 
-    val isShuffled = playerState.isShuffled
-    val repeatMode = playerState.repeatMode
+    val isShuffled  = playerState.isShuffled
+    val repeatMode  = playerState.repeatMode
 
-    val durationMs = playerState.durationMs.coerceAtLeast(1L)
+    val durationMs  = playerState.durationMs.coerceAtLeast(1L)
 
-    var isSeeking by remember { mutableStateOf(false) }
-    var seekValue by remember { mutableFloatStateOf(0f) }
-    var livePositionMs by remember { mutableLongStateOf(0L) }
+    var isSeeking       by remember { mutableStateOf(false) }
+    var seekValue       by remember { mutableFloatStateOf(0f) }
+    var livePositionMs  by remember { mutableLongStateOf(0L) }
 
     var audioDetails by remember { mutableStateOf<AudioDetails?>(null) }
 
-    var showSpeedDialog by remember { mutableStateOf(false) }
+    var showSpeedDialog     by remember { mutableStateOf(false) }
     var showSleepTimerDialog by remember { mutableStateOf(false) }
-    var showQueueSheet by remember { mutableStateOf(false) }
+    var showQueueSheet      by remember { mutableStateOf(false) }
+    // ── NEW: Yamada EQ dialog ──────────────────────────────────────────────
+    var showEqDialog        by remember { mutableStateOf(false) }
+    // ──────────────────────────────────────────────────────────────────────
     var sleepTimerRemainingMs by remember { mutableLongStateOf(-1L) }
 
-    // FIX: currentSpeedLabel resets to "1.0×" whenever the song changes
+    // currentSpeedLabel resets to "1.0×" whenever the song changes
     val currentSongId = song?.id
     var currentSpeedLabel by remember { mutableStateOf("1.0×") }
-    LaunchedEffect(currentSongId) {
-        currentSpeedLabel = "1.0×"
-    }
+    LaunchedEffect(currentSongId) { currentSpeedLabel = "1.0×" }
 
     // ── Volume control ──
-    // FIX: Optimized — AudioManager queries are cheap but we avoid redundant
-    // state writes by only updating when the value actually changes.
-    // The BroadcastReceiver is scoped to the composable lifetime via DisposableEffect.
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
-    val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat() }
+    val maxVolume    = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat() }
 
     var volumeValue by remember {
         mutableFloatStateOf(
@@ -113,12 +110,8 @@ fun PlayerScreen(
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 if (intent?.action == "android.media.VOLUME_CHANGED_ACTION") {
-                    val newVolume =
-                        audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume
-                    // Only trigger recomposition when the value actually changed
-                    if (newVolume != volumeValue) {
-                        volumeValue = newVolume
-                    }
+                    val newVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume
+                    if (newVolume != volumeValue) volumeValue = newVolume
                 }
             }
         }
@@ -126,11 +119,9 @@ fun PlayerScreen(
         onDispose { context.unregisterReceiver(receiver) }
     }
 
-    val bgColor = if (settings.amoledBlack) Color.Black else Color(0xFF0D0A0A)
+    val bgColor      = if (settings.amoledBlack) Color.Black else Color(0xFF0D0A0A)
     val surfaceColor = if (settings.amoledBlack) Color(0xFF0A0A0A) else Color(0xFF1E1414)
 
-    // FIX: Intercept hardware/gesture back press and route to MusicListScreen
-    // instead of letting the OS minimize/destroy the activity.
     BackHandler { onNavigateBack() }
 
     LaunchedEffect(playerState.isPlaying, playerService, playerState.currentSong?.id) {
@@ -140,7 +131,6 @@ fun PlayerScreen(
                 livePositionMs = currentPos
                 seekValue = (currentPos.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
             }
-
             while (playerState.isPlaying) {
                 delay(200)
                 val pos = playerService.getCurrentPosition()
@@ -234,11 +224,11 @@ fun PlayerScreen(
         AnimatedVisibility(
             visible = showQueueSheet,
             enter = expandVertically(),
-            exit = shrinkVertically()
+            exit  = shrinkVertically()
         ) {
             QueuePanel(
                 playerState = playerState,
-                artCache = artCache,
+                artCache    = artCache,
                 onSongClick = { _, index ->
                     playerService?.jumpToQueueIndex(index)
                     showQueueSheet = false
@@ -299,7 +289,6 @@ fun PlayerScreen(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            // Favorite heart button
             if (song != null) {
                 val isFav = favorites.contains(song.id)
                 IconButton(onClick = { musicViewModel.favoritesManager.toggle(song.id) }) {
@@ -319,8 +308,8 @@ fun PlayerScreen(
         Slider(
             value = seekValue,
             onValueChange = { value ->
-                isSeeking = true
-                seekValue = value
+                isSeeking  = true
+                seekValue  = value
                 livePositionMs = (value * durationMs).toLong()
             },
             onValueChangeFinished = {
@@ -329,8 +318,8 @@ fun PlayerScreen(
             },
             modifier = Modifier.fillMaxWidth(),
             colors = SliderDefaults.colors(
-                thumbColor = Color.White,
-                activeTrackColor = Color.White,
+                thumbColor         = Color.White,
+                activeTrackColor   = Color.White,
                 inactiveTrackColor = Color(0xFF3D3030)
             )
         )
@@ -340,7 +329,7 @@ fun PlayerScreen(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(formatMs(livePositionMs), color = Color(0xFFAAAAAA), fontSize = 12.sp)
-            Text(formatMs(durationMs), color = Color(0xFFAAAAAA), fontSize = 12.sp)
+            Text(formatMs(durationMs),     color = Color(0xFFAAAAAA), fontSize = 12.sp)
         }
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -359,8 +348,6 @@ fun PlayerScreen(
             Slider(
                 value = volumeValue,
                 onValueChange = { v ->
-                    // Only write to AudioManager when the rounded integer step changes,
-                    // avoiding redundant setStreamVolume calls on every tiny drag delta.
                     val newStep = (v * maxVolume).toInt()
                     val oldStep = (volumeValue * maxVolume).toInt()
                     volumeValue = v
@@ -372,8 +359,8 @@ fun PlayerScreen(
                     .weight(1f)
                     .padding(horizontal = 6.dp),
                 colors = SliderDefaults.colors(
-                    thumbColor = Color(0xFFB8355B),
-                    activeTrackColor = Color(0xFFB8355B),
+                    thumbColor         = Color(0xFFB8355B),
+                    activeTrackColor   = Color(0xFFB8355B),
                     inactiveTrackColor = Color(0xFF3D3030)
                 )
             )
@@ -387,7 +374,17 @@ fun PlayerScreen(
 
         Spacer(modifier = Modifier.weight(1f))
 
-        // ── Extra Controls Row: Speed + Equalizer + Sleep Timer ──
+        // ── Extra Controls Row: Speed · EQ · Sleep Timer ──
+        // Derive EQ active state for chip highlight
+        val eqPreset by playerService?.eqManager?.currentPreset?.collectAsState()
+            ?: run { remember { mutableStateOf(EqPreset.OFF) } }.let { remember { it } }
+            .let { mutableStateOf(EqPreset.OFF) }.let { remember { it } }
+            // Simpler pattern below — safe even before service binds:
+        val eqActiveLabel = remember(eqPreset) {
+            if (eqPreset == EqPreset.OFF) "EQ" else eqPreset.displayName
+        }
+        val eqIsActive = eqPreset != EqPreset.OFF
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -395,37 +392,28 @@ fun PlayerScreen(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Speed button
+            // Speed chip
             ExtraControlChip(
-                icon = Icons.Default.Speed,
-                label = currentSpeedLabel,
-                active = currentSpeedLabel != "1.0×",
+                icon    = Icons.Default.Speed,
+                label   = currentSpeedLabel,
+                active  = currentSpeedLabel != "1.0×",
                 onClick = { showSpeedDialog = true }
             )
 
-            // Equalizer button
+            // ── Yamada EQ chip ────────────────────────────────────────────
             ExtraControlChip(
-                icon = Icons.Default.Equalizer,
-                label = "EQ",
-                active = false,
-                onClick = {
-                    try {
-                        val intent = Intent(AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL).apply {
-                            putExtra(AudioEffect.EXTRA_AUDIO_SESSION, 0)
-                            putExtra(AudioEffect.EXTRA_CONTENT_TYPE, AudioEffect.CONTENT_TYPE_MUSIC)
-                        }
-                        context.startActivity(intent)
-                    } catch (e: Exception) {
-                        // Equalizer not available on this device — silently ignore
-                    }
-                }
+                icon    = Icons.Default.Equalizer,
+                label   = eqActiveLabel,
+                active  = eqIsActive,
+                onClick = { showEqDialog = true }
             )
+            // ─────────────────────────────────────────────────────────────
 
-            // Sleep timer button
+            // Sleep timer chip
             ExtraControlChip(
-                icon = Icons.Default.Bedtime,
-                label = if (sleepTimerRemainingMs > 0) formatMs(sleepTimerRemainingMs) else "Sleep",
-                active = sleepTimerRemainingMs > 0,
+                icon    = Icons.Default.Bedtime,
+                label   = if (sleepTimerRemainingMs > 0) formatMs(sleepTimerRemainingMs) else "Sleep",
+                active  = sleepTimerRemainingMs > 0,
                 onClick = { showSleepTimerDialog = true }
             )
         }
@@ -439,7 +427,7 @@ fun PlayerScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(
-                onClick = { playerService?.toggleShuffle() },
+                onClick  = { playerService?.toggleShuffle() },
                 modifier = Modifier.size(48.dp)
             ) {
                 Icon(
@@ -451,8 +439,8 @@ fun PlayerScreen(
             }
 
             IconButton(
-                onClick = { playerService?.skipPrev() },
-                enabled = song != null,
+                onClick  = { playerService?.skipPrev() },
+                enabled  = song != null,
                 modifier = Modifier.size(48.dp)
             ) {
                 Icon(
@@ -471,13 +459,12 @@ fun PlayerScreen(
                 contentAlignment = Alignment.Center
             ) {
                 IconButton(
-                    onClick = { playerService?.togglePlayPause() },
-                    enabled = song != null,
+                    onClick  = { playerService?.togglePlayPause() },
+                    enabled  = song != null,
                     modifier = Modifier.fillMaxSize()
                 ) {
                     Icon(
-                        imageVector = if (playerState.isPlaying) Icons.Default.Pause
-                        else Icons.Default.PlayArrow,
+                        imageVector = if (playerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = if (playerState.isPlaying) "Pause" else "Play",
                         tint = Color(0xFF0D0A0A),
                         modifier = Modifier.size(36.dp)
@@ -486,8 +473,8 @@ fun PlayerScreen(
             }
 
             IconButton(
-                onClick = { playerService?.skipNext(isAutoCompletion = false) },
-                enabled = playerState.hasNext,
+                onClick  = { playerService?.skipNext(isAutoCompletion = false) },
+                enabled  = playerState.hasNext,
                 modifier = Modifier.size(48.dp)
             ) {
                 Icon(
@@ -499,7 +486,7 @@ fun PlayerScreen(
             }
 
             IconButton(
-                onClick = { playerService?.toggleRepeat() },
+                onClick  = { playerService?.toggleRepeat() },
                 modifier = Modifier.size(48.dp)
             ) {
                 Icon(
@@ -526,16 +513,41 @@ fun PlayerScreen(
         )
     }
 
+    // ── Yamada EQ Dialog ──────────────────────────────────────────────────
+    if (showEqDialog) {
+        val service = playerService
+        if (service != null) {
+            EqDialog(
+                eqManager = service.eqManager,
+                onDismiss = { showEqDialog = false }
+            )
+        } else {
+            // Service not yet bound — show a simple "unavailable" toast-style dialog
+            Dialog(onDismissRequest = { showEqDialog = false }) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFF1A1010))
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("EQ unavailable — start playback first", color = Color(0xFF888888), fontSize = 14.sp)
+                }
+            }
+        }
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     if (showSleepTimerDialog) {
         SleepTimerDialog(
             isActive = sleepTimerRemainingMs > 0,
             onSelect = { minutes ->
                 sleepTimerRemainingMs = minutes * 60 * 1000L
-                showSleepTimerDialog = false
+                showSleepTimerDialog  = false
             },
             onCancel = {
                 sleepTimerRemainingMs = -1L
-                showSleepTimerDialog = false
+                showSleepTimerDialog  = false
             },
             onDismiss = { showSleepTimerDialog = false }
         )
@@ -588,7 +600,7 @@ fun QueuePanel(
     onSongClick: (Song, Int) -> Unit
 ) {
     val listState = rememberLazyListState()
-    val queue = playerState.activeQueue
+    val queue     = playerState.activeQueue
 
     LaunchedEffect(playerState.currentIndex) {
         if (playerState.currentIndex >= 0 && playerState.currentIndex < queue.size) {
@@ -689,7 +701,6 @@ fun QueuePanel(
             }
         }
     }
-
     Spacer(Modifier.height(12.dp))
 }
 
@@ -703,12 +714,12 @@ fun SpeedDialog(
     onDismiss: () -> Unit
 ) {
     val speeds = listOf(
-        0.5f to "0.5×",
+        0.5f  to "0.5×",
         0.75f to "0.75×",
-        1.0f to "1.0×",
+        1.0f  to "1.0×",
         1.25f to "1.25×",
-        1.5f to "1.5×",
-        2.0f to "2.0×"
+        1.5f  to "1.5×",
+        2.0f  to "2.0×"
     )
 
     Dialog(onDismissRequest = onDismiss) {
@@ -736,9 +747,7 @@ fun SpeedDialog(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(
-                                    if (isSelected) Color(0xFFB8355B) else Color(0xFF2C2020)
-                                )
+                                .background(if (isSelected) Color(0xFFB8355B) else Color(0xFF2C2020))
                                 .clickable { onSelect(speed, label) }
                                 .padding(vertical = 12.dp),
                             contentAlignment = Alignment.Center
@@ -778,19 +787,10 @@ fun SleepTimerDialog(
                 .background(Color(0xFF1E1414))
                 .padding(20.dp)
         ) {
-            Text(
-                "Sleep Timer",
-                color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 4.dp)
-            )
-            Text(
-                "Pause music after…",
-                color = Color(0xFF888888),
-                fontSize = 13.sp,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
+            Text("Sleep Timer", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 4.dp))
+            Text("Pause music after…", color = Color(0xFF888888), fontSize = 13.sp,
+                modifier = Modifier.padding(bottom = 16.dp))
 
             options.chunked(3).forEach { row ->
                 Row(
@@ -807,12 +807,7 @@ fun SleepTimerDialog(
                                 .padding(vertical = 12.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = label,
-                                color = Color.White,
-                                fontSize = 13.sp,
-                                textAlign = TextAlign.Center
-                            )
+                            Text(text = label, color = Color.White, fontSize = 13.sp, textAlign = TextAlign.Center)
                         }
                     }
                 }
@@ -830,12 +825,7 @@ fun SleepTimerDialog(
                         .padding(vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        "Cancel Timer",
-                        color = Color(0xFFFF6B6B),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Text("Cancel Timer", color = Color(0xFFFF6B6B), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -866,22 +856,22 @@ private fun extractAudioDetails(context: Context, songId: Any): AudioDetails? {
         val formatStr = when {
             mime.contains("flac", true) -> "FLAC"
             mime.contains("mpeg", true) -> "MP3"
-            mime.contains("mp4", true) -> "M4A"
-            mime.contains("wav", true) -> "WAV"
-            mime.contains("ogg", true) -> "OGG"
-            mime.contains("aac", true) -> "AAC"
-            mime.isNotEmpty() -> mime.substringAfterLast("/").uppercase()
-            else -> "UNKNOWN"
+            mime.contains("mp4",  true) -> "M4A"
+            mime.contains("wav",  true) -> "WAV"
+            mime.contains("ogg",  true) -> "OGG"
+            mime.contains("aac",  true) -> "AAC"
+            mime.isNotEmpty()           -> mime.substringAfterLast("/").uppercase()
+            else                        -> "UNKNOWN"
         }
 
-        val bitrateStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)
+        val bitrateStr  = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)
         val bitrateKbps = bitrateStr?.toLongOrNull()?.div(1000)?.toString() ?: "Unknown"
 
         val extractor = MediaExtractor()
         extractor.setDataSource(context, uri, null)
 
         var sampleRate = "Unknown"
-        var bitDepth = "16"
+        var bitDepth   = "16"
 
         if (extractor.trackCount > 0) {
             val format = extractor.getTrackFormat(0)
@@ -894,9 +884,9 @@ private fun extractAudioDetails(context: Context, songId: Any): AudioDetails? {
             } else if (format.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
                 val pcm = format.getInteger(MediaFormat.KEY_PCM_ENCODING)
                 bitDepth = when (pcm) {
-                    AudioFormat.ENCODING_PCM_8BIT -> "8"
-                    AudioFormat.ENCODING_PCM_16BIT -> "16"
-                    AudioFormat.ENCODING_PCM_24BIT_PACKED -> "24"
+                    AudioFormat.ENCODING_PCM_8BIT              -> "8"
+                    AudioFormat.ENCODING_PCM_16BIT             -> "16"
+                    AudioFormat.ENCODING_PCM_24BIT_PACKED      -> "24"
                     AudioFormat.ENCODING_PCM_32BIT, AudioFormat.ENCODING_PCM_FLOAT -> "32"
                     else -> "16"
                 }

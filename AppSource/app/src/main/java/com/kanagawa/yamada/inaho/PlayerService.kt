@@ -61,9 +61,9 @@ class PlayerService : Service() {
         private const val NOTIF_ID = 1
 
         const val ACTION_PLAY_PAUSE = "com.kanagawa.yamada.inaho.PLAY_PAUSE"
-        const val ACTION_NEXT = "com.kanagawa.yamada.inaho.NEXT"
-        const val ACTION_PREV = "com.kanagawa.yamada.inaho.PREV"
-        const val ACTION_STOP = "com.kanagawa.yamada.inaho.STOP"
+        const val ACTION_NEXT       = "com.kanagawa.yamada.inaho.NEXT"
+        const val ACTION_PREV       = "com.kanagawa.yamada.inaho.PREV"
+        const val ACTION_STOP       = "com.kanagawa.yamada.inaho.STOP"
 
         private val _playerState = MutableStateFlow(PlayerState())
         val playerState = _playerState.asStateFlow()
@@ -77,8 +77,14 @@ class PlayerService : Service() {
     private var mediaPlayer: MediaPlayer? = null
     private lateinit var mediaSession: MediaSessionCompat
 
-    // FIX: Track current playback speed — reset to 1.0f on every new song
+    // Track current playback speed — reset to 1.0f on every new song
     private var currentPlaybackSpeed: Float = 1.0f
+
+    // ── Yamada EQ ──────────────────────────────────────────────────────────────
+    /** Exposed so PlayerScreen / ViewModel can bind the EQ dialog to it. */
+    lateinit var eqManager: YamadaEQManager
+        private set
+    // ──────────────────────────────────────────────────────────────────────────
 
     override fun onBind(intent: Intent): IBinder = binder
 
@@ -86,36 +92,19 @@ class PlayerService : Service() {
         super.onCreate()
         createNotificationChannel()
         setupMediaSession()
+        // Initialise EQ manager — session will be attached once MediaPlayer is ready
+        eqManager = YamadaEQManager(applicationContext)
     }
 
     private fun setupMediaSession() {
         mediaSession = MediaSessionCompat(this, "Inaho_Media_Session").apply {
             setCallback(object : MediaSessionCompat.Callback() {
-                override fun onPlay() {
-                    if (!_playerState.value.isPlaying) togglePlayPause()
-                }
-
-                override fun onPause() {
-                    if (_playerState.value.isPlaying) togglePlayPause()
-                }
-
-                override fun onSkipToNext() {
-                    skipNext(isAutoCompletion = false)
-                }
-
-                override fun onSkipToPrevious() {
-                    skipPrev()
-                }
-
-                override fun onSeekTo(pos: Long) {
-                    seekTo(pos)
-                    updateMediaSessionState()
-                    updateNotification()
-                }
-
-                override fun onStop() {
-                    stopPlayback()
-                }
+                override fun onPlay()            { if (!_playerState.value.isPlaying) togglePlayPause() }
+                override fun onPause()           { if (_playerState.value.isPlaying)  togglePlayPause() }
+                override fun onSkipToNext()      { skipNext(isAutoCompletion = false) }
+                override fun onSkipToPrevious()  { skipPrev() }
+                override fun onSeekTo(pos: Long) { seekTo(pos); updateMediaSessionState(); updateNotification() }
+                override fun onStop()            { stopPlayback() }
             })
             isActive = true
         }
@@ -124,9 +113,9 @@ class PlayerService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_PLAY_PAUSE -> togglePlayPause()
-            ACTION_NEXT -> skipNext(isAutoCompletion = false)
-            ACTION_PREV -> skipPrev()
-            ACTION_STOP -> stopPlayback()
+            ACTION_NEXT       -> skipNext(isAutoCompletion = false)
+            ACTION_PREV       -> skipPrev()
+            ACTION_STOP       -> stopPlayback()
         }
         return START_STICKY
     }
@@ -138,32 +127,31 @@ class PlayerService : Service() {
         val song = state.currentSong ?: return
 
         val playbackState = if (state.isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
-        val position = mediaPlayer?.currentPosition?.toLong() ?: 0L
+        val position      = mediaPlayer?.currentPosition?.toLong() ?: 0L
         val playbackSpeed = if (state.isPlaying) currentPlaybackSpeed else 0f
 
-        val stateBuilder = PlaybackStateCompat.Builder()
-            .setActions(
-                PlaybackStateCompat.ACTION_PLAY or
-                        PlaybackStateCompat.ACTION_PAUSE or
-                        PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
-                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
-                        PlaybackStateCompat.ACTION_SEEK_TO or
-                        PlaybackStateCompat.ACTION_STOP
-            )
-            .setState(playbackState, position, playbackSpeed)
-
-        mediaSession.setPlaybackState(stateBuilder.build())
+        mediaSession.setPlaybackState(
+            PlaybackStateCompat.Builder()
+                .setActions(
+                    PlaybackStateCompat.ACTION_PLAY or
+                    PlaybackStateCompat.ACTION_PAUSE or
+                    PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                    PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                    PlaybackStateCompat.ACTION_SEEK_TO or
+                    PlaybackStateCompat.ACTION_STOP
+                )
+                .setState(playbackState, position, playbackSpeed)
+                .build()
+        )
 
         val metadataBuilder = MediaMetadataCompat.Builder()
-            .putString(MediaMetadataCompat.METADATA_KEY_TITLE, song.title)
+            .putString(MediaMetadataCompat.METADATA_KEY_TITLE,  song.title)
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, song.artist)
             .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, state.durationMs)
 
-        val bitmap = getAlbumArtBitmap(applicationContext, song.trackUri)
-        if (bitmap != null) {
-            metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, bitmap)
+        getAlbumArtBitmap(applicationContext, song.trackUri)?.let {
+            metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, it)
         }
-
         mediaSession.setMetadata(metadataBuilder.build())
     }
 
@@ -195,17 +183,16 @@ class PlayerService : Service() {
         }
         val currentIndex = if (isShuffled) 0 else index
 
-        // FIX: Reset speed to 1.0x every time a new song is explicitly selected
         currentPlaybackSpeed = 1.0f
 
         _playerState.value = _playerState.value.copy(
-            currentSong = song,
+            currentSong  = song,
             originalQueue = queue,
-            activeQueue = activeQueue,
+            activeQueue  = activeQueue,
             currentIndex = currentIndex,
-            isPlaying = false,
-            positionMs = 0L,
-            durationMs = song.durationMs
+            isPlaying    = false,
+            positionMs   = 0L,
+            durationMs   = song.durationMs
         )
         prepareAndPlay(song.trackUri)
     }
@@ -229,23 +216,12 @@ class PlayerService : Service() {
         if (newShuffle) {
             val current = state.currentSong
             val shuffled = state.originalQueue.shuffled().toMutableList()
-            if (current != null) {
-                shuffled.remove(current)
-                shuffled.add(0, current)
-            }
-            _playerState.value = state.copy(
-                isShuffled = true,
-                activeQueue = shuffled,
-                currentIndex = 0
-            )
+            if (current != null) { shuffled.remove(current); shuffled.add(0, current) }
+            _playerState.value = state.copy(isShuffled = true, activeQueue = shuffled, currentIndex = 0)
         } else {
-            val current = state.currentSong
+            val current   = state.currentSong
             val originalIdx = state.originalQueue.indexOf(current).takeIf { it >= 0 } ?: 0
-            _playerState.value = state.copy(
-                isShuffled = false,
-                activeQueue = state.originalQueue,
-                currentIndex = originalIdx
-            )
+            _playerState.value = state.copy(isShuffled = false, activeQueue = state.originalQueue, currentIndex = originalIdx)
         }
     }
 
@@ -273,22 +249,21 @@ class PlayerService : Service() {
             }
         }
 
-        // FIX: Reset speed to 1.0x on every auto/manual song advance
         currentPlaybackSpeed = 1.0f
 
         val nextSong = state.activeQueue[nextIndex]
         _playerState.value = state.copy(
-            currentSong = nextSong,
+            currentSong  = nextSong,
             currentIndex = nextIndex,
-            positionMs = 0L,
-            durationMs = nextSong.durationMs
+            positionMs   = 0L,
+            durationMs   = nextSong.durationMs
         )
         prepareAndPlay(nextSong.trackUri)
     }
 
     fun skipPrev() {
         val state = _playerState.value
-        val mp = mediaPlayer
+        val mp    = mediaPlayer
         val position = mp?.currentPosition ?: 0
 
         if (position > 3000) {
@@ -311,15 +286,14 @@ class PlayerService : Service() {
             }
         }
 
-        // FIX: Reset speed to 1.0x when going back to the previous song
         currentPlaybackSpeed = 1.0f
 
         val prevSong = state.activeQueue[prevIndex]
         _playerState.value = state.copy(
-            currentSong = prevSong,
+            currentSong  = prevSong,
             currentIndex = prevIndex,
-            positionMs = 0L,
-            durationMs = prevSong.durationMs
+            positionMs   = 0L,
+            durationMs   = prevSong.durationMs
         )
         prepareAndPlay(prevSong.trackUri)
     }
@@ -332,43 +306,35 @@ class PlayerService : Service() {
 
     fun getCurrentPosition(): Long = mediaPlayer?.currentPosition?.toLong() ?: 0L
 
-    /**
-     * Jump to a specific index in the active queue (used by the Queue panel).
-     */
     fun jumpToQueueIndex(index: Int) {
         val state = _playerState.value
         if (index < 0 || index >= state.activeQueue.size) return
         val song = state.activeQueue[index]
 
-        // FIX: Reset speed to 1.0x when jumping via the queue panel
         currentPlaybackSpeed = 1.0f
 
         _playerState.value = state.copy(
-            currentSong = song,
+            currentSong  = song,
             currentIndex = index,
-            positionMs = 0L,
-            durationMs = song.durationMs
+            positionMs   = 0L,
+            durationMs   = song.durationMs
         )
         prepareAndPlay(song.trackUri)
     }
 
-    /**
-     * Change playback speed. Supported values: 0.5, 0.75, 1.0, 1.25, 1.5, 2.0.
-     * Requires API 23+; silently ignored on older versions.
-     */
     fun setPlaybackSpeed(speed: Float) {
         currentPlaybackSpeed = speed
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             try {
-                mediaPlayer?.playbackParams = mediaPlayer?.playbackParams?.setSpeed(speed)
-                    ?: return
-            } catch (e: Exception) {
-                // Unsupported on some devices — fail gracefully
-            }
+                mediaPlayer?.playbackParams = mediaPlayer?.playbackParams?.setSpeed(speed) ?: return
+            } catch (_: Exception) {}
         }
     }
 
     fun stopPlayback() {
+        // Release EQ before tearing down the player
+        eqManager.release()
+
         mediaPlayer?.apply {
             if (isPlaying) stop()
             reset()
@@ -387,6 +353,9 @@ class PlayerService : Service() {
     }
 
     private fun prepareAndPlay(uri: Uri) {
+        // Release EQ effects tied to the old session before tearing it down
+        eqManager.release()
+
         val oldPlayer = mediaPlayer
         mediaPlayer = null
         oldPlayer?.apply {
@@ -408,9 +377,10 @@ class PlayerService : Service() {
             try {
                 setDataSource(applicationContext, uri)
                 setOnPreparedListener { mp ->
-                    // currentPlaybackSpeed is already reset to 1.0f before every prepareAndPlay call
-                    // for new song navigations, so this block only re-applies a non-default speed
-                    // if setPlaybackSpeed() was called explicitly by the user in this session.
+                    // ── Attach Yamada EQ to the new audio session ──────────────
+                    eqManager.attach(mp.audioSessionId)
+                    // ──────────────────────────────────────────────────────────
+
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && currentPlaybackSpeed != 1.0f) {
                         try {
                             mp.playbackParams = mp.playbackParams.setSpeed(currentPlaybackSpeed)
@@ -418,7 +388,7 @@ class PlayerService : Service() {
                     }
                     mp.start()
                     _playerState.value = _playerState.value.copy(
-                        isPlaying = true,
+                        isPlaying  = true,
                         durationMs = mp.duration.toLong()
                     )
                     updateMediaSessionState()
@@ -451,7 +421,7 @@ class PlayerService : Service() {
 
     private fun buildNotification(): Notification {
         val state = _playerState.value
-        val song = state.currentSong
+        val song  = state.currentSong
 
         val openIntent = PendingIntent.getActivity(
             this, 0,
@@ -489,12 +459,12 @@ class PlayerService : Service() {
     }
 
     private fun updateNotification() {
-        val nm = getSystemService(NotificationManager::class.java)
-        nm.notify(NOTIF_ID, buildNotification())
+        getSystemService(NotificationManager::class.java).notify(NOTIF_ID, buildNotification())
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        eqManager.release()
         mediaPlayer?.apply {
             setOnCompletionListener(null)
             setOnPreparedListener(null)
