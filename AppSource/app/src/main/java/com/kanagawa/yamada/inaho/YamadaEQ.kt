@@ -201,7 +201,7 @@ class YamadaEQManager(private val context: Context) {
                             noiseGateThreshold = -80f
                             expanderRatio = 1.0f
                             preGain       = 5f    // BOOSTED: Drive more signal into the compressor
-                            postGain      = 5f    // BOOSTED: Makeup gain for what the compressor eats
+                            postGain      = 8.5f    // BOOSTED: Makeup gain for what the compressor eats
                         }
                         setMbcBandByChannelIndex(ch, 0, tunedBand)
 
@@ -211,7 +211,7 @@ class YamadaEQManager(private val context: Context) {
                             releaseTime = 50f
                             ratio       = 10f
                             threshold   = -0.5f  // Slightly higher ceiling before brickwalling
-                            postGain    = 2.5f   // BOOSTED: Extra master lift to stand shoulder-to-shoulder with Classic
+                            postGain    = 5f   // BOOSTED: Extra master lift to stand shoulder-to-shoulder with Classic
                         }
                         setLimiterByChannelIndex(ch, tunedLim)
                     }
