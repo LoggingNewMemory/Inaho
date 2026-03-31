@@ -1,13 +1,16 @@
 package com.kanagawa.yamada.inaho
 
 import android.content.Context
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Nightlight
 import androidx.compose.material3.*
@@ -17,6 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -111,6 +116,7 @@ fun SettingsScreen(
             .fillMaxSize()
             .background(if (settings.amoledBlack) Color.Black else Color(0xFF120E0E))
             .padding(start = 2.dp, end = 2.dp, top = 4.dp, bottom = 4.dp)
+            .verticalScroll(rememberScrollState())
     ) {
         // Top Bar
         Row(
@@ -214,7 +220,7 @@ fun SettingsScreen(
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
-                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .clip(CircleShape)
                                 .background(Color(0xFFB8355B))
                         )
                     }
@@ -228,6 +234,67 @@ fun SettingsScreen(
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(48.dp))
+
+        // ==========================================
+        // THE DEVELOPERS SECTION
+        // ==========================================
+        Text(
+            text = "THE DEVELOPERS",
+            color = Color.White,
+            fontSize = 30.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .padding(bottom = 24.dp)
+        )
+
+        DeveloperProfile(
+            role = "Developer",
+            avatarResId = R.drawable.ic_yamada,
+            name = "Kanagawa Yamada",
+            description = "VTuber / VTeacher of Indonesia. Founder and Leader of Kanagawa Lab Community",
+            socials = {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    SocialLink(
+                        iconResId = R.drawable.github,
+                        text = "GitHub",
+                        url = "https://github.com/LoggingNewMemory"
+                    )
+                    SocialLink(
+                        iconResId = R.drawable.youtube,
+                        text = "YouTube",
+                        url = "https://www.youtube.com/@KanagawaYamada"
+                    )
+                }
+            }
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        DeveloperProfile(
+            role = "Inspired By",
+            avatarResId = R.drawable.ic_inaho,
+            name = "Ochinai Inaho",
+            description = "Japanese VTuber under the agency of Goraku",
+            socials = {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    SocialLink(
+                        iconResId = R.drawable.x,
+                        text = "X",
+                        url = "https://x.com/inaho_vt"
+                    )
+                    SocialLink(
+                        iconResId = R.drawable.youtube,
+                        text = "YouTube",
+                        url = "https://www.youtube.com/@%E8%90%BD%E4%B9%83%E3%81%84%E3%81%AA%E3%81%BB"
+                    )
+                }
+            }
+        )
+
+        Spacer(modifier = Modifier.height(48.dp))
     }
 }
 
@@ -283,6 +350,94 @@ private fun SettingsToggleRow(
                 uncheckedThumbColor = Color.LightGray,
                 uncheckedTrackColor = Color(0xFF2C2C2C)
             )
+        )
+    }
+}
+
+@Composable
+private fun DeveloperProfile(
+    role: String,
+    avatarResId: Int,
+    name: String,
+    description: String,
+    socials: @Composable () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+    ) {
+        Text(
+            text = role,
+            color = Color.White,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFF1A1010))
+                .padding(16.dp)
+        ) {
+            Image(
+                painter = painterResource(id = avatarResId),
+                contentDescription = name,
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(CircleShape)
+                    .background(Color.White)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = name,
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = description,
+                    color = Color(0xFFCCCCCC),
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                socials()
+            }
+        }
+    }
+}
+
+@Composable
+private fun SocialLink(iconResId: Int, text: String, url: String) {
+    val uriHandler = LocalUriHandler.current
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .clickable { uriHandler.openUri(url) }
+            .padding(vertical = 4.dp, horizontal = 2.dp)
+    ) {
+        Icon(
+            painter = painterResource(id = iconResId),
+            contentDescription = text,
+            tint = Color(0xFFB8355B),
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = text,
+            color = Color(0xFFB8355B),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium
         )
     }
 }
