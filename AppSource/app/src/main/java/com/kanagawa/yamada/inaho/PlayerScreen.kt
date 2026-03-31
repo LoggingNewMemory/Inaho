@@ -623,53 +623,57 @@ private fun extractAudioDetails(context: Context, songId: Any): AudioDetails? {
 
     return try {
         val retriever = MediaMetadataRetriever()
-        retriever.setDataSource(context, uri)
-
-        val mime = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE) ?: ""
-        val formatStr = when {
-            mime.contains("flac", true) -> "FLAC"
-            mime.contains("mpeg", true) -> "MP3"
-            mime.contains("mp4",  true) -> "M4A"
-            mime.contains("wav",  true) -> "WAV"
-            mime.contains("ogg",  true) -> "OGG"
-            mime.contains("aac",  true) -> "AAC"
-            mime.isNotEmpty()           -> mime.substringAfterLast("/").uppercase()
-            else                        -> "UNKNOWN"
-        }
-
-        val bitrateStr  = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)
-        val bitrateKbps = bitrateStr?.toLongOrNull()?.div(1000)?.toString() ?: "Unknown"
-
         val extractor = MediaExtractor()
-        extractor.setDataSource(context, uri, null)
 
-        var sampleRate = "Unknown"
-        var bitDepth   = "16"
+        try {
+            retriever.setDataSource(context, uri)
 
-        if (extractor.trackCount > 0) {
-            val format = extractor.getTrackFormat(0)
-            if (format.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
-                val sr = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-                sampleRate = if (sr % 1000 == 0) "${sr / 1000}" else "${sr / 1000f}"
+            val mime = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE) ?: ""
+            val formatStr = when {
+                mime.contains("flac", true) -> "FLAC"
+                mime.contains("mpeg", true) -> "MP3"
+                mime.contains("mp4",  true) -> "M4A"
+                mime.contains("wav",  true) -> "WAV"
+                mime.contains("ogg",  true) -> "OGG"
+                mime.contains("aac",  true) -> "AAC"
+                mime.isNotEmpty()           -> mime.substringAfterLast("/").uppercase()
+                else                        -> "UNKNOWN"
             }
-            if (format.containsKey("bits-per-sample")) {
-                bitDepth = format.getInteger("bits-per-sample").toString()
-            } else if (format.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
-                val pcm = format.getInteger(MediaFormat.KEY_PCM_ENCODING)
-                bitDepth = when (pcm) {
-                    AudioFormat.ENCODING_PCM_8BIT              -> "8"
-                    AudioFormat.ENCODING_PCM_16BIT             -> "16"
-                    AudioFormat.ENCODING_PCM_24BIT_PACKED      -> "24"
-                    AudioFormat.ENCODING_PCM_32BIT, AudioFormat.ENCODING_PCM_FLOAT -> "32"
-                    else -> "16"
+
+            val bitrateStr  = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)
+            val bitrateKbps = bitrateStr?.toLongOrNull()?.div(1000)?.toString() ?: "Unknown"
+
+            extractor.setDataSource(context, uri, null)
+
+            var sampleRate = "Unknown"
+            var bitDepth   = "16"
+
+            if (extractor.trackCount > 0) {
+                val format = extractor.getTrackFormat(0)
+                if (format.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
+                    val sr = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                    sampleRate = if (sr % 1000 == 0) "${sr / 1000}" else "${sr / 1000f}"
+                }
+                if (format.containsKey("bits-per-sample")) {
+                    bitDepth = format.getInteger("bits-per-sample").toString()
+                } else if (format.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
+                    val pcm = format.getInteger(MediaFormat.KEY_PCM_ENCODING)
+                    bitDepth = when (pcm) {
+                        AudioFormat.ENCODING_PCM_8BIT              -> "8"
+                        AudioFormat.ENCODING_PCM_16BIT             -> "16"
+                        AudioFormat.ENCODING_PCM_24BIT_PACKED      -> "24"
+                        AudioFormat.ENCODING_PCM_32BIT, AudioFormat.ENCODING_PCM_FLOAT -> "32"
+                        else -> "16"
+                    }
                 }
             }
+
+            AudioDetails(formatStr, "${sampleRate} kHz", "$bitDepth Bit", "$bitrateKbps kbps")
+        } finally {
+            // CRITICAL OOM FIX: Ensure these are always released even if an error occurs above
+            extractor.release()
+            retriever.release()
         }
-
-        extractor.release()
-        retriever.release()
-
-        AudioDetails(formatStr, "${sampleRate} kHz", "$bitDepth Bit", "$bitrateKbps kbps")
     } catch (e: Exception) {
         e.printStackTrace()
         null

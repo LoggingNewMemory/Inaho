@@ -51,6 +51,16 @@ class MainActivity : ComponentActivity() {
                 val musicViewModel: MusicViewModel = viewModel()
                 var currentScreen by rememberSaveable { mutableStateOf(AppScreen.LIST) }
 
+                // Track global player state across all screens
+                val playerState by PlayerService.playerState.collectAsState()
+
+                // THE FIX: Whenever the song changes (auto-play next, skipped, clicked), preload its art instantly!
+                LaunchedEffect(playerState.currentIndex, playerState.activeQueue) {
+                    if (playerState.activeQueue.isNotEmpty() && playerState.currentIndex >= 0) {
+                        musicViewModel.preloadQueueWindow(playerState.activeQueue, playerState.currentIndex)
+                    }
+                }
+
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Box(modifier = Modifier.padding(innerPadding)) {
 
