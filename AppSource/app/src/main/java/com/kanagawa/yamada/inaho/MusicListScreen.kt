@@ -57,6 +57,7 @@ import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 // ==========================================
@@ -662,6 +663,7 @@ fun MusicListScreen(
         ) {
             MiniPlayerBar(
                 playerState = playerState,
+                playerService = playerService,
                 coverBitmap = playerState.currentSong?.let { artCache[it.id] },
                 onPlayPause = { playerService?.togglePlayPause() },
                 onNext = { playerService?.skipNext() },
@@ -678,6 +680,7 @@ fun MusicListScreen(
 @Composable
 fun MiniPlayerBar(
     playerState: PlayerState,
+    playerService: PlayerService?,
     coverBitmap: Bitmap?,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
@@ -685,8 +688,23 @@ fun MiniPlayerBar(
     surfaceColor: Color = Color(0xFF1E1414)
 ) {
     val song = playerState.currentSong ?: return
+
+    // Create a local state to hold the live position for the progress bar
+    var livePositionMs by remember(song.id) { mutableLongStateOf(playerState.positionMs) }
+
+    // Poll the current position when playing, just like PlayerScreen
+    LaunchedEffect(playerState.isPlaying, playerService, song.id) {
+        if (playerService != null) {
+            livePositionMs = playerService.getCurrentPosition()
+            while (playerState.isPlaying) {
+                delay(500) // 500ms provides smooth enough updates for the mini player
+                livePositionMs = playerService.getCurrentPosition()
+            }
+        }
+    }
+
     val progress = if (playerState.durationMs > 0)
-        (playerState.positionMs.toFloat() / playerState.durationMs.toFloat()).coerceIn(0f, 1f)
+        (livePositionMs.toFloat() / playerState.durationMs.toFloat()).coerceIn(0f, 1f)
     else 0f
 
     Surface(
