@@ -22,7 +22,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -241,8 +244,14 @@ fun SettingsScreen(
         // THE DEVELOPERS SECTION
         // ==========================================
         Text(
-            text = "THE DEVELOPERS",
-            color = Color.White,
+            text = buildAnnotatedString {
+                withStyle(style = SpanStyle(color = Color.White)) {
+                    append("THE ")
+                }
+                withStyle(style = SpanStyle(color = Color(0xFFB8355B))) {
+                    append("DEVELOPERS")
+                }
+            },
             fontSize = 30.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier
@@ -252,6 +261,7 @@ fun SettingsScreen(
 
         DeveloperProfile(
             role = "Developer",
+            roleColor = Color.White, // Set to White
             avatarResId = R.drawable.ic_yamada,
             name = "Kanagawa Yamada",
             description = "VTuber / VTeacher of Indonesia. Founder and Leader of Kanagawa Lab Community",
@@ -275,6 +285,7 @@ fun SettingsScreen(
 
         DeveloperProfile(
             role = "Inspired By",
+            roleColor = Color(0xFFB8355B), // Set to Pink
             avatarResId = R.drawable.ic_inaho,
             name = "Ochinai Inaho",
             description = "Japanese VTuber under the agency of Goraku",
@@ -357,6 +368,7 @@ private fun SettingsToggleRow(
 @Composable
 private fun DeveloperProfile(
     role: String,
+    roleColor: Color = Color.White, // Added color parameter with default fallback
     avatarResId: Int,
     name: String,
     description: String,
@@ -369,7 +381,7 @@ private fun DeveloperProfile(
     ) {
         Text(
             text = role,
-            color = Color.White,
+            color = roleColor, // Uses the color passed in
             fontSize = 18.sp,
             fontWeight = FontWeight.Medium,
             modifier = Modifier.padding(bottom = 8.dp)
