@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -507,8 +508,52 @@ fun MusicListScreen(
                     text = "Favorites${if (filteredSongs != null) " · ${filteredSongs.size}" else ""}",
                     color = Color(0xFFB8355B),
                     fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
                 )
+
+                // --- Play All / Shuffle All Favorites ---
+                val favList = filteredSongs
+                if (!favList.isNullOrEmpty()) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFFB8355B))
+                                .clickable {
+                                    playerService?.playSong(favList[0], favList, 0)
+                                    musicViewModel.preloadQueueWindow(favList, 0)
+                                    onNavigateToPlayer()
+                                }
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = "Play All", tint = Color.White, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(3.dp))
+                            Text("Play All", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF2C1A1A))
+                                .clickable {
+                                    val shuffled = favList.shuffled()
+                                    playerService?.playSong(shuffled[0], shuffled, 0)
+                                    musicViewModel.preloadQueueWindow(shuffled, 0)
+                                    onNavigateToPlayer()
+                                }
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Shuffle, contentDescription = "Shuffle All", tint = Color(0xFFB8355B), modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(3.dp))
+                            Text("Shuffle", color = Color(0xFFB8355B), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
             }
         }
 
@@ -561,6 +606,7 @@ fun MusicListScreen(
                                     isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
                                     onClick = {
                                         playerService?.playSong(song, filteredSongs, index)
+                                        musicViewModel.preloadQueueWindow(filteredSongs, index)
                                         onNavigateToPlayer()
                                     }
                                 )
@@ -590,6 +636,7 @@ fun MusicListScreen(
                                     val queueIndex = safeQueue.indexOfFirst { it.id == song.id }.takeIf { it >= 0 } ?: 0
 
                                     playerService?.playSong(song, safeQueue, queueIndex)
+                                    musicViewModel.preloadQueueWindow(safeQueue, queueIndex)
                                     onNavigateToPlayer()
                                 }
                             )
