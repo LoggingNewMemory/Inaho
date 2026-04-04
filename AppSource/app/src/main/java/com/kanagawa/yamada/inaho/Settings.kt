@@ -59,7 +59,7 @@ class SettingsManager(context: Context) {
             sortOption = SortOption.valueOf(
                 prefs.getString("sort_option", SortOption.TITLE_ASC.name) ?: SortOption.TITLE_ASC.name
             ),
-            onlyMusicFolder = prefs.getBoolean("only_music_folder", false),
+            onlyMusicFolder = prefs.getBoolean("only_music_folder", true),
             amoledBlack = prefs.getBoolean("amoled_black", false)
         )
     )
