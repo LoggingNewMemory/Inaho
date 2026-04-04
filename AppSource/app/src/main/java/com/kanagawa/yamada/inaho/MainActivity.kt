@@ -30,7 +30,7 @@ class InahoApp : Application(), SingletonImageLoader.Factory {
 
 // --- Screen Enum Updated ---
 enum class AppScreen {
-    SETUP, HOME, LIST, FAVORITES, SETTINGS, PLAYER
+    SETUP, HOME, LIST, PLAYLIST, SETTINGS, PLAYER
 }
 
 // --- Activity ---
@@ -67,8 +67,8 @@ class MainActivity : ComponentActivity() {
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     bottomBar = {
-                        // Show NavBar on the 4 main sections
-                        if (currentScreen in listOf(AppScreen.HOME, AppScreen.LIST, AppScreen.FAVORITES, AppScreen.SETTINGS)) {
+                        // Show NavBar on the 4 main sections (UPDATED FAVORITES TO PLAYLIST)
+                        if (currentScreen in listOf(AppScreen.HOME, AppScreen.LIST, AppScreen.PLAYLIST, AppScreen.SETTINGS)) {
                             NavBar(
                                 currentScreen = currentScreen,
                                 onNavigate = { currentScreen = it },
@@ -111,8 +111,9 @@ class MainActivity : ComponentActivity() {
                                         onNavigateToPlayer = { currentScreen = AppScreen.PLAYER }
                                     )
                                 }
-                                AppScreen.FAVORITES -> {
-                                    FavoritesScreen(
+                                // UPDATED TO PLAYLIST
+                                AppScreen.PLAYLIST -> {
+                                    PlaylistScreen(
                                         musicViewModel = musicViewModel,
                                         onNavigateToPlayer = { currentScreen = AppScreen.PLAYER }
                                     )

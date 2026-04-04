@@ -34,8 +34,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-// Seed ensures randomizations stay exactly the same for the entire app session
-// Using Random.Default.nextLong() avoids the linear seed correlation bug
 private val appLaunchSeed = kotlin.random.Random.Default.nextLong()
 
 @Composable
@@ -53,13 +51,11 @@ fun HomeScreen(
     val bgColor = if (settings.amoledBlack) Color.Black else Color(0xFF120E0E)
     val surfaceColor = if (settings.amoledBlack) Color(0xFF0A0A0A) else Color(0xFF1E1414)
 
-    // Check if the user is a VIP to apply the Pink color
     val isVip = remember(settings.userName) {
         listOf("Kanagawa Yamada", "Ochinai Inaho", "落乃いなほ").contains(settings.userName.trim())
     }
     val nameColor = if (isVip) Color(0xFFB8355B) else Color.White
 
-    // --- PERMISSION & LIBRARY LOADING LOGIC ---
     var hasPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(
@@ -120,18 +116,14 @@ fun HomeScreen(
             }
         }
     }
-    // -----------------------------------------------------
 
-    // Pick up to 5 random songs for the grid (using stable seed)
     val dailySongs = remember(fullLibrary) {
         if (fullLibrary.isNotEmpty()) fullLibrary.shuffled(kotlin.random.Random(appLaunchSeed)).take(5) else emptyList()
     }
-    // Pick 10 random songs for the "Jump Back In" quick list (using offset stable seed)
     val quickList = remember(fullLibrary) {
         if (fullLibrary.size > 5) fullLibrary.shuffled(kotlin.random.Random(appLaunchSeed + 1)).take(10) else emptyList()
     }
 
-    // Use a Box as the root to allow the Mini Player to float perfectly over the content
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -143,7 +135,6 @@ fun HomeScreen(
                 .padding(horizontal = 16.dp)
                 .padding(top = 16.dp)
         ) {
-            // --- Multi-line Greetings (Bigger Font Sizes) ---
             Text(text = "いらっしゃいませ,", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
             Text(text = settings.userName, color = nameColor, fontSize = 24.sp, fontWeight = FontWeight.Bold)
 
@@ -152,10 +143,8 @@ fun HomeScreen(
             Text(text = "Song of The Day", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
             Spacer(modifier = Modifier.height(8.dp))
 
-            // --- Grid ---
             if (dailySongs.isNotEmpty()) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Main Item
                     val mainSong = dailySongs[0]
                     LaunchedEffect(mainSong.id) { musicViewModel.loadArtIfNeeded(mainSong) }
                     Box(
@@ -177,7 +166,6 @@ fun HomeScreen(
                         }
                     }
 
-                    // 4 Small Items
                     Column(
                         modifier = Modifier
                             .weight(1f)
@@ -211,11 +199,11 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // --- Playlist Button ---
+            // --- Playlist Button Restored to Home Screen ---
             Button(
                 onClick = {
                     if (fullLibrary.isNotEmpty()) {
-                        val shuffled = fullLibrary.shuffled() // New random playlist on click
+                        val shuffled = fullLibrary.shuffled()
                         playerService?.playSong(shuffled[0], shuffled, 0)
                         musicViewModel.preloadQueueWindow(shuffled, 0)
                         onNavigateToPlayer()
@@ -232,11 +220,9 @@ fun HomeScreen(
             Text(text = "Suggested for You", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
             Spacer(modifier = Modifier.height(8.dp))
 
-            // --- Quick List ---
             Box(modifier = Modifier.weight(1f)) {
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
-                    // Increased bottom padding to ensure items scroll past the floating player seamlessly
                     contentPadding = PaddingValues(bottom = if (playerState.currentSong != null) 100.dp else 16.dp)
                 ) {
                     itemsIndexed(quickList) { index, song ->
@@ -258,19 +244,18 @@ fun HomeScreen(
             }
         }
 
-        // --- Floating Mini Player ---
         AnimatedVisibility(
             visible = playerState.currentSong != null,
             enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
             exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(16.dp) // Creates the floating margin
+                .padding(16.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .shadow(12.dp, RoundedCornerShape(16.dp)) // Drop shadow for floating effect
-                    .clip(RoundedCornerShape(16.dp)) // Clips the child MiniPlayerBar nicely
+                    .shadow(12.dp, RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(16.dp))
             ) {
                 MiniPlayerBar(
                     playerState = playerState, playerService = playerService,

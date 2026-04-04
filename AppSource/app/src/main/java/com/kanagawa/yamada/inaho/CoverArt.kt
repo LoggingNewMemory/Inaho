@@ -67,7 +67,6 @@ internal fun extractAndDownsample(context: Context, uri: Uri, targetPx: Int): Bi
             retriever.setDataSource(context, uri)
             retriever.embeddedPicture
         } finally {
-            // CRITICAL: Always release native resources even if setDataSource fails to prevent OOM
             retriever.release()
         }
     } catch (e: Exception) { null } ?: return null
@@ -104,17 +103,10 @@ internal fun extractAndDownsample(context: Context, uri: Uri, targetPx: Int): Bi
 // LRU BITMAP CACHE
 // ==========================================
 
-/**
- * A thread-safe LRU map that evicts the least-recently-used entry once [maxSize] is exceeded.
- */
 private class LruBitmapCache(private val maxSize: Int) :
-    LinkedHashMap<Long, Bitmap?>(maxSize + 1, 0.75f, /* accessOrder = */ true) {
+    LinkedHashMap<Long, Bitmap?>(maxSize + 1, 0.75f, true) {
 
     override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, Bitmap?>?): Boolean {
-        // DANGER AVERTED: We removed the explicit manual bmp.recycle() here.
-        // Jetpack Compose might still be actively drawing the bitmap during a screen transition.
-        // Recycling it manually will cause a fatal 'Canvas: trying to use a recycled bitmap' crash.
-        // Android's modern native GC is smart enough to clean up the unreferenced bitmaps perfectly.
         return size > maxSize
     }
 }
@@ -129,7 +121,7 @@ private const val PRE_LOAD_RADIUS = 15
 class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     val settingsManager = SettingsManager(application)
-    val favoritesManager = FavoritesManager(application)
+    val playlistManager = PlaylistManager(application)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val songs = settingsManager.settingsFlow.flatMapLatest { settings ->

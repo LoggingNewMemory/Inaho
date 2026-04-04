@@ -24,6 +24,7 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -51,7 +52,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
-// --- Audio Details Data Class ---
 data class AudioDetails(
     val format: String,
     val sampleRate: String,
@@ -67,7 +67,8 @@ fun PlayerScreen(
     val context = LocalContext.current
     val playerState by PlayerService.playerState.collectAsState()
     val artCache   by musicViewModel.artCache.collectAsState()
-    val favorites  by musicViewModel.favoritesManager.favoritesFlow.collectAsState()
+    val favorites  by musicViewModel.playlistManager.favoritesFlow.collectAsState()
+    val customPlaylists by musicViewModel.playlistManager.customPlaylistsFlow.collectAsState()
     val playerService = rememberPlayerService()
     val settings   by musicViewModel.settingsManager.settingsFlow.collectAsState()
 
@@ -89,13 +90,13 @@ fun PlayerScreen(
     var showSleepTimerDialog by remember { mutableStateOf(false) }
     var showQueueSheet      by remember { mutableStateOf(false) }
     var showEqDialog        by remember { mutableStateOf(false) }
+    var showAddToPlaylistDialog by remember { mutableStateOf(false) }
     var sleepTimerRemainingMs by remember { mutableLongStateOf(-1L) }
 
     val currentSongId = song?.id
     var currentSpeedLabel by remember { mutableStateOf("1.0×") }
     LaunchedEffect(currentSongId) { currentSpeedLabel = "1.0×" }
 
-    // ── Volume control ──
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val maxVolume    = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat() }
 
@@ -168,7 +169,6 @@ fun PlayerScreen(
             .padding(horizontal = 20.dp)
             .navigationBarsPadding()
     ) {
-        // ── Top Bar ──
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -206,7 +206,6 @@ fun PlayerScreen(
             }
         }
 
-        // ── Queue Sheet ──
         AnimatedVisibility(
             visible = showQueueSheet,
             enter = expandVertically(),
@@ -223,8 +222,6 @@ fun PlayerScreen(
         }
 
         if (!showQueueSheet) {
-            // ── ANIMATED Cover Art ──
-            // Scale subtly scales down when paused
             val artScale by animateFloatAsState(
                 targetValue = if (playerState.isPlaying) 1f else 0.85f,
                 animationSpec = spring(
@@ -258,7 +255,6 @@ fun PlayerScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // ── Title + Favorite ──
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -283,7 +279,10 @@ fun PlayerScreen(
             }
             if (song != null) {
                 val isFav = favorites.contains(song.id)
-                IconButton(onClick = { musicViewModel.favoritesManager.toggle(song.id) }) {
+                IconButton(onClick = { showAddToPlaylistDialog = true }) {
+                    Icon(imageVector = Icons.Default.PlaylistAdd, contentDescription = "Add to Playlist", tint = Color.White, modifier = Modifier.size(26.dp))
+                }
+                IconButton(onClick = { musicViewModel.playlistManager.toggleFavorite(song.id) }) {
                     Icon(
                         imageVector = if (isFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                         contentDescription = "Favorite",
@@ -296,7 +295,6 @@ fun PlayerScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // ── Seek Bar ──
         Slider(
             value = seekValue,
             onValueChange = { value ->
@@ -319,7 +317,6 @@ fun PlayerScreen(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // ── Volume Slider ──
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Icon(imageVector = Icons.Default.VolumeDown, contentDescription = null, tint = Color(0xFF666666), modifier = Modifier.size(18.dp))
             Slider(
@@ -340,7 +337,6 @@ fun PlayerScreen(
 
         Spacer(modifier = Modifier.weight(1f))
 
-        // ── Extra Controls Row: Speed · EQ · Sleep Timer ──
         val eqPreset by playerService?.eqManager?.currentPreset?.collectAsState() ?: run { remember { mutableStateOf(EqPreset.OFF) } }
         val eqActiveLabel = remember(eqPreset) { if (eqPreset == EqPreset.OFF) "EQ" else eqPreset.displayName }
         val eqIsActive = eqPreset != EqPreset.OFF
@@ -355,7 +351,6 @@ fun PlayerScreen(
             ExtraControlChip(icon = Icons.Default.Bedtime, label = if (sleepTimerRemainingMs > 0) formatMs(sleepTimerRemainingMs) else "Sleep", active = sleepTimerRemainingMs > 0, onClick = { showSleepTimerDialog = true })
         }
 
-        // ── Main Controls Row ──
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 36.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
@@ -381,7 +376,6 @@ fun PlayerScreen(
                     enabled  = song != null,
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    // ── ANIMATED Play/Pause Crossfade ──
                     AnimatedContent(
                         targetState = playerState.isPlaying,
                         transitionSpec = {
@@ -429,11 +423,33 @@ fun PlayerScreen(
     if (showSleepTimerDialog) {
         SleepTimerDialog(isActive = sleepTimerRemainingMs > 0, onSelect = { minutes -> sleepTimerRemainingMs = minutes * 60 * 1000L; showSleepTimerDialog  = false }, onCancel = { sleepTimerRemainingMs = -1L; showSleepTimerDialog  = false }, onDismiss = { showSleepTimerDialog = false })
     }
+
+    if (showAddToPlaylistDialog && song != null) {
+        Dialog(onDismissRequest = { showAddToPlaylistDialog = false }) {
+            Column(modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(Color(0xFF1E1414)).padding(20.dp)) {
+                Text("Add to Playlist", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(16.dp))
+                if (customPlaylists.isEmpty()) {
+                    Text("No custom playlists found.", color = Color.LightGray)
+                } else {
+                    LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
+                        items(customPlaylists) { playlist ->
+                            Text(
+                                text = playlist.name,
+                                color = Color.White,
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    musicViewModel.playlistManager.addSongToPlaylist(playlist.id, song.id)
+                                    showAddToPlaylistDialog = false
+                                }.padding(vertical = 12.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
-// ==========================================
-// EXTRA CONTROL CHIP
-// ==========================================
 @Composable
 private fun ExtraControlChip(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -457,9 +473,6 @@ private fun ExtraControlChip(
     }
 }
 
-// ==========================================
-// QUEUE PANEL
-// ==========================================
 @Composable
 fun QueuePanel(
     playerState: PlayerState,
@@ -525,9 +538,6 @@ fun QueuePanel(
     Spacer(Modifier.height(12.dp))
 }
 
-// ==========================================
-// SPEED DIALOG
-// ==========================================
 @Composable
 fun SpeedDialog(
     currentLabel: String,
@@ -565,9 +575,6 @@ fun SpeedDialog(
     }
 }
 
-// ==========================================
-// SLEEP TIMER DIALOG
-// ==========================================
 @Composable
 fun SleepTimerDialog(
     isActive: Boolean,
@@ -605,9 +612,6 @@ fun SleepTimerDialog(
     }
 }
 
-// ==========================================
-// HELPERS
-// ==========================================
 private fun formatMs(ms: Long): String {
     val totalSeconds = (ms / 1000).coerceAtLeast(0)
     return String.format("%02d:%02d", totalSeconds / 60, totalSeconds % 60)
@@ -670,7 +674,6 @@ private fun extractAudioDetails(context: Context, songId: Any): AudioDetails? {
 
             AudioDetails(formatStr, "${sampleRate} kHz", "$bitDepth Bit", "$bitrateKbps kbps")
         } finally {
-            // CRITICAL OOM FIX: Ensure these are always released even if an error occurs above
             extractor.release()
             retriever.release()
         }
