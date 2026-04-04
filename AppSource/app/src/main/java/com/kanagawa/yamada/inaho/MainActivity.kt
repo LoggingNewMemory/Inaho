@@ -159,7 +159,7 @@ Gw coba sekali lagi di comment postnya
 
 https://x.com/Kanagawa_Yamada/status/2039006484416365010
 
-Dan yap, ini juga di notice
+Dan yap, ini juga tidak di notice
 
 Sedih rasanya, namun aku juga sadar diri. Dia lebih terkenal daripada aku
 Dan pada akhirnya kuberikan saja ini untuk diriku sendiri.
