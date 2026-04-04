@@ -35,7 +35,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 // Seed ensures randomizations stay exactly the same for the entire app session
-private val appLaunchSeed = System.currentTimeMillis()
+// Using Random.Default.nextLong() avoids the linear seed correlation bug
+private val appLaunchSeed = kotlin.random.Random.Default.nextLong()
 
 @Composable
 fun HomeScreen(
@@ -51,10 +52,6 @@ fun HomeScreen(
 
     val bgColor = if (settings.amoledBlack) Color.Black else Color(0xFF120E0E)
     val surfaceColor = if (settings.amoledBlack) Color(0xFF0A0A0A) else Color(0xFF1E1414)
-
-    val greetings = remember { listOf("Welcome", "いらっしゃいませ", "Selamat Datang", "Sugeng Rawuh") }
-    // Uses the app session seed so the greeting doesn't cycle when switching tabs
-    val randomGreeting = remember { greetings.random(kotlin.random.Random(appLaunchSeed)) }
 
     // Check if the user is a VIP to apply the Pink color
     val isVip = remember(settings.userName) {
@@ -147,7 +144,7 @@ fun HomeScreen(
                 .padding(top = 16.dp)
         ) {
             // --- Multi-line Greetings (Bigger Font Sizes) ---
-            Text(text = "$randomGreeting,", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Text(text = "いらっしゃいませ,", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
             Text(text = settings.userName, color = nameColor, fontSize = 24.sp, fontWeight = FontWeight.Bold)
 
             Spacer(modifier = Modifier.height(16.dp))
