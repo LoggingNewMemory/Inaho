@@ -9,6 +9,9 @@ import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,7 +24,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -32,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 private val appLaunchSeed = kotlin.random.Random.Default.nextLong()
@@ -199,7 +205,6 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // --- Playlist Button Restored to Home Screen ---
             Button(
                 onClick = {
                     if (fullLibrary.isNotEmpty()) {
@@ -252,18 +257,51 @@ fun HomeScreen(
                 .align(Alignment.BottomCenter)
                 .padding(16.dp)
         ) {
+            val durationMs = playerState.durationMs.coerceAtLeast(1L)
+            var livePositionMs by remember { mutableLongStateOf(playerState.positionMs) }
+
+            // Polling effect for live progress matching the PlayerScreen approach
+            LaunchedEffect(playerState.isPlaying, playerService, playerState.currentSong?.id) {
+                if (playerService != null) {
+                    livePositionMs = playerService.getCurrentPosition()
+                    while (playerState.isPlaying) {
+                        delay(200) // update every 200ms
+                        livePositionMs = playerService.getCurrentPosition()
+                    }
+                }
+            }
+
+            val targetProgress = (livePositionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+            val animatedProgress by animateFloatAsState(
+                targetValue = targetProgress,
+                animationSpec = tween(durationMillis = 200, easing = LinearEasing), // Match delay for smooth sync
+                label = "MiniPlayerProgress"
+            )
+
             Box(
                 modifier = Modifier
                     .shadow(12.dp, RoundedCornerShape(16.dp))
                     .clip(RoundedCornerShape(16.dp))
+                    .drawBehind {
+                        // 1. Static surface background
+                        drawRect(color = surfaceColor)
+
+                        // 2. Dynamic pink progress bar on top
+                        val progressWidth = size.width * animatedProgress
+                        drawRect(
+                            color = Color(0xFFB8355B).copy(alpha = 0.25f), // Adjust alpha here if you want it more/less opaque
+                            size = Size(width = progressWidth, height = size.height)
+                        )
+                    }
             ) {
                 MiniPlayerBar(
-                    playerState = playerState, playerService = playerService,
+                    playerState = playerState,
+                    playerService = playerService,
                     coverBitmap = playerState.currentSong?.let { artCache[it.id] },
                     onPlayPause = { playerService?.togglePlayPause() },
                     onNext = { playerService?.skipNext() },
                     onExpand = onNavigateToPlayer,
-                    surfaceColor = surfaceColor
+                    surfaceColor = Color.Transparent // Ensures our custom drawn background shines through!
                 )
             }
         }
