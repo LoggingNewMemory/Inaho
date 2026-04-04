@@ -28,9 +28,9 @@ class InahoApp : Application(), SingletonImageLoader.Factory {
     override fun newImageLoader(context: Context): ImageLoader = ImageLoader.Builder(context).build()
 }
 
-// --- Screen Enum ---
+// --- Screen Enum Updated ---
 enum class AppScreen {
-    LIST, SETTINGS, PLAYER
+    SETUP, HOME, LIST, FAVORITES, SETTINGS, PLAYER
 }
 
 // --- Activity ---
@@ -49,85 +49,84 @@ class MainActivity : ComponentActivity() {
         setContent {
             HaloMusicTheme {
                 val musicViewModel: MusicViewModel = viewModel()
-                var currentScreen by rememberSaveable { mutableStateOf(AppScreen.LIST) }
+                val settings by musicViewModel.settingsManager.settingsFlow.collectAsState()
 
-                // Track global player state across all screens
+                // Route to SETUP if name is blank, otherwise go to HOME
+                var currentScreen by rememberSaveable {
+                    mutableStateOf(if (settings.userName.isBlank()) AppScreen.SETUP else AppScreen.HOME)
+                }
+
                 val playerState by PlayerService.playerState.collectAsState()
 
-                // THE FIX: Whenever the song changes (auto-play next, skipped, clicked), preload its art instantly!
                 LaunchedEffect(playerState.currentIndex, playerState.activeQueue) {
                     if (playerState.activeQueue.isNotEmpty() && playerState.currentIndex >= 0) {
                         musicViewModel.preloadQueueWindow(playerState.activeQueue, playerState.currentIndex)
                     }
                 }
 
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    bottomBar = {
+                        // Show NavBar on the 4 main sections
+                        if (currentScreen in listOf(AppScreen.HOME, AppScreen.LIST, AppScreen.FAVORITES, AppScreen.SETTINGS)) {
+                            NavBar(
+                                currentScreen = currentScreen,
+                                onNavigate = { currentScreen = it },
+                                amoledBlack = settings.amoledBlack
+                            )
+                        }
+                    }
+                ) { innerPadding ->
                     Box(modifier = Modifier.padding(innerPadding)) {
 
-                        // ANIMATED SCREEN TRANSITIONS
                         AnimatedContent(
                             targetState = currentScreen,
                             transitionSpec = {
-                                when (targetState) {
-                                    AppScreen.PLAYER -> {
-                                        slideInVertically(
-                                            animationSpec = tween(400),
-                                            initialOffsetY = { it }
-                                        ) + fadeIn() togetherWith slideOutVertically(
-                                            animationSpec = tween(400),
-                                            targetOffsetY = { -it / 4 }
-                                        ) + fadeOut()
-                                    }
-                                    AppScreen.SETTINGS -> {
-                                        slideInHorizontally(
-                                            animationSpec = tween(300),
-                                            initialOffsetX = { it }
-                                        ) + fadeIn() togetherWith slideOutHorizontally(
-                                            animationSpec = tween(300),
-                                            targetOffsetX = { -it / 4 }
-                                        ) + fadeOut()
-                                    }
-                                    AppScreen.LIST -> {
-                                        if (initialState == AppScreen.PLAYER) {
-                                            slideInVertically(
-                                                animationSpec = tween(400),
-                                                initialOffsetY = { -it / 4 }
-                                            ) + fadeIn() togetherWith slideOutVertically(
-                                                animationSpec = tween(400),
-                                                targetOffsetY = { it }
-                                            ) + fadeOut()
-                                        } else {
-                                            slideInHorizontally(
-                                                animationSpec = tween(300),
-                                                initialOffsetX = { -it / 4 }
-                                            ) + fadeIn() togetherWith slideOutHorizontally(
-                                                animationSpec = tween(300),
-                                                targetOffsetX = { it }
-                                            ) + fadeOut()
-                                        }
-                                    }
+                                if (targetState == AppScreen.PLAYER) {
+                                    slideInVertically(animationSpec = tween(400), initialOffsetY = { it }) + fadeIn() togetherWith slideOutVertically(animationSpec = tween(400), targetOffsetY = { -it / 4 }) + fadeOut()
+                                } else if (initialState == AppScreen.PLAYER) {
+                                    slideInVertically(animationSpec = tween(400), initialOffsetY = { -it / 4 }) + fadeIn() togetherWith slideOutVertically(animationSpec = tween(400), targetOffsetY = { it }) + fadeOut()
+                                } else {
+                                    slideInHorizontally(animationSpec = tween(300), initialOffsetX = { it }) + fadeIn() togetherWith slideOutHorizontally(animationSpec = tween(300), targetOffsetX = { -it / 4 }) + fadeOut()
                                 }
                             },
                             label = "Screen Transition"
                         ) { screen ->
                             when (screen) {
+                                AppScreen.SETUP -> {
+                                    SetupScreen(
+                                        settingsManager = musicViewModel.settingsManager,
+                                        onComplete = { currentScreen = AppScreen.HOME }
+                                    )
+                                }
+                                AppScreen.HOME -> {
+                                    HomeScreen(
+                                        musicViewModel = musicViewModel,
+                                        onNavigateToPlayer = { currentScreen = AppScreen.PLAYER }
+                                    )
+                                }
                                 AppScreen.LIST -> {
                                     MusicListScreen(
                                         musicViewModel = musicViewModel,
-                                        onNavigateToSettings = { currentScreen = AppScreen.SETTINGS },
+                                        onNavigateToPlayer = { currentScreen = AppScreen.PLAYER }
+                                    )
+                                }
+                                AppScreen.FAVORITES -> {
+                                    FavoritesScreen(
+                                        musicViewModel = musicViewModel,
                                         onNavigateToPlayer = { currentScreen = AppScreen.PLAYER }
                                     )
                                 }
                                 AppScreen.SETTINGS -> {
                                     SettingsScreen(
                                         settingsManager = musicViewModel.settingsManager,
-                                        onNavigateBack = { currentScreen = AppScreen.LIST }
+                                        onNavigateBack = { currentScreen = AppScreen.HOME }
                                     )
                                 }
                                 AppScreen.PLAYER -> {
                                     PlayerScreen(
                                         musicViewModel = musicViewModel,
-                                        onNavigateBack = { currentScreen = AppScreen.LIST }
+                                        onNavigateBack = { currentScreen = AppScreen.HOME } // Or you can add logic to return to previous screen
                                     )
                                 }
                             }

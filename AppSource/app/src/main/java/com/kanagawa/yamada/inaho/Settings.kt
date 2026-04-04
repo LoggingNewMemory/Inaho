@@ -44,6 +44,7 @@ enum class SortOption(val displayName: String) {
 }
 
 data class AppSettings(
+    val userName: String,
     val sortOption: SortOption,
     val onlyMusicFolder: Boolean,
     val amoledBlack: Boolean = false
@@ -54,6 +55,7 @@ class SettingsManager(context: Context) {
 
     private val _settingsFlow = MutableStateFlow(
         AppSettings(
+            userName = prefs.getString("user_name", "") ?: "",
             sortOption = SortOption.valueOf(
                 prefs.getString("sort_option", SortOption.TITLE_ASC.name) ?: SortOption.TITLE_ASC.name
             ),
@@ -62,6 +64,11 @@ class SettingsManager(context: Context) {
         )
     )
     val settingsFlow = _settingsFlow.asStateFlow()
+
+    fun updateUserName(name: String) {
+        prefs.edit().putString("user_name", name).apply()
+        _settingsFlow.value = _settingsFlow.value.copy(userName = name)
+    }
 
     fun updateSortOption(option: SortOption) {
         prefs.edit().putString("sort_option", option.name).apply()
@@ -245,38 +252,24 @@ fun SettingsScreen(
         // ==========================================
         Text(
             text = buildAnnotatedString {
-                withStyle(style = SpanStyle(color = Color.White)) {
-                    append("THE ")
-                }
-                withStyle(style = SpanStyle(color = Color(0xFFB8355B))) {
-                    append("DEVELOPERS")
-                }
+                withStyle(style = SpanStyle(color = Color.White)) { append("THE ") }
+                withStyle(style = SpanStyle(color = Color(0xFFB8355B))) { append("DEVELOPERS") }
             },
             fontSize = 30.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .padding(bottom = 24.dp)
+            modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 24.dp)
         )
 
         DeveloperProfile(
             role = "Developer",
-            roleColor = Color.White, // Set to White
+            roleColor = Color.White,
             avatarResId = R.drawable.ic_yamada,
             name = "Kanagawa Yamada",
             description = "VTuber / VTeacher of Indonesia. Founder and Leader of Kanagawa Lab Community",
             socials = {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    SocialLink(
-                        iconResId = R.drawable.github,
-                        text = "GitHub",
-                        url = "https://github.com/LoggingNewMemory"
-                    )
-                    SocialLink(
-                        iconResId = R.drawable.youtube,
-                        text = "YouTube",
-                        url = "https://www.youtube.com/@KanagawaYamada"
-                    )
+                    SocialLink(iconResId = R.drawable.github, text = "GitHub", url = "https://github.com/LoggingNewMemory")
+                    SocialLink(iconResId = R.drawable.youtube, text = "YouTube", url = "https://www.youtube.com/@KanagawaYamada")
                 }
             }
         )
@@ -285,22 +278,14 @@ fun SettingsScreen(
 
         DeveloperProfile(
             role = "Inspired By",
-            roleColor = Color(0xFFB8355B), // Set to Pink
+            roleColor = Color(0xFFB8355B),
             avatarResId = R.drawable.ic_inaho,
             name = "Ochinai Inaho",
             description = "Japanese VTuber under the agency of Goraku",
             socials = {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    SocialLink(
-                        iconResId = R.drawable.x,
-                        text = "X",
-                        url = "https://x.com/inaho_vt"
-                    )
-                    SocialLink(
-                        iconResId = R.drawable.youtube,
-                        text = "YouTube",
-                        url = "https://www.youtube.com/@%E8%90%BD%E4%B9%83%E3%81%84%E3%81%AA%E3%81%BB"
-                    )
+                    SocialLink(iconResId = R.drawable.x, text = "X", url = "https://x.com/inaho_vt")
+                    SocialLink(iconResId = R.drawable.youtube, text = "YouTube", url = "https://www.youtube.com/@%E8%90%BD%E4%B9%83%E3%81%84%E3%81%AA%E3%81%BB")
                 }
             }
         )
@@ -311,55 +296,28 @@ fun SettingsScreen(
 
 @Composable
 private fun SettingsToggleRow(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onToggle: (Boolean) -> Unit
+    icon: ImageVector, title: String, subtitle: String, checked: Boolean, onToggle: (Boolean) -> Unit
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onToggle(!checked) }
-            .padding(vertical = 10.dp, horizontal = 12.dp),
+        modifier = Modifier.fillMaxWidth().clickable { onToggle(!checked) }.padding(vertical = 10.dp, horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFF1E1414)),
+            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF1E1414)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = Color(0xFFB8355B),
-                modifier = Modifier.size(22.dp)
-            )
+            Icon(imageVector = icon, contentDescription = null, tint = Color(0xFFB8355B), modifier = Modifier.size(22.dp))
         }
         Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = subtitle,
-                color = Color(0xFF888888),
-                fontSize = 13.sp
-            )
+            Text(text = title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            Text(text = subtitle, color = Color(0xFF888888), fontSize = 13.sp)
         }
         Switch(
-            checked = checked,
-            onCheckedChange = onToggle,
+            checked = checked, onCheckedChange = onToggle,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = Color(0xFFB8355B),
-                uncheckedThumbColor = Color.LightGray,
-                uncheckedTrackColor = Color(0xFF2C2C2C)
+                checkedThumbColor = Color.White, checkedTrackColor = Color(0xFFB8355B),
+                uncheckedThumbColor = Color.LightGray, uncheckedTrackColor = Color(0xFF2C2C2C)
             )
         )
     }
@@ -367,59 +325,23 @@ private fun SettingsToggleRow(
 
 @Composable
 private fun DeveloperProfile(
-    role: String,
-    roleColor: Color = Color.White, // Added color parameter with default fallback
-    avatarResId: Int,
-    name: String,
-    description: String,
-    socials: @Composable () -> Unit
+    role: String, roleColor: Color = Color.White, avatarResId: Int, name: String, description: String, socials: @Composable () -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-    ) {
-        Text(
-            text = role,
-            color = roleColor, // Uses the color passed in
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        Text(text = role, color = roleColor, fontSize = 18.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 8.dp))
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFF1A1010))
-                .padding(16.dp)
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0xFF1A1010)).padding(16.dp)
         ) {
             Image(
-                painter = painterResource(id = avatarResId),
-                contentDescription = name,
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(CircleShape)
-                    .background(Color.White)
+                painter = painterResource(id = avatarResId), contentDescription = name,
+                modifier = Modifier.size(64.dp).clip(CircleShape).background(Color.White)
             )
             Spacer(modifier = Modifier.width(16.dp))
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = name,
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium
-                )
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                Text(text = name, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Medium)
                 Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = description,
-                    color = Color(0xFFCCCCCC),
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp
-                )
+                Text(text = description, color = Color(0xFFCCCCCC), fontSize = 13.sp, lineHeight = 18.sp)
                 Spacer(modifier = Modifier.height(8.dp))
                 socials()
             }
@@ -430,26 +352,12 @@ private fun DeveloperProfile(
 @Composable
 private fun SocialLink(iconResId: Int, text: String, url: String) {
     val uriHandler = LocalUriHandler.current
-
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .clip(RoundedCornerShape(4.dp))
-            .clickable { uriHandler.openUri(url) }
-            .padding(vertical = 4.dp, horizontal = 2.dp)
+        modifier = Modifier.clip(RoundedCornerShape(4.dp)).clickable { uriHandler.openUri(url) }.padding(vertical = 4.dp, horizontal = 2.dp)
     ) {
-        Icon(
-            painter = painterResource(id = iconResId),
-            contentDescription = text,
-            tint = Color(0xFFB8355B),
-            modifier = Modifier.size(20.dp)
-        )
+        Icon(painter = painterResource(id = iconResId), contentDescription = text, tint = Color(0xFFB8355B), modifier = Modifier.size(20.dp))
         Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = text,
-            color = Color(0xFFB8355B),
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium
-        )
+        Text(text = text, color = Color(0xFFB8355B), fontSize = 14.sp, fontWeight = FontWeight.Medium)
     }
 }
