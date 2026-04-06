@@ -255,24 +255,61 @@ fun PlaylistScreen(
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(text = "${songsToDisplay.size} songs", color = Color(0xFFAAAAAA), fontSize = 14.sp)
                         Spacer(modifier = Modifier.height(12.dp))
-                        Button(
-                            onClick = {
-                                if (songsToDisplay.isNotEmpty()) {
-                                    val shuffled = songsToDisplay.shuffled()
-                                    playerService?.playSong(shuffled[0], shuffled, 0)
-                                    musicViewModel.preloadQueueWindow(shuffled, 0)
-                                    onNavigateToPlayer()
-                                }
-                            },
-                            enabled = songsToDisplay.isNotEmpty(),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB8355B)),
-                            shape = RoundedCornerShape(24.dp),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                            modifier = Modifier.height(36.dp)
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(imageVector = Icons.Default.Shuffle, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Shuffle", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            // Play All Button
+                            Button(
+                                onClick = {
+                                    if (songsToDisplay.isNotEmpty()) {
+                                        playerService?.playSong(songsToDisplay[0], songsToDisplay, 0)
+                                        musicViewModel.preloadQueueWindow(songsToDisplay, 0)
+                                        onNavigateToPlayer()
+                                    }
+                                },
+                                enabled = songsToDisplay.isNotEmpty(),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color.White,
+                                    contentColor = Color(0xFFB8355B),
+                                    disabledContainerColor = Color.White.copy(alpha = 0.5f),
+                                    disabledContentColor = Color(0xFFB8355B).copy(alpha = 0.5f)
+                                ),
+                                shape = RoundedCornerShape(24.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                modifier = Modifier.weight(1f).height(36.dp)
+                            ) {
+                                Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Play All", fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+
+                            // Shuffle Button
+                            Button(
+                                onClick = {
+                                    if (songsToDisplay.isNotEmpty()) {
+                                        val shuffled = songsToDisplay.shuffled()
+                                        playerService?.playSong(shuffled[0], shuffled, 0)
+                                        musicViewModel.preloadQueueWindow(shuffled, 0)
+                                        onNavigateToPlayer()
+                                    }
+                                },
+                                enabled = songsToDisplay.isNotEmpty(),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFFB8355B),
+                                    contentColor = Color.White,
+                                    disabledContainerColor = Color(0xFFB8355B).copy(alpha = 0.5f),
+                                    disabledContentColor = Color.White.copy(alpha = 0.5f)
+                                ),
+                                shape = RoundedCornerShape(24.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                modifier = Modifier.weight(1f).height(36.dp)
+                            ) {
+                                Icon(imageVector = Icons.Default.Shuffle, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Shuffle", fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
                         }
                     }
                 }
