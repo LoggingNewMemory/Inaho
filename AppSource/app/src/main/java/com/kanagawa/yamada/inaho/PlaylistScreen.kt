@@ -122,6 +122,11 @@ fun PlaylistScreen(
             ) {
                 // 1. Favorites Playlist Card
                 item {
+                    // Load the cover art of the first song in favorites
+                    val firstFavSong = remember(favorites, loadedSongs) { loadedSongs.find { it.id == favorites.firstOrNull() } }
+                    LaunchedEffect(firstFavSong?.id) { firstFavSong?.let { musicViewModel.loadArtIfNeeded(it) } }
+                    val favCover = firstFavSong?.let { artCache[it.id] }
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -131,11 +136,20 @@ fun PlaylistScreen(
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.1f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(imageVector = Icons.Default.Favorite, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
+                        if (favCover != null) {
+                            Image(
+                                bitmap = favCover.asImageBitmap(),
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp))
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.1f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(imageVector = Icons.Default.Favorite, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
+                            }
                         }
                         Spacer(modifier = Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
