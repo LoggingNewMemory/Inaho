@@ -86,7 +86,7 @@ fun PlayerScreen(
 
     var audioDetails by remember { mutableStateOf<AudioDetails?>(null) }
 
-    var showSpeedDialog     by remember { mutableStateOf(false) }
+    var showSpeedPitchDialog     by remember { mutableStateOf(false) }
     var showSleepTimerDialog by remember { mutableStateOf(false) }
     var showQueueSheet      by remember { mutableStateOf(false) }
     var showEqDialog        by remember { mutableStateOf(false) }
@@ -94,8 +94,14 @@ fun PlayerScreen(
     var sleepTimerRemainingMs by remember { mutableLongStateOf(-1L) }
 
     val currentSongId = song?.id
-    var currentSpeedLabel by remember { mutableStateOf("1.0×") }
-    LaunchedEffect(currentSongId) { currentSpeedLabel = "1.0×" }
+    var currentSpeed by remember { mutableFloatStateOf(1.0f) }
+    var currentPitch by remember { mutableFloatStateOf(1.0f) }
+
+    // Reset parameters when the song changes to match service behaviour
+    LaunchedEffect(currentSongId) {
+        currentSpeed = 1.0f
+        currentPitch = 1.0f
+    }
 
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val maxVolume    = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat() }
@@ -341,12 +347,19 @@ fun PlayerScreen(
         val eqActiveLabel = remember(eqPreset) { if (eqPreset == EqPreset.OFF) "EQ" else eqPreset.displayName }
         val eqIsActive = eqPreset != EqPreset.OFF
 
+        val speedPitchActive = currentSpeed != 1.0f || currentPitch != 1.0f
+        val currentSpeedPitchLabel = if (currentPitch == 1.0f) {
+            String.format("%.2f×", currentSpeed)
+        } else {
+            String.format("%.2f× / %.2fp", currentSpeed, currentPitch)
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ExtraControlChip(icon = Icons.Default.Speed, label = currentSpeedLabel, active = currentSpeedLabel != "1.0×", onClick = { showSpeedDialog = true })
+            ExtraControlChip(icon = Icons.Default.Speed, label = currentSpeedPitchLabel, active = speedPitchActive, onClick = { showSpeedPitchDialog = true })
             ExtraControlChip(icon = Icons.Default.Equalizer, label = eqActiveLabel, active = eqIsActive, onClick = { showEqDialog = true })
             ExtraControlChip(icon = Icons.Default.Bedtime, label = if (sleepTimerRemainingMs > 0) formatMs(sleepTimerRemainingMs) else "Sleep", active = sleepTimerRemainingMs > 0, onClick = { showSleepTimerDialog = true })
         }
@@ -403,8 +416,17 @@ fun PlayerScreen(
         }
     }
 
-    if (showSpeedDialog) {
-        SpeedDialog(currentLabel = currentSpeedLabel, onSelect = { speed, label -> currentSpeedLabel = label; playerService?.setPlaybackSpeed(speed); showSpeedDialog = false }, onDismiss = { showSpeedDialog = false })
+    if (showSpeedPitchDialog) {
+        SpeedAndPitchDialog(
+            initialSpeed = currentSpeed,
+            initialPitch = currentPitch,
+            onApply = { s, p ->
+                currentSpeed = s
+                currentPitch = p
+                playerService?.setPlaybackSpeedAndPitch(s, p)
+            },
+            onDismiss = { showSpeedPitchDialog = false }
+        )
     }
 
     if (showEqDialog) {
@@ -539,37 +561,106 @@ fun QueuePanel(
 }
 
 @Composable
-fun SpeedDialog(
-    currentLabel: String,
-    onSelect: (Float, String) -> Unit,
+fun SpeedAndPitchDialog(
+    initialSpeed: Float,
+    initialPitch: Float,
+    onApply: (Float, Float) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val speeds = listOf(
-        0.5f  to "0.5×", 0.75f to "0.75×", 1.0f  to "1.0×",
-        1.25f to "1.25×", 1.5f  to "1.5×", 2.0f  to "2.0×"
-    )
+    var speed by remember { mutableFloatStateOf(initialSpeed) }
+    var pitch by remember { mutableFloatStateOf(initialPitch) }
+
+    val speedPresets = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+    val pitchPresets = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
 
     Dialog(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(Color(0xFF1E1414)).padding(20.dp)) {
-            Text("Playback Speed", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
-            speeds.chunked(3).forEach { row ->
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    row.forEach { (speed, label) ->
-                        val isSelected = label == currentLabel
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (isSelected) Color(0xFFB8355B) else Color(0xFF2C2020))
-                                .clickable { onSelect(speed, label) }
-                                .padding(vertical = 12.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(text = label, color = Color.White, fontSize = 14.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, textAlign = TextAlign.Center)
-                        }
-                    }
+            Text("Speed & Pitch", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
+
+            // Speed Slider Section
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Speed", color = Color(0xFFAAAAAA), fontSize = 14.sp)
+                Text(String.format("%.2f×", speed), color = Color(0xFFB8355B), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+            Slider(
+                value = speed,
+                onValueChange = { speed = it; onApply(speed, pitch) },
+                valueRange = 0.5f..2.0f,
+                colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color(0xFFB8355B), inactiveTrackColor = Color(0xFF3D3030))
+            )
+
+            // Speed Presets
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                speedPresets.forEach { preset ->
+                    Text(
+                        text = if (preset % 1 == 0f) String.format("%.0f×", preset) else String.format("%.2f", preset),
+                        color = if (speed == preset) Color.White else Color(0xFF888888),
+                        fontSize = 12.sp,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (speed == preset) Color(0xFFB8355B) else Color(0xFF2C2020))
+                            .clickable { speed = preset; onApply(speed, pitch) }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
                 }
-                Spacer(Modifier.height(10.dp))
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            // Pitch Slider Section
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Pitch", color = Color(0xFFAAAAAA), fontSize = 14.sp)
+                Text(String.format("%.2fp", pitch), color = Color(0xFFB8355B), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+            Slider(
+                value = pitch,
+                onValueChange = { pitch = it; onApply(speed, pitch) },
+                valueRange = 0.5f..2.0f,
+                colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color(0xFFB8355B), inactiveTrackColor = Color(0xFF3D3030))
+            )
+
+            // Pitch Presets
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                pitchPresets.forEach { preset ->
+                    Text(
+                        text = if (preset % 1 == 0f) String.format("%.0fp", preset) else String.format("%.2f", preset),
+                        color = if (pitch == preset) Color.White else Color(0xFF888888),
+                        fontSize = 12.sp,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (pitch == preset) Color(0xFFB8355B) else Color(0xFF2C2020))
+                            .clickable { pitch = preset; onApply(speed, pitch) }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            // Action Buttons
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Reset",
+                    color = Color(0xFFAAAAAA),
+                    fontSize = 14.sp,
+                    modifier = Modifier
+                        .clickable {
+                            speed = 1.0f
+                            pitch = 1.0f
+                            onApply(1.0f, 1.0f)
+                        }
+                        .padding(8.dp)
+                )
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFFB8355B))
+                        .clickable { onDismiss() }
+                        .padding(horizontal = 20.dp, vertical = 10.dp)
+                ) {
+                    Text("Done", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }

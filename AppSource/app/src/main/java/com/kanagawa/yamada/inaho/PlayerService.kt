@@ -80,8 +80,9 @@ class PlayerService : Service() {
     private var mediaPlayer: MediaPlayer? = null
     private lateinit var mediaSession: MediaSessionCompat
 
-    // Track current playback speed — reset to 1.0f on every new song
+    // Track current playback speed & pitch — reset to 1.0f on every new song
     private var currentPlaybackSpeed: Float = 1.0f
+    private var currentPlaybackPitch: Float = 1.0f
 
     // ── Yamada EQ ──────────────────────────────────────────────────────────────
     /** Exposed so PlayerScreen / ViewModel can bind the EQ dialog to it. */
@@ -208,6 +209,7 @@ class PlayerService : Service() {
         val currentIndex = if (isShuffled) 0 else index
 
         currentPlaybackSpeed = 1.0f
+        currentPlaybackPitch = 1.0f
 
         _playerState.value = _playerState.value.copy(
             currentSong  = song,
@@ -274,6 +276,7 @@ class PlayerService : Service() {
         }
 
         currentPlaybackSpeed = 1.0f
+        currentPlaybackPitch = 1.0f
 
         val nextSong = state.activeQueue[nextIndex]
         _playerState.value = state.copy(
@@ -311,6 +314,7 @@ class PlayerService : Service() {
         }
 
         currentPlaybackSpeed = 1.0f
+        currentPlaybackPitch = 1.0f
 
         val prevSong = state.activeQueue[prevIndex]
         _playerState.value = state.copy(
@@ -336,6 +340,7 @@ class PlayerService : Service() {
         val song = state.activeQueue[index]
 
         currentPlaybackSpeed = 1.0f
+        currentPlaybackPitch = 1.0f
 
         _playerState.value = state.copy(
             currentSong  = song,
@@ -346,11 +351,14 @@ class PlayerService : Service() {
         prepareAndPlay(song.trackUri)
     }
 
-    fun setPlaybackSpeed(speed: Float) {
+    fun setPlaybackSpeedAndPitch(speed: Float, pitch: Float) {
         currentPlaybackSpeed = speed
+        currentPlaybackPitch = pitch
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             try {
-                mediaPlayer?.playbackParams = mediaPlayer?.playbackParams?.setSpeed(speed) ?: return
+                mediaPlayer?.let { mp ->
+                    mp.playbackParams = mp.playbackParams.setSpeed(speed).setPitch(pitch)
+                }
             } catch (_: Exception) {}
         }
     }
@@ -405,9 +413,9 @@ class PlayerService : Service() {
                     eqManager.attach(mp.audioSessionId)
                     // ──────────────────────────────────────────────────────────
 
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && currentPlaybackSpeed != 1.0f) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && (currentPlaybackSpeed != 1.0f || currentPlaybackPitch != 1.0f)) {
                         try {
-                            mp.playbackParams = mp.playbackParams.setSpeed(currentPlaybackSpeed)
+                            mp.playbackParams = mp.playbackParams.setSpeed(currentPlaybackSpeed).setPitch(currentPlaybackPitch)
                         } catch (_: Exception) {}
                     }
                     mp.start()
