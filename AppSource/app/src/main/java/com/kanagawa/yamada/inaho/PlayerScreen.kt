@@ -570,72 +570,31 @@ fun SpeedAndPitchDialog(
     var speed by remember { mutableFloatStateOf(initialSpeed) }
     var pitch by remember { mutableFloatStateOf(initialPitch) }
 
-    val speedPresets = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
-    val pitchPresets = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+    val labels = listOf("0.5", "0.75", "1.0", "1.25", "1.50", "1.75", "2.0")
 
     Dialog(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(Color(0xFF1E1414)).padding(20.dp)) {
-            Text("Speed & Pitch", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
+            Text("Speed & Pitch", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 24.dp))
 
             // Speed Slider Section
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Speed", color = Color(0xFFAAAAAA), fontSize = 14.sp)
-                Text(String.format("%.2f×", speed), color = Color(0xFFB8355B), fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            }
-            Slider(
+            Text("Speed", color = Color(0xFFAAAAAA), fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
+            DiscreteSliderWithLabels(
                 value = speed,
                 onValueChange = { speed = it; onApply(speed, pitch) },
-                valueRange = 0.5f..2.0f,
-                colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color(0xFFB8355B), inactiveTrackColor = Color(0xFF3D3030))
+                labels = labels
             )
-
-            // Speed Presets
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                speedPresets.forEach { preset ->
-                    Text(
-                        text = if (preset % 1 == 0f) String.format("%.0f×", preset) else String.format("%.2f", preset),
-                        color = if (speed == preset) Color.White else Color(0xFF888888),
-                        fontSize = 12.sp,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(if (speed == preset) Color(0xFFB8355B) else Color(0xFF2C2020))
-                            .clickable { speed = preset; onApply(speed, pitch) }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(20.dp))
-
-            // Pitch Slider Section
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Pitch", color = Color(0xFFAAAAAA), fontSize = 14.sp)
-                Text(String.format("%.2fp", pitch), color = Color(0xFFB8355B), fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            }
-            Slider(
-                value = pitch,
-                onValueChange = { pitch = it; onApply(speed, pitch) },
-                valueRange = 0.5f..2.0f,
-                colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color(0xFFB8355B), inactiveTrackColor = Color(0xFF3D3030))
-            )
-
-            // Pitch Presets
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                pitchPresets.forEach { preset ->
-                    Text(
-                        text = if (preset % 1 == 0f) String.format("%.0fp", preset) else String.format("%.2f", preset),
-                        color = if (pitch == preset) Color.White else Color(0xFF888888),
-                        fontSize = 12.sp,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(if (pitch == preset) Color(0xFFB8355B) else Color(0xFF2C2020))
-                            .clickable { pitch = preset; onApply(speed, pitch) }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-            }
 
             Spacer(Modifier.height(24.dp))
+
+            // Pitch Slider Section
+            Text("Pitch", color = Color(0xFFAAAAAA), fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
+            DiscreteSliderWithLabels(
+                value = pitch,
+                onValueChange = { pitch = it; onApply(speed, pitch) },
+                labels = labels
+            )
+
+            Spacer(Modifier.height(32.dp))
 
             // Action Buttons
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -663,6 +622,44 @@ fun SpeedAndPitchDialog(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DiscreteSliderWithLabels(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    labels: List<String>
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp), // Offsets text to align with slider thumb/ticks
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            labels.forEach { label ->
+                val numValue = label.toFloat()
+                val isSelected = (value == numValue)
+                Text(
+                    text = label,
+                    color = if (isSelected) Color(0xFFB8355B) else Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                )
+            }
+        }
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = 0.5f..2.0f,
+            steps = 5, // 5 steps creates 6 intervals (0.75, 1.0, 1.25, 1.5, 1.75)
+            colors = SliderDefaults.colors(
+                thumbColor = Color(0xFFB8355B),
+                activeTrackColor = Color(0xFFB8355B),
+                inactiveTrackColor = Color(0xFFB8355B).copy(alpha = 0.3f),
+                activeTickColor = Color.White,     // White dots inside the colored track
+                inactiveTickColor = Color.White    // White dots inside the inactive track
+            )
+        )
     }
 }
 
