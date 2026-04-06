@@ -58,7 +58,11 @@ fun PlaylistScreen(
 
     // Navigation state inside the screen
     var currentView by remember { mutableStateOf("LIST") } // LIST, FAV, CUSTOM
-    var selectedPlaylist by remember { mutableStateOf<PlaylistManager.Playlist?>(null) }
+
+    // Fix: Store just the ID so the selected playlist always reflects the latest state
+    var selectedPlaylistId by remember { mutableStateOf<Long?>(null) }
+    val selectedPlaylist = customPlaylists.find { it.id == selectedPlaylistId }
+
     var showCreateDialog by remember { mutableStateOf(false) }
 
     // Rename dialog state
@@ -131,10 +135,8 @@ fun PlaylistScreen(
                 TextButton(onClick = {
                     if (newName.isNotBlank()) {
                         musicViewModel.playlistManager.renamePlaylist(renameTarget!!.id, newName.trim())
-                        // If currently viewing this playlist, refresh the title
-                        if (selectedPlaylist?.id == renameTarget!!.id) {
-                            selectedPlaylist = selectedPlaylist!!.copy(name = newName.trim())
-                        }
+                        // We no longer need to manually copy the name here because selectedPlaylist
+                        // gets automatically recalculated from the customPlaylists state
                     }
                     showRenameDialog = false
                     renameTarget = null
@@ -246,7 +248,8 @@ fun PlaylistScreen(
                 }
 
                 // 2. Custom Playlists
-                items(customPlaylists) { playlist ->
+                // Using key = { it.id } prevents weird compose UI bugs when an item is deleted
+                items(customPlaylists, key = { it.id }) { playlist ->
                     val firstSong = remember(playlist.songIds, loadedSongs) { loadedSongs.find { it.id == playlist.songIds.firstOrNull() } }
                     LaunchedEffect(firstSong?.id) { firstSong?.let { musicViewModel.loadArtIfNeeded(it) } }
                     val cover = firstSong?.let { artCache[it.id] }
@@ -260,7 +263,7 @@ fun PlaylistScreen(
                             .clip(RoundedCornerShape(16.dp))
                             .background(surfaceColor)
                             .clickable {
-                                selectedPlaylist = playlist
+                                selectedPlaylistId = playlist.id
                                 currentView = "CUSTOM"
                             }
                             .padding(12.dp),
@@ -310,7 +313,7 @@ fun PlaylistScreen(
                                     text = { Text("Reorder songs", color = Color(0xFFCCCCCC), fontSize = 14.sp) },
                                     onClick = {
                                         showMenu = false
-                                        selectedPlaylist = playlist
+                                        selectedPlaylistId = playlist.id
                                         currentView = "CUSTOM"
                                     }
                                 )
@@ -526,7 +529,7 @@ fun PlaylistScreen(
                                         modifier = Modifier.weight(1f),
                                         onRemove = {
                                             if (selectedPlaylist != null) {
-                                                musicViewModel.playlistManager.removeSongFromPlaylist(selectedPlaylist!!.id, song.id)
+                                                musicViewModel.playlistManager.removeSongFromPlaylist(selectedPlaylist.id, song.id)
                                             }
                                         }
                                     )
