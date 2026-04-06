@@ -18,16 +18,34 @@ class PlaylistManager(context: Context) {
     private val _customPlaylistsFlow = MutableStateFlow(loadCustomPlaylists())
     val customPlaylistsFlow = _customPlaylistsFlow.asStateFlow()
 
-    private fun loadFavorites(): Set<Long> {
-        val raw = prefs.getStringSet("favorites", emptySet()) ?: emptySet()
-        return raw.mapNotNull { it.toLongOrNull() }.toSet()
+    private fun loadFavorites(): List<Long> {
+        val raw = prefs.getString("favorites_ordered", null)
+        if (raw != null) {
+            // Load from the ordered list format
+            return raw.split(",").filter { it.isNotBlank() }.mapNotNull { it.toLongOrNull() }
+        }
+        // Migrate from old Set format
+        val oldSet = prefs.getStringSet("favorites", emptySet()) ?: emptySet()
+        val migrated = oldSet.mapNotNull { it.toLongOrNull() }
+        if (migrated.isNotEmpty()) {
+            prefs.edit()
+                .putString("favorites_ordered", migrated.joinToString(","))
+                .remove("favorites")
+                .apply()
+        }
+        return migrated
     }
 
     fun toggleFavorite(songId: Long) {
-        val current = _favoritesFlow.value.toMutableSet()
+        val current = _favoritesFlow.value.toMutableList()
         if (current.contains(songId)) current.remove(songId) else current.add(songId)
-        prefs.edit().putStringSet("favorites", current.map { it.toString() }.toSet()).apply()
+        prefs.edit().putString("favorites_ordered", current.joinToString(",")).apply()
         _favoritesFlow.value = current
+    }
+
+    fun reorderFavorites(newOrder: List<Long>) {
+        prefs.edit().putString("favorites_ordered", newOrder.joinToString(",")).apply()
+        _favoritesFlow.value = newOrder
     }
 
     private fun loadCustomPlaylists(): List<Playlist> {
@@ -53,6 +71,11 @@ class PlaylistManager(context: Context) {
         _customPlaylistsFlow.value = loadCustomPlaylists()
     }
 
+    fun renamePlaylist(playlistId: Long, newName: String) {
+        prefs.edit().putString("playlist_${playlistId}_name", newName).apply()
+        _customPlaylistsFlow.value = loadCustomPlaylists()
+    }
+
     fun addSongToPlaylist(playlistId: Long, songId: Long) {
         val playlist = _customPlaylistsFlow.value.find { it.id == playlistId } ?: return
         if (playlist.songIds.contains(songId)) return
@@ -65,6 +88,11 @@ class PlaylistManager(context: Context) {
         val playlist = _customPlaylistsFlow.value.find { it.id == playlistId } ?: return
         val newSongs = playlist.songIds - songId
         prefs.edit().putString("playlist_${playlistId}_songs", newSongs.joinToString(",")).apply()
+        _customPlaylistsFlow.value = loadCustomPlaylists()
+    }
+
+    fun reorderPlaylistSongs(playlistId: Long, newOrder: List<Long>) {
+        prefs.edit().putString("playlist_${playlistId}_songs", newOrder.joinToString(",")).apply()
         _customPlaylistsFlow.value = loadCustomPlaylists()
     }
 

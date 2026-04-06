@@ -59,4 +59,5 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.0")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.media:media:1.7.0")
+    implementation("sh.calvin.reorderable:reorderable:2.4.0")
 }
