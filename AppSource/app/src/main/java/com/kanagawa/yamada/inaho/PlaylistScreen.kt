@@ -14,7 +14,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
@@ -59,7 +61,6 @@ fun PlaylistScreen(
     // Navigation state inside the screen
     var currentView by remember { mutableStateOf("LIST") } // LIST, FAV, CUSTOM
 
-    // Fix: Store just the ID so the selected playlist always reflects the latest state
     var selectedPlaylistId by remember { mutableStateOf<Long?>(null) }
     val selectedPlaylist = customPlaylists.find { it.id == selectedPlaylistId }
 
@@ -135,8 +136,6 @@ fun PlaylistScreen(
                 TextButton(onClick = {
                     if (newName.isNotBlank()) {
                         musicViewModel.playlistManager.renamePlaylist(renameTarget!!.id, newName.trim())
-                        // We no longer need to manually copy the name here because selectedPlaylist
-                        // gets automatically recalculated from the customPlaylists state
                     }
                     showRenameDialog = false
                     renameTarget = null
@@ -167,6 +166,7 @@ fun PlaylistScreen(
                     musicViewModel.playlistManager.deletePlaylist(deleteTarget!!.id)
                     showDeleteDialog = false
                     deleteTarget = null
+                    currentView = "LIST" // Go back to list if we delete the currently viewed playlist
                 }) { Text("Delete", color = Color(0xFFB8355B), fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
@@ -185,7 +185,9 @@ fun PlaylistScreen(
         if (currentView == "LIST") {
             // --- MAIN PLAYLIST OVERVIEW ---
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -227,11 +229,16 @@ fun PlaylistScreen(
                                 bitmap = favCover.asImageBitmap(),
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
-                                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp))
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(RoundedCornerShape(8.dp))
                             )
                         } else {
                             Box(
-                                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.1f)),
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.White.copy(alpha = 0.1f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(imageVector = Icons.Default.Favorite, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
@@ -248,14 +255,10 @@ fun PlaylistScreen(
                 }
 
                 // 2. Custom Playlists
-                // Using key = { it.id } prevents weird compose UI bugs when an item is deleted
                 items(customPlaylists, key = { it.id }) { playlist ->
                     val firstSong = remember(playlist.songIds, loadedSongs) { loadedSongs.find { it.id == playlist.songIds.firstOrNull() } }
                     LaunchedEffect(firstSong?.id) { firstSong?.let { musicViewModel.loadArtIfNeeded(it) } }
                     val cover = firstSong?.let { artCache[it.id] }
-
-                    // 3-dot menu state per card
-                    var showMenu by remember { mutableStateOf(false) }
 
                     Row(
                         modifier = Modifier
@@ -274,11 +277,16 @@ fun PlaylistScreen(
                                 bitmap = cover.asImageBitmap(),
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
-                                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp))
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(RoundedCornerShape(8.dp))
                             )
                         } else {
                             Box(
-                                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF2C2C2C)),
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF2C2C2C)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(imageVector = Icons.Default.QueueMusic, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(28.dp))
@@ -290,60 +298,6 @@ fun PlaylistScreen(
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(text = "${playlist.songIds.size} songs", color = Color(0xFFAAAAAA), fontSize = 13.sp)
                         }
-
-                        // 3-dot menu button (replaces the old inline Delete icon)
-                        Box {
-                            IconButton(onClick = { showMenu = true }) {
-                                Icon(
-                                    imageVector = Icons.Default.MoreVert,
-                                    contentDescription = "Playlist options",
-                                    tint = Color(0xFF888888)
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = showMenu,
-                                onDismissRequest = { showMenu = false },
-                                containerColor = Color(0xFF2A1A1A)
-                            ) {
-                                // Reorder songs
-                                DropdownMenuItem(
-                                    leadingIcon = {
-                                        Icon(imageVector = Icons.Default.Reorder, contentDescription = null, tint = Color(0xFFCCCCCC), modifier = Modifier.size(20.dp))
-                                    },
-                                    text = { Text("Reorder songs", color = Color(0xFFCCCCCC), fontSize = 14.sp) },
-                                    onClick = {
-                                        showMenu = false
-                                        selectedPlaylistId = playlist.id
-                                        currentView = "CUSTOM"
-                                    }
-                                )
-                                // Rename
-                                DropdownMenuItem(
-                                    leadingIcon = {
-                                        Icon(imageVector = Icons.Default.DriveFileRenameOutline, contentDescription = null, tint = Color(0xFFCCCCCC), modifier = Modifier.size(20.dp))
-                                    },
-                                    text = { Text("Rename", color = Color(0xFFCCCCCC), fontSize = 14.sp) },
-                                    onClick = {
-                                        showMenu = false
-                                        renameTarget = playlist
-                                        showRenameDialog = true
-                                    }
-                                )
-                                HorizontalDivider(color = Color(0xFF3A2020), thickness = 1.dp)
-                                // Delete
-                                DropdownMenuItem(
-                                    leadingIcon = {
-                                        Icon(imageVector = Icons.Default.Delete, contentDescription = null, tint = Color(0xFFB8355B), modifier = Modifier.size(20.dp))
-                                    },
-                                    text = { Text("Delete playlist", color = Color(0xFFB8355B), fontSize = 14.sp) },
-                                    onClick = {
-                                        showMenu = false
-                                        deleteTarget = playlist
-                                        showDeleteDialog = true
-                                    }
-                                )
-                            }
-                        }
                     }
                 }
             }
@@ -353,7 +307,11 @@ fun PlaylistScreen(
             val title = if (isFavView) "Favorites" else selectedPlaylist?.name ?: "Playlist"
             val songIds = if (isFavView) favorites else selectedPlaylist?.songIds ?: emptyList()
 
-            // Maintain local reorderable list so drags feel instant before persistence
+            // State for Edit Mode (toggles reorder & delete handles)
+            var isEditMode by remember { mutableStateOf(false) }
+            var showTopMenu by remember { mutableStateOf(false) }
+
+            // Maintain local reorderable list
             var reorderableSongIds by remember(songIds) { mutableStateOf(songIds) }
             val songsToDisplay = remember(loadedSongs, reorderableSongIds) {
                 reorderableSongIds.mapNotNull { id -> loadedSongs.find { it.id == id } }
@@ -378,19 +336,82 @@ fun PlaylistScreen(
             }
 
             Column(modifier = Modifier.fillMaxSize()) {
-                // Top Bar
+                // Top Bar with Back Button on Left and 3-Dots on Right
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween, // This pushes the icons to opposite ends
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = { currentView = "LIST" }) {
+                    IconButton(onClick = {
+                        currentView = "LIST"
+                        isEditMode = false // Reset edit mode when leaving
+                    }) {
                         Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color(0xFFB8355B))
+                    }
+
+                    // 3-Dot Menu for Custom Playlists (Favorites shouldn't be renamed/deleted)
+                    if (!isFavView && selectedPlaylist != null) {
+                        Box {
+                            IconButton(onClick = { showTopMenu = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = "Playlist options",
+                                    tint = Color.White
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showTopMenu,
+                                onDismissRequest = { showTopMenu = false },
+                                containerColor = Color(0xFF2A1A1A)
+                            ) {
+                                // Toggle Edit Mode
+                                DropdownMenuItem(
+                                    leadingIcon = {
+                                        Icon(imageVector = Icons.Default.Edit, contentDescription = null, tint = Color(0xFFCCCCCC), modifier = Modifier.size(20.dp))
+                                    },
+                                    text = { Text(if (isEditMode) "Done Editing" else "Edit Songs", color = Color(0xFFCCCCCC), fontSize = 14.sp) },
+                                    onClick = {
+                                        isEditMode = !isEditMode
+                                        showTopMenu = false
+                                    }
+                                )
+                                // Rename Playlist
+                                DropdownMenuItem(
+                                    leadingIcon = {
+                                        Icon(imageVector = Icons.Default.DriveFileRenameOutline, contentDescription = null, tint = Color(0xFFCCCCCC), modifier = Modifier.size(20.dp))
+                                    },
+                                    text = { Text("Rename Playlist", color = Color(0xFFCCCCCC), fontSize = 14.sp) },
+                                    onClick = {
+                                        showTopMenu = false
+                                        renameTarget = selectedPlaylist
+                                        showRenameDialog = true
+                                    }
+                                )
+                                HorizontalDivider(color = Color(0xFF3A2020), thickness = 1.dp)
+                                // Delete Playlist
+                                DropdownMenuItem(
+                                    leadingIcon = {
+                                        Icon(imageVector = Icons.Default.Delete, contentDescription = null, tint = Color(0xFFB8355B), modifier = Modifier.size(20.dp))
+                                    },
+                                    text = { Text("Delete Playlist", color = Color(0xFFB8355B), fontSize = 14.sp) },
+                                    onClick = {
+                                        showTopMenu = false
+                                        deleteTarget = selectedPlaylist
+                                        showDeleteDialog = true
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
 
                 // Hero Header Section
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.Bottom
                 ) {
                     Box(
@@ -426,22 +447,24 @@ fun PlaylistScreen(
                             // Play All Button
                             Button(
                                 onClick = {
-                                    if (songsToDisplay.isNotEmpty()) {
+                                    if (songsToDisplay.isNotEmpty() && !isEditMode) {
                                         playerService?.playSong(songsToDisplay[0], songsToDisplay, 0)
                                         musicViewModel.preloadQueueWindow(songsToDisplay, 0)
                                         onNavigateToPlayer()
                                     }
                                 },
-                                enabled = songsToDisplay.isNotEmpty(),
+                                enabled = songsToDisplay.isNotEmpty() && !isEditMode,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color.White,
                                     contentColor = Color(0xFFB8355B),
-                                    disabledContainerColor = Color.White.copy(alpha = 0.5f),
-                                    disabledContentColor = Color(0xFFB8355B).copy(alpha = 0.5f)
+                                    disabledContainerColor = Color.White.copy(alpha = 0.2f),
+                                    disabledContentColor = Color.White.copy(alpha = 0.5f)
                                 ),
                                 shape = RoundedCornerShape(24.dp),
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                modifier = Modifier.weight(1f).height(36.dp)
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(36.dp)
                             ) {
                                 Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
@@ -451,23 +474,25 @@ fun PlaylistScreen(
                             // Shuffle Button
                             Button(
                                 onClick = {
-                                    if (songsToDisplay.isNotEmpty()) {
+                                    if (songsToDisplay.isNotEmpty() && !isEditMode) {
                                         val shuffled = songsToDisplay.shuffled()
                                         playerService?.playSong(shuffled[0], shuffled, 0)
                                         musicViewModel.preloadQueueWindow(shuffled, 0)
                                         onNavigateToPlayer()
                                     }
                                 },
-                                enabled = songsToDisplay.isNotEmpty(),
+                                enabled = songsToDisplay.isNotEmpty() && !isEditMode,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color(0xFFB8355B),
                                     contentColor = Color.White,
-                                    disabledContainerColor = Color(0xFFB8355B).copy(alpha = 0.5f),
+                                    disabledContainerColor = Color(0xFFB8355B).copy(alpha = 0.2f),
                                     disabledContentColor = Color.White.copy(alpha = 0.5f)
                                 ),
                                 shape = RoundedCornerShape(24.dp),
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                modifier = Modifier.weight(1f).height(36.dp)
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(36.dp)
                             ) {
                                 Icon(imageVector = Icons.Default.Shuffle, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
@@ -480,7 +505,7 @@ fun PlaylistScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 HorizontalDivider(color = surfaceColor, thickness = 2.dp)
 
-                // Songs List (reorderable)
+                // Songs List
                 if (songsToDisplay.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
@@ -498,12 +523,13 @@ fun PlaylistScreen(
                         itemsIndexed(songsToDisplay, key = { _, s -> s.id }) { index, song ->
                             LaunchedEffect(song.id) { musicViewModel.loadArtIfNeeded(song) }
 
-                            ReorderableItem(reorderableState, key = song.id) { isDragging ->
+                            // We only allow dragging if isEditMode is true
+                            ReorderableItem(reorderableState, key = song.id, enabled = isEditMode) { isDragging ->
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .background(if (isDragging) Color(0xFF2C1A1A) else Color.Transparent)
-                                        .clickable {
+                                        .clickable(enabled = !isEditMode) {
                                             playerService?.playSong(song, songsToDisplay, index)
                                             musicViewModel.preloadQueueWindow(songsToDisplay, index)
                                             onNavigateToPlayer()
@@ -511,21 +537,24 @@ fun PlaylistScreen(
                                         .padding(horizontal = 8.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    // Drag handle — must be inside ReorderableItem lambda
-                                    Icon(
-                                        imageVector = Icons.Default.Reorder,
-                                        contentDescription = "Drag to reorder",
-                                        tint = Color(0xFF555555),
-                                        modifier = Modifier
-                                            .size(20.dp)
-                                            .draggableHandle()
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
+                                    // Drag handle - Only visible in edit mode
+                                    if (isEditMode) {
+                                        Icon(
+                                            imageVector = Icons.Default.DragIndicator,
+                                            contentDescription = "Drag to reorder",
+                                            tint = Color(0xFF888888),
+                                            modifier = Modifier
+                                                .padding(end = 8.dp)
+                                                .size(24.dp)
+                                                .draggableHandle()
+                                        )
+                                    }
+
                                     PlaylistSongRow(
                                         song = song,
                                         coverBitmap = artCache[song.id],
-                                        isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
-                                        showRemove = !isFavView && selectedPlaylist != null,
+                                        isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying && !isEditMode,
+                                        showRemove = isEditMode && !isFavView && selectedPlaylist != null,
                                         modifier = Modifier.weight(1f),
                                         onRemove = {
                                             if (selectedPlaylist != null) {
@@ -543,9 +572,6 @@ fun PlaylistScreen(
     }
 }
 
-// Song content row — rendered inside the ReorderableItem lambda.
-// The outer Row (with drag handle) lives in the caller; this composable
-// fills the remaining space with its own Row, giving weight(1f) a valid RowScope.
 @Composable
 private fun PlaylistSongRow(
     song: Song,
@@ -565,11 +591,16 @@ private fun PlaylistSongRow(
                 bitmap = coverBitmap.asImageBitmap(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(6.dp))
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(6.dp))
             )
         } else {
             Box(
-                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF2C2C2C))
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(0xFF2C2C2C))
             )
         }
 
@@ -595,10 +626,15 @@ private fun PlaylistSongRow(
             )
         }
 
-        // ── Right side: Remove or duration ──────────────────────────────
+        // ── Right side: Direct Remove Icon OR Duration ──────────────────
         if (showRemove) {
+            // Because they're in edit mode, they just tap the red minus icon to remove
             IconButton(onClick = onRemove, modifier = Modifier.size(36.dp)) {
-                Icon(imageVector = Icons.Default.RemoveCircleOutline, contentDescription = "Remove", tint = Color(0xFF666666))
+                Icon(
+                    imageVector = Icons.Default.RemoveCircleOutline,
+                    contentDescription = "Remove from playlist",
+                    tint = Color(0xFFB8355B)
+                )
             }
         } else {
             Spacer(modifier = Modifier.width(8.dp))
