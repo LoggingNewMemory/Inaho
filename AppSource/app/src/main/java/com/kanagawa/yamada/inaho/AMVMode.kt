@@ -7,8 +7,11 @@ import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.viewinterop.AndroidView
 
 @Composable
@@ -16,6 +19,16 @@ fun AMVVideoSurface(
     playerService: PlayerService?,
     modifier: Modifier = Modifier
 ) {
+    val playerState by PlayerService.playerState.collectAsState()
+
+    // We get the actual video sizes to calculate the Center Crop
+    val vw = playerState.videoWidth.toFloat()
+    val vh = playerState.videoHeight.toFloat()
+
+    // Assuming the parent box is 1:1, we un-squish the video mathematically
+    val scaleX = if (vw > 0 && vh > 0 && vw > vh) vw / vh else 1f
+    val scaleY = if (vw > 0 && vh > 0 && vh > vw) vh / vw else 1f
+
     AndroidView(
         factory = { context ->
             TextureView(context).apply {
@@ -26,7 +39,6 @@ fun AMVVideoSurface(
 
                 surfaceTextureListener = object : TextureView.SurfaceTextureListener {
                     override fun onSurfaceTextureAvailable(texture: SurfaceTexture, width: Int, height: Int) {
-                        // Create and tag the surface so we can reuse it during Compose recompositions
                         val surface = Surface(texture)
                         tag = surface
                         playerService?.setVideoSurface(surface)
@@ -38,7 +50,7 @@ fun AMVVideoSurface(
                         playerService?.setVideoSurface(null)
                         (tag as? Surface)?.release()
                         tag = null
-                        return true // Let Android know it can safely destroy the texture
+                        return true
                     }
 
                     override fun onSurfaceTextureUpdated(texture: SurfaceTexture) {}
@@ -46,17 +58,22 @@ fun AMVVideoSurface(
             }
         },
         update = { view ->
-            // If the Service binds slightly after the view is created, pass the cached surface
             val surface = view.tag as? Surface
             if (surface != null && playerService != null) {
                 playerService.setVideoSurface(surface)
             } else if (view.isAvailable && playerService != null && view.tag == null) {
-                // Fallback catch if the listener fired before we could tag it
                 val newSurface = Surface(view.surfaceTexture)
                 view.tag = newSurface
                 playerService.setVideoSurface(newSurface)
             }
         },
-        modifier = modifier.fillMaxSize().background(Color.Black)
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            // Apply the center-crop stretch mathematically
+            .graphicsLayer(
+                scaleX = scaleX,
+                scaleY = scaleY
+            )
     )
 }

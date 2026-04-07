@@ -41,7 +41,9 @@ data class PlayerState(
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val isShuffled: Boolean = false,
-    val repeatMode: RepeatMode = RepeatMode.OFF
+    val repeatMode: RepeatMode = RepeatMode.OFF,
+    val videoWidth: Int = 0,  // <-- Added for cropping
+    val videoHeight: Int = 0  // <-- Added for cropping
 ) {
     val nextSong: Song?
         get() = if (currentIndex + 1 < activeQueue.size) activeQueue[currentIndex + 1]
@@ -226,7 +228,9 @@ class PlayerService : Service() {
             currentIndex = currentIndex,
             isPlaying    = false,
             positionMs   = 0L,
-            durationMs   = song.durationMs
+            durationMs   = song.durationMs,
+            videoWidth   = 0, // Reset for new song
+            videoHeight  = 0  // Reset for new song
         )
         prepareAndPlay(song.trackUri)
     }
@@ -291,7 +295,9 @@ class PlayerService : Service() {
             currentSong  = nextSong,
             currentIndex = nextIndex,
             positionMs   = 0L,
-            durationMs   = nextSong.durationMs
+            durationMs   = nextSong.durationMs,
+            videoWidth   = 0,
+            videoHeight  = 0
         )
         prepareAndPlay(nextSong.trackUri)
     }
@@ -329,7 +335,9 @@ class PlayerService : Service() {
             currentSong  = prevSong,
             currentIndex = prevIndex,
             positionMs   = 0L,
-            durationMs   = prevSong.durationMs
+            durationMs   = prevSong.durationMs,
+            videoWidth   = 0,
+            videoHeight  = 0
         )
         prepareAndPlay(prevSong.trackUri)
     }
@@ -354,7 +362,9 @@ class PlayerService : Service() {
             currentSong  = song,
             currentIndex = index,
             positionMs   = 0L,
-            durationMs   = song.durationMs
+            durationMs   = song.durationMs,
+            videoWidth   = 0,
+            videoHeight  = 0
         )
         prepareAndPlay(song.trackUri)
     }
@@ -413,8 +423,17 @@ class PlayerService : Service() {
                     .build()
             )
 
-            // Re-apply the stored surface to the new MediaPlayer immediately!
             setSurface(currentSurface)
+
+            // Listen for video sizes to pass to Compose for cropping
+            setOnVideoSizeChangedListener { _, width, height ->
+                if (width > 0 && height > 0) {
+                    _playerState.value = _playerState.value.copy(
+                        videoWidth = width,
+                        videoHeight = height
+                    )
+                }
+            }
 
             try {
                 setDataSource(applicationContext, uri)
@@ -427,9 +446,12 @@ class PlayerService : Service() {
                         } catch (_: Exception) {}
                     }
                     mp.start()
+
                     _playerState.value = _playerState.value.copy(
                         isPlaying  = true,
-                        durationMs = mp.duration.toLong()
+                        durationMs = mp.duration.toLong(),
+                        videoWidth = mp.videoWidth,    // Capture size immediately if available
+                        videoHeight = mp.videoHeight   // Capture size immediately if available
                     )
                     updateMediaSessionState()
                     startForeground(NOTIF_ID, buildNotification())
