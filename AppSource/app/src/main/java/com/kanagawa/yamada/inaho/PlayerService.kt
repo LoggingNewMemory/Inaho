@@ -81,7 +81,6 @@ class PlayerService : Service() {
     private var mediaPlayer: MediaPlayer? = null
     private lateinit var mediaSession: MediaSessionCompat
 
-    // Track current playback speed & pitch — reset to 1.0f on every new song
     private var currentPlaybackSpeed: Float = 1.0f
     private var currentPlaybackPitch: Float = 1.0f
 
@@ -91,8 +90,18 @@ class PlayerService : Service() {
     // ──────────────────────────────────────────────────────────────────────────
 
     // ── Video Surface Handling ─────────────────────────────────────────────────
+    private var currentSurface: Surface? = null // Keep track of active surface
+
     fun setVideoSurface(surface: Surface?) {
-        mediaPlayer?.setSurface(surface)
+        // Prevent redundant surface application which can cause the video to freeze or blank out
+        if (currentSurface === surface) return
+
+        currentSurface = surface
+        try {
+            mediaPlayer?.setSurface(surface)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
     // ──────────────────────────────────────────────────────────────────────────
 
@@ -100,7 +109,6 @@ class PlayerService : Service() {
     private val noisyAudioReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
-                // Earphones/Bluetooth disconnected! Pause immediately.
                 if (_playerState.value.isPlaying) {
                     togglePlayPause()
                 }
@@ -115,10 +123,8 @@ class PlayerService : Service() {
         super.onCreate()
         createNotificationChannel()
         setupMediaSession()
-        // Initialise EQ manager — session will be attached once MediaPlayer is ready
         eqManager = YamadaEQManager(applicationContext)
 
-        // Register the auto-pause broadcast receiver
         val filter = IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(noisyAudioReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -150,8 +156,6 @@ class PlayerService : Service() {
         }
         return START_STICKY
     }
-
-    // --- MediaSession Sync ---
 
     private fun updateMediaSessionState() {
         val state = _playerState.value
@@ -199,8 +203,6 @@ class PlayerService : Service() {
             retriever?.release()
         }
     }
-
-    // --- Playback Controls ---
 
     fun playSong(song: Song, queue: List<Song>, index: Int) {
         val isShuffled = _playerState.value.isShuffled
@@ -370,7 +372,6 @@ class PlayerService : Service() {
     }
 
     fun stopPlayback() {
-        // Release EQ before tearing down the player
         eqManager.release()
 
         mediaPlayer?.apply {
@@ -391,7 +392,6 @@ class PlayerService : Service() {
     }
 
     private fun prepareAndPlay(uri: Uri) {
-        // Release EQ effects tied to the old session before tearing it down
         eqManager.release()
 
         val oldPlayer = mediaPlayer
@@ -412,12 +412,14 @@ class PlayerService : Service() {
                     .setUsage(AudioAttributes.USAGE_MEDIA)
                     .build()
             )
+
+            // Re-apply the stored surface to the new MediaPlayer immediately!
+            setSurface(currentSurface)
+
             try {
                 setDataSource(applicationContext, uri)
                 setOnPreparedListener { mp ->
-                    // ── Attach Yamada EQ to the new audio session ──────────────
                     eqManager.attach(mp.audioSessionId)
-                    // ──────────────────────────────────────────────────────────
 
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && (currentPlaybackSpeed != 1.0f || currentPlaybackPitch != 1.0f)) {
                         try {
@@ -502,7 +504,6 @@ class PlayerService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        // Unregister the auto-pause receiver to prevent memory leaks
         runCatching { unregisterReceiver(noisyAudioReceiver) }
 
         eqManager.release()
