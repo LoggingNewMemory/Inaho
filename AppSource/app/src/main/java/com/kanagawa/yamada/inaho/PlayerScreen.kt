@@ -108,22 +108,17 @@ fun PlayerScreen(
         if (window != null) {
             val insetsController = WindowCompat.getInsetsController(window, window.decorView)
 
-            // Hide Status Bar and Navigation Bar
             insetsController.hide(WindowInsetsCompat.Type.systemBars())
-
-            // Allow user to swipe from edges to temporarily reveal the bars without breaking layout
             insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
 
         onDispose {
-            // Restore normal system bars when leaving the PlayerScreen (going back to music list)
             if (window != null) {
                 val insetsController = WindowCompat.getInsetsController(window, window.decorView)
                 insetsController.show(WindowInsetsCompat.Type.systemBars())
             }
         }
     }
-    // -----------------------------
 
     LaunchedEffect(currentSongId) {
         currentSpeed = 1.0f
@@ -200,7 +195,6 @@ fun PlayerScreen(
 
         val isVideoFormat = song?.isVideo == true
 
-        // 1. Dynamic Background Layer
         if (isAmvModeActive && isVideoFormat) {
             AMVVideoSurface(
                 playerService = playerService,
@@ -222,7 +216,6 @@ fun PlayerScreen(
             )
         }
 
-        // 2. Dim Overlay Layer
         if ((isAmvModeActive && isVideoFormat) || coverBitmap != null) {
             Box(
                 modifier = Modifier
@@ -231,11 +224,10 @@ fun PlayerScreen(
             )
         }
 
-        // 3. Main Player UI Layer
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .displayCutoutPadding() // Protects Top Bar from camera holes in Immersive Mode
+                .displayCutoutPadding()
                 .padding(horizontal = 20.dp)
                 .navigationBarsPadding()
         ) {
@@ -359,7 +351,7 @@ fun PlayerScreen(
                         Icon(
                             imageVector = if (isFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                             contentDescription = "Favorite",
-                            tint = if (isFav) Color(0xFFB8355B) else Color(0xFF555555),
+                            tint = if (isFav) Color(0xFFB8355B) else Color.White, // Changed to Color.White
                             modifier = Modifier.size(26.dp)
                         )
                     }
@@ -391,7 +383,7 @@ fun PlayerScreen(
             Spacer(modifier = Modifier.height(10.dp))
 
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = Icons.Default.VolumeDown, contentDescription = null, tint = Color(0xFF666666), modifier = Modifier.size(18.dp))
+                Icon(imageVector = Icons.Default.VolumeDown, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                 Slider(
                     value = volumeValue,
                     onValueChange = { v ->
@@ -405,7 +397,7 @@ fun PlayerScreen(
                     modifier = Modifier.weight(1f).padding(horizontal = 6.dp),
                     colors = SliderDefaults.colors(thumbColor = Color(0xFFB8355B), activeTrackColor = Color(0xFFB8355B), inactiveTrackColor = Color(0xFF3D3030))
                 )
-                Icon(imageVector = Icons.Default.VolumeUp, contentDescription = null, tint = Color(0xFF666666), modifier = Modifier.size(18.dp))
+                Icon(imageVector = Icons.Default.VolumeUp, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
             }
 
             Spacer(modifier = Modifier.weight(1f))
