@@ -49,9 +49,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -101,24 +98,6 @@ fun PlayerScreen(
     var currentSpeed by remember { mutableFloatStateOf(1.0f) }
     var currentPitch by remember { mutableFloatStateOf(1.0f) }
     var isAmvModeActive by remember { mutableStateOf(settings.amvModeAlwaysOn) }
-
-    // --- IMMERSIVE MODE LOGIC ---
-    DisposableEffect(Unit) {
-        val window = (context as? android.app.Activity)?.window
-        if (window != null) {
-            val insetsController = WindowCompat.getInsetsController(window, window.decorView)
-
-            insetsController.hide(WindowInsetsCompat.Type.systemBars())
-            insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        }
-
-        onDispose {
-            if (window != null) {
-                val insetsController = WindowCompat.getInsetsController(window, window.decorView)
-                insetsController.show(WindowInsetsCompat.Type.systemBars())
-            }
-        }
-    }
 
     LaunchedEffect(currentSongId) {
         currentSpeed = 1.0f
@@ -351,7 +330,7 @@ fun PlayerScreen(
                         Icon(
                             imageVector = if (isFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                             contentDescription = "Favorite",
-                            tint = if (isFav) Color(0xFFB8355B) else Color.White, // Changed to Color.White
+                            tint = if (isFav) Color(0xFFB8355B) else Color.White,
                             modifier = Modifier.size(26.dp)
                         )
                     }

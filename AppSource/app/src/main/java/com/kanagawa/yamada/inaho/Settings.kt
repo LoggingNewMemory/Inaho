@@ -123,6 +123,7 @@ fun SettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(if (settings.amoledBlack) Color.Black else Color(0xFF120E0E))
+            .displayCutoutPadding()
             .padding(start = 2.dp, end = 2.dp, top = 4.dp, bottom = 4.dp)
             .verticalScroll(rememberScrollState())
     ) {

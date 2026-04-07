@@ -222,6 +222,7 @@ fun MusicListScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(bgColor)
+            .displayCutoutPadding()
             .padding(start = 4.dp, end = 4.dp, top = 8.dp)
     ) {
         // --- Top Bar (Animated Search) ---
