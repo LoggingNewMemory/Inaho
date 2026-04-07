@@ -80,8 +80,10 @@ class PlayerService : Service() {
     }
 
     private val binder = PlayerBinder()
+
+    // --- Dual Decoder ---
     private var mediaPlayer: MediaPlayer? = null
-    private var bgMediaPlayer: MediaPlayer? = null // <-- Dual Decoder for Background
+    private var bgMediaPlayer: MediaPlayer? = null
 
     private lateinit var mediaSession: MediaSessionCompat
 
@@ -93,27 +95,25 @@ class PlayerService : Service() {
 
     // ── Video Surface Handling ─────────────────────────────────────────────────
     private var currentSurface: Surface? = null
-    private var currentBgSurface: Surface? = null // Background surface
+    private var currentBgSurface: Surface? = null
 
     fun setVideoSurface(surface: Surface?) {
         if (currentSurface === surface) return
         currentSurface = surface
-        try { mediaPlayer?.setSurface(surface) } catch (e: Exception) {}
+        try { mediaPlayer?.setSurface(surface) } catch (_: Exception) {}
     }
 
     fun setBgVideoSurface(surface: Surface?) {
         if (currentBgSurface === surface) return
         currentBgSurface = surface
-        try { bgMediaPlayer?.setSurface(surface) } catch (e: Exception) {}
+        try { bgMediaPlayer?.setSurface(surface) } catch (_: Exception) {}
     }
     // ──────────────────────────────────────────────────────────────────────────
 
     private val noisyAudioReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
-                if (_playerState.value.isPlaying) {
-                    togglePlayPause()
-                }
+                if (_playerState.value.isPlaying) togglePlayPause()
             }
         }
     }
@@ -141,7 +141,7 @@ class PlayerService : Service() {
                 override fun onPause()           { if (_playerState.value.isPlaying)  togglePlayPause() }
                 override fun onSkipToNext()      { skipNext(isAutoCompletion = false) }
                 override fun onSkipToPrevious()  { skipPrev() }
-                override fun onSeekTo(pos: Long) { seekTo(pos); updateMediaSessionState(); updateNotification() }
+                override fun onSeekTo(pos: Long) { seekTo(pos) }
                 override fun onStop()            { stopPlayback() }
             })
             isActive = true
@@ -163,7 +163,7 @@ class PlayerService : Service() {
         val song = state.currentSong ?: return
 
         val playbackState = if (state.isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
-        val position      = mediaPlayer?.currentPosition?.toLong() ?: 0L
+        val position      = try { mediaPlayer?.currentPosition?.toLong() ?: 0L } catch (_: Exception) { 0L }
         val playbackSpeed = if (state.isPlaying) currentPlaybackSpeed else 0f
 
         mediaSession.setPlaybackState(
@@ -201,7 +201,7 @@ class PlayerService : Service() {
         } catch (e: Exception) {
             null
         } finally {
-            retriever?.release()
+            try { retriever?.release() } catch (_: Exception) {}
         }
     }
 
@@ -236,18 +236,24 @@ class PlayerService : Service() {
 
     fun togglePlayPause() {
         val mp = mediaPlayer ?: return
-        if (mp.isPlaying) {
-            mp.pause()
-            bgMediaPlayer?.pause() // Pause Background Video
-            _playerState.value = _playerState.value.copy(isPlaying = false)
-        } else {
-            mp.start()
-            bgMediaPlayer?.seekTo(mp.currentPosition) // Resync background on play
-            bgMediaPlayer?.start()
-            _playerState.value = _playerState.value.copy(isPlaying = true)
+        try {
+            if (mp.isPlaying) {
+                mp.pause()
+                try { bgMediaPlayer?.pause() } catch (_: Exception) {}
+                _playerState.value = _playerState.value.copy(isPlaying = false)
+            } else {
+                mp.start()
+                try {
+                    bgMediaPlayer?.seekTo(mp.currentPosition)
+                    bgMediaPlayer?.start()
+                } catch (_: Exception) {}
+                _playerState.value = _playerState.value.copy(isPlaying = true)
+            }
+            updateMediaSessionState()
+            updateNotification()
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
-        updateMediaSessionState()
-        updateNotification()
     }
 
     fun toggleShuffle() {
@@ -306,12 +312,11 @@ class PlayerService : Service() {
 
     fun skipPrev() {
         val state = _playerState.value
-        val mp    = mediaPlayer
-        val position = mp?.currentPosition ?: 0
+        val position = try { mediaPlayer?.currentPosition ?: 0 } catch (_: Exception) { 0 }
 
         if (position > 3000) {
-            mp?.seekTo(0)
-            bgMediaPlayer?.seekTo(0)
+            try { mediaPlayer?.seekTo(0) } catch (_: Exception) {}
+            try { bgMediaPlayer?.seekTo(0) } catch (_: Exception) {}
             _playerState.value = state.copy(positionMs = 0L)
             updateMediaSessionState()
             return
@@ -323,8 +328,8 @@ class PlayerService : Service() {
             state.currentIndex > 0 -> state.currentIndex - 1
             state.repeatMode == RepeatMode.ALL -> state.activeQueue.size - 1
             else -> {
-                mp?.seekTo(0)
-                bgMediaPlayer?.seekTo(0)
+                try { mediaPlayer?.seekTo(0) } catch (_: Exception) {}
+                try { bgMediaPlayer?.seekTo(0) } catch (_: Exception) {}
                 _playerState.value = state.copy(positionMs = 0L)
                 updateMediaSessionState()
                 return
@@ -347,13 +352,14 @@ class PlayerService : Service() {
     }
 
     fun seekTo(positionMs: Long) {
-        mediaPlayer?.seekTo(positionMs.toInt())
-        bgMediaPlayer?.seekTo(positionMs.toInt()) // Sync Background Video
+        try { mediaPlayer?.seekTo(positionMs.toInt()) } catch (_: Exception) {}
+        try { bgMediaPlayer?.seekTo(positionMs.toInt()) } catch (_: Exception) {}
         _playerState.value = _playerState.value.copy(positionMs = positionMs)
         updateMediaSessionState()
+        updateNotification()
     }
 
-    fun getCurrentPosition(): Long = mediaPlayer?.currentPosition?.toLong() ?: 0L
+    fun getCurrentPosition(): Long = try { mediaPlayer?.currentPosition?.toLong() ?: 0L } catch (_: Exception) { 0L }
 
     fun jumpToQueueIndex(index: Int) {
         val state = _playerState.value
@@ -378,28 +384,31 @@ class PlayerService : Service() {
         currentPlaybackSpeed = speed
         currentPlaybackPitch = pitch
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            try {
-                mediaPlayer?.let { mp -> mp.playbackParams = mp.playbackParams.setSpeed(speed).setPitch(pitch) }
-                bgMediaPlayer?.let { bg -> bg.playbackParams = bg.playbackParams.setSpeed(speed).setPitch(pitch) }
-            } catch (_: Exception) {}
+            try { mediaPlayer?.let { mp -> mp.playbackParams = mp.playbackParams.setSpeed(speed).setPitch(pitch) } } catch (_: Exception) {}
+            try { bgMediaPlayer?.let { bg -> bg.playbackParams = bg.playbackParams.setSpeed(speed).setPitch(pitch) } } catch (_: Exception) {}
         }
     }
+
+    // ── NATIVE HARDWARE DECODER CLEANUP ──────────────────────────────────────────
+    private fun safelyDestroyPlayer(mp: MediaPlayer?) {
+        if (mp == null) return
+        try { mp.setOnPreparedListener(null) } catch (_: Exception) {}
+        try { mp.setOnCompletionListener(null) } catch (_: Exception) {}
+        try { mp.setOnErrorListener(null) } catch (_: Exception) {}
+        try { mp.setOnVideoSizeChangedListener(null) } catch (_: Exception) {}
+        try { if (mp.isPlaying) mp.stop() } catch (_: Exception) {}
+        try { mp.reset() } catch (_: Exception) {}
+        try { mp.release() } catch (_: Exception) {}
+    }
+    // ──────────────────────────────────────────────────────────────────────────
 
     fun stopPlayback() {
         eqManager.release()
 
-        bgMediaPlayer?.apply {
-            if (isPlaying) stop()
-            reset()
-            release()
-        }
+        safelyDestroyPlayer(bgMediaPlayer)
         bgMediaPlayer = null
 
-        mediaPlayer?.apply {
-            if (isPlaying) stop()
-            reset()
-            release()
-        }
+        safelyDestroyPlayer(mediaPlayer)
         mediaPlayer = null
 
         _playerState.value = PlayerState()
@@ -415,62 +424,51 @@ class PlayerService : Service() {
 
     private fun prepareAndPlay(song: Song) {
         eqManager.release()
-
         val uri = song.trackUri
 
-        bgMediaPlayer?.apply {
-            setOnPreparedListener(null)
-            if (isPlaying) stop()
-            reset()
-            release()
-        }
+        // FORCEFULLY AND SAFELY PURGE OLD PLAYERS TO PREVENT DECODER LEAKS
+        safelyDestroyPlayer(bgMediaPlayer)
         bgMediaPlayer = null
-
-        val oldPlayer = mediaPlayer
+        safelyDestroyPlayer(mediaPlayer)
         mediaPlayer = null
-        oldPlayer?.apply {
-            setOnCompletionListener(null)
-            setOnPreparedListener(null)
-            setOnErrorListener(null)
-            if (isPlaying) stop()
-            reset()
-            release()
-        }
 
         // --- Prepare Background Player (Muted) ---
         if (song.isVideo) {
             bgMediaPlayer = MediaPlayer().apply {
-                setAudioAttributes(AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).setUsage(AudioAttributes.USAGE_MEDIA).build())
-                setSurface(currentBgSurface)
-                setVolume(0f, 0f) // Muted!
                 try {
+                    setAudioAttributes(AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).setUsage(AudioAttributes.USAGE_MEDIA).build())
+                    setSurface(currentBgSurface)
+                    setVolume(0f, 0f) // Muted!
                     setDataSource(applicationContext, uri)
                     setOnPreparedListener { mp ->
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && (currentPlaybackSpeed != 1.0f || currentPlaybackPitch != 1.0f)) {
                             try { mp.playbackParams = mp.playbackParams.setSpeed(currentPlaybackSpeed).setPitch(currentPlaybackPitch) } catch (_: Exception) {}
                         }
-                        mp.start()
+                        try { mp.start() } catch (_: Exception) {}
                     }
+                    setOnErrorListener { _, _, _ -> true } // Ignore background player crash safely
                     prepareAsync()
-                } catch (e: Exception) {}
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
         }
 
         // --- Prepare Main Player ---
         mediaPlayer = MediaPlayer().apply {
-            setAudioAttributes(AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).setUsage(AudioAttributes.USAGE_MEDIA).build())
-            setSurface(currentSurface)
-
-            setOnVideoSizeChangedListener { _, width, height ->
-                if (width > 0 && height > 0) {
-                    _playerState.value = _playerState.value.copy(
-                        videoWidth = width,
-                        videoHeight = height
-                    )
-                }
-            }
-
             try {
+                setAudioAttributes(AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).setUsage(AudioAttributes.USAGE_MEDIA).build())
+                setSurface(currentSurface)
+
+                setOnVideoSizeChangedListener { _, width, height ->
+                    if (width > 0 && height > 0) {
+                        _playerState.value = _playerState.value.copy(
+                            videoWidth = width,
+                            videoHeight = height
+                        )
+                    }
+                }
+
                 setDataSource(applicationContext, uri)
                 setOnPreparedListener { mp ->
                     eqManager.attach(mp.audioSessionId)
@@ -478,16 +476,18 @@ class PlayerService : Service() {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && (currentPlaybackSpeed != 1.0f || currentPlaybackPitch != 1.0f)) {
                         try { mp.playbackParams = mp.playbackParams.setSpeed(currentPlaybackSpeed).setPitch(currentPlaybackPitch) } catch (_: Exception) {}
                     }
-                    mp.start()
 
-                    _playerState.value = _playerState.value.copy(
-                        isPlaying  = true,
-                        durationMs = mp.duration.toLong(),
-                        videoWidth = mp.videoWidth,
-                        videoHeight = mp.videoHeight
-                    )
-                    updateMediaSessionState()
-                    startForeground(NOTIF_ID, buildNotification())
+                    try {
+                        mp.start()
+                        _playerState.value = _playerState.value.copy(
+                            isPlaying  = true,
+                            durationMs = mp.duration.toLong(),
+                            videoWidth = mp.videoWidth,
+                            videoHeight = mp.videoHeight
+                        )
+                        updateMediaSessionState()
+                        startForeground(NOTIF_ID, buildNotification())
+                    } catch (_: Exception) {}
                 }
                 setOnCompletionListener {
                     skipNext(isAutoCompletion = true)
@@ -498,6 +498,7 @@ class PlayerService : Service() {
                 }
                 prepareAsync()
             } catch (e: Exception) {
+                e.printStackTrace()
                 _playerState.value = _playerState.value.copy(isPlaying = false)
             }
         }
@@ -560,22 +561,14 @@ class PlayerService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         runCatching { unregisterReceiver(noisyAudioReceiver) }
-
         eqManager.release()
 
-        bgMediaPlayer?.apply {
-            setOnPreparedListener(null)
-            release()
-        }
+        safelyDestroyPlayer(bgMediaPlayer)
         bgMediaPlayer = null
 
-        mediaPlayer?.apply {
-            setOnCompletionListener(null)
-            setOnPreparedListener(null)
-            setOnErrorListener(null)
-            release()
-        }
+        safelyDestroyPlayer(mediaPlayer)
         mediaPlayer = null
+
         mediaSession.release()
     }
 }
