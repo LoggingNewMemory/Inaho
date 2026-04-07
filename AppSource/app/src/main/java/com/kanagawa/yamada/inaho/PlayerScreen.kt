@@ -36,6 +36,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
@@ -98,7 +99,6 @@ fun PlayerScreen(
     var currentPitch by remember { mutableFloatStateOf(1.0f) }
     var isAmvModeActive by remember { mutableStateOf(settings.amvModeAlwaysOn) }
 
-    // Reset parameters when the song changes to match service behaviour
     LaunchedEffect(currentSongId) {
         currentSpeed = 1.0f
         currentPitch = 1.0f
@@ -126,7 +126,8 @@ fun PlayerScreen(
     }
 
     val bgColor      = if (settings.amoledBlack) Color.Black else Color(0xFF0D0A0A)
-    val surfaceColor = if (settings.amoledBlack) Color(0xFF0A0A0A) else Color(0xFF1E1414)
+    // Make surface slightly transparent if a background exists to let the blur bleed through
+    val surfaceColor = if (settings.amoledBlack) Color(0xFF0A0A0A) else Color(0xFF1E1414).copy(alpha = 0.85f)
 
     BackHandler { onNavigateBack() }
 
@@ -170,255 +171,290 @@ fun PlayerScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(bgColor)
-            .padding(horizontal = 20.dp)
-            .navigationBarsPadding()
-    ) {
-        Box(
+    // --- MAIN SCREEN WRAPPED IN A BOX FOR BACKGROUNDS ---
+    Box(modifier = Modifier.fillMaxSize().background(bgColor)) {
+
+        val isVideoFormat = song?.isVideo == true
+
+        // 1. Dynamic Background Layer (Either Video or Thumbnail)
+        if (isAmvModeActive && isVideoFormat) {
+            AMVVideoSurface(
+                playerService = playerService,
+                isBackground = true,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .scale(1.2f) // slightly scale up to hide white edges caused by blur
+                    .blur(settings.amvBlurAmount.dp)
+            )
+        } else if (coverBitmap != null) {
+            Image(
+                bitmap = coverBitmap.asImageBitmap(),
+                contentDescription = "Blurred Background",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .scale(1.2f)
+                    .blur(settings.amvBlurAmount.dp)
+            )
+        }
+
+        // 2. Dim Overlay Layer
+        if ((isAmvModeActive && isVideoFormat) || coverBitmap != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = settings.amvDimAmount))
+            )
+        }
+
+        // 3. Main Player UI Layer
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp, bottom = 8.dp)
+                .fillMaxSize()
+                .padding(horizontal = 20.dp)
+                .navigationBarsPadding()
         ) {
-            IconButton(
-                onClick = onNavigateBack,
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .offset(x = (-12).dp)
-            ) {
-                Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color(0xFFB8355B))
-            }
-
-            audioDetails?.let { details ->
-                Text(
-                    text = "${details.format} • ${details.sampleRate} • ${details.bitDepth} • ${details.bitRate}",
-                    color = Color(0xFFAAAAAA),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .background(surfaceColor, RoundedCornerShape(12.dp))
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                )
-            }
-
-            IconButton(
-                onClick = { showQueueSheet = !showQueueSheet },
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .offset(x = 12.dp)
-            ) {
-                Icon(imageVector = Icons.Default.QueueMusic, contentDescription = "Queue", tint = if (showQueueSheet) Color(0xFFB8355B) else Color.White)
-            }
-        }
-
-        AnimatedVisibility(
-            visible = showQueueSheet,
-            enter = expandVertically(),
-            exit  = shrinkVertically()
-        ) {
-            QueuePanel(
-                playerState = playerState,
-                artCache    = artCache,
-                onSongClick = { _, index ->
-                    playerService?.jumpToQueueIndex(index)
-                    showQueueSheet = false
-                }
-            )
-        }
-
-        if (!showQueueSheet) {
-            val artScale by animateFloatAsState(
-                targetValue = if (playerState.isPlaying) 1f else 0.85f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessLow
-                ),
-                label = "AlbumArtScale"
-            )
-
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .scale(artScale)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(surfaceColor)
-                    .clickable { isAmvModeActive = !isAmvModeActive },
-                contentAlignment = Alignment.Center
-            ) {
-                val isVideoFormat = song?.isVideo == true
-
-                if (isAmvModeActive && isVideoFormat) {
-                    AMVVideoSurface(playerService = playerService)
-                } else if (coverBitmap != null) {
-                    Image(
-                        bitmap = coverBitmap.asImageBitmap(),
-                        contentDescription = "Album Art",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = Color(0xFF3D2020), modifier = Modifier.size(80.dp))
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = song?.title ?: "No song selected",
-                    color = Color.White,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    modifier = Modifier.basicMarquee()
-                )
-                Spacer(modifier = Modifier.height(3.dp))
-                Text(
-                    text = song?.artist ?: "",
-                    color = Color(0xFFAAAAAA),
-                    fontSize = 14.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            if (song != null) {
-                val isFav = favorites.contains(song.id)
-                IconButton(onClick = { showAddToPlaylistDialog = true }) {
-                    Icon(imageVector = Icons.Default.PlaylistAdd, contentDescription = "Add to Playlist", tint = Color.White, modifier = Modifier.size(26.dp))
-                }
-                IconButton(onClick = { musicViewModel.playlistManager.toggleFavorite(song.id) }) {
-                    Icon(
-                        imageVector = if (isFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = "Favorite",
-                        tint = if (isFav) Color(0xFFB8355B) else Color(0xFF555555),
-                        modifier = Modifier.size(26.dp)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Slider(
-            value = seekValue,
-            onValueChange = { value ->
-                isSeeking  = true
-                seekValue  = value
-                livePositionMs = (value * durationMs).toLong()
-            },
-            onValueChangeFinished = {
-                isSeeking = false
-                playerService?.seekTo((seekValue * durationMs).toLong())
-            },
-            modifier = Modifier.fillMaxWidth(),
-            colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color(0xFF3D3030))
-        )
-
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(formatMs(livePositionMs), color = Color(0xFFAAAAAA), fontSize = 12.sp)
-            Text(formatMs(durationMs), color = Color(0xFFAAAAAA), fontSize = 12.sp)
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Icon(imageVector = Icons.Default.VolumeDown, contentDescription = null, tint = Color(0xFF666666), modifier = Modifier.size(18.dp))
-            Slider(
-                value = volumeValue,
-                onValueChange = { v ->
-                    val newStep = (v * maxVolume).toInt()
-                    val oldStep = (volumeValue * maxVolume).toInt()
-                    volumeValue = v
-                    if (newStep != oldStep) {
-                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newStep, 0)
-                    }
-                },
-                modifier = Modifier.weight(1f).padding(horizontal = 6.dp),
-                colors = SliderDefaults.colors(thumbColor = Color(0xFFB8355B), activeTrackColor = Color(0xFFB8355B), inactiveTrackColor = Color(0xFF3D3030))
-            )
-            Icon(imageVector = Icons.Default.VolumeUp, contentDescription = null, tint = Color(0xFF666666), modifier = Modifier.size(18.dp))
-        }
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        val eqPreset by playerService?.eqManager?.currentPreset?.collectAsState() ?: run { remember { mutableStateOf(EqPreset.OFF) } }
-        val eqActiveLabel = remember(eqPreset) { if (eqPreset == EqPreset.OFF) "EQ" else eqPreset.displayName }
-        val eqIsActive = eqPreset != EqPreset.OFF
-
-        val speedPitchActive = currentSpeed != 1.0f || currentPitch != 1.0f
-        val currentSpeedPitchLabel = if (currentPitch == 1.0f) {
-            String.format("%.2f×", currentSpeed)
-        } else {
-            String.format("%.2f× / %.2fp", currentSpeed, currentPitch)
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            ExtraControlChip(icon = Icons.Default.Speed, label = currentSpeedPitchLabel, active = speedPitchActive, onClick = { showSpeedPitchDialog = true })
-            ExtraControlChip(icon = Icons.Default.Equalizer, label = eqActiveLabel, active = eqIsActive, onClick = { showEqDialog = true })
-            ExtraControlChip(icon = Icons.Default.Bedtime, label = if (sleepTimerRemainingMs > 0) formatMs(sleepTimerRemainingMs) else "Sleep", active = sleepTimerRemainingMs > 0, onClick = { showSleepTimerDialog = true })
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 36.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick  = { playerService?.toggleShuffle() }, modifier = Modifier.size(48.dp)) {
-                Icon(imageVector = Icons.Default.Shuffle, contentDescription = "Shuffle", tint = if (isShuffled) Color(0xFFB8355B) else Color.White, modifier = Modifier.size(26.dp))
-            }
-
-            IconButton(onClick  = { playerService?.skipPrev() }, enabled  = song != null, modifier = Modifier.size(48.dp)) {
-                Icon(imageVector = Icons.Default.SkipPrevious, contentDescription = "Previous", tint = if (song != null) Color.White else Color.White.copy(alpha = 0.3f), modifier = Modifier.size(34.dp))
-            }
-
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(CircleShape)
-                    .background(Color.White),
-                contentAlignment = Alignment.Center
+                    .padding(top = 12.dp, bottom = 8.dp)
             ) {
                 IconButton(
-                    onClick  = { playerService?.togglePlayPause() },
-                    enabled  = song != null,
-                    modifier = Modifier.fillMaxSize()
+                    onClick = onNavigateBack,
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .offset(x = (-12).dp)
                 ) {
-                    AnimatedContent(
-                        targetState = playerState.isPlaying,
-                        transitionSpec = {
-                            scaleIn(spring()) + fadeIn() togetherWith scaleOut(spring()) + fadeOut()
-                        },
-                        label = "PlayPauseButton"
-                    ) { playing ->
+                    Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color(0xFFB8355B))
+                }
+
+                audioDetails?.let { details ->
+                    Text(
+                        text = "${details.format} • ${details.sampleRate} • ${details.bitDepth} • ${details.bitRate}",
+                        color = Color(0xFFAAAAAA),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .background(surfaceColor, RoundedCornerShape(12.dp))
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+
+                IconButton(
+                    onClick = { showQueueSheet = !showQueueSheet },
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .offset(x = 12.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.QueueMusic, contentDescription = "Queue", tint = if (showQueueSheet) Color(0xFFB8355B) else Color.White)
+                }
+            }
+
+            AnimatedVisibility(
+                visible = showQueueSheet,
+                enter = expandVertically(),
+                exit  = shrinkVertically()
+            ) {
+                QueuePanel(
+                    playerState = playerState,
+                    artCache    = artCache,
+                    onSongClick = { _, index ->
+                        playerService?.jumpToQueueIndex(index)
+                        showQueueSheet = false
+                    }
+                )
+            }
+
+            if (!showQueueSheet) {
+                val artScale by animateFloatAsState(
+                    targetValue = if (playerState.isPlaying) 1f else 0.85f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessLow
+                    ),
+                    label = "AlbumArtScale"
+                )
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .scale(artScale)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(surfaceColor)
+                        .clickable { isAmvModeActive = !isAmvModeActive },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isAmvModeActive && isVideoFormat) {
+                        AMVVideoSurface(playerService = playerService, isBackground = false)
+                    } else if (coverBitmap != null) {
+                        Image(
+                            bitmap = coverBitmap.asImageBitmap(),
+                            contentDescription = "Album Art",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = Color(0xFF3D2020), modifier = Modifier.size(80.dp))
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = song?.title ?: "No song selected",
+                        color = Color.White,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        modifier = Modifier.basicMarquee()
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = song?.artist ?: "",
+                        color = Color(0xFFAAAAAA),
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (song != null) {
+                    val isFav = favorites.contains(song.id)
+                    IconButton(onClick = { showAddToPlaylistDialog = true }) {
+                        Icon(imageVector = Icons.Default.PlaylistAdd, contentDescription = "Add to Playlist", tint = Color.White, modifier = Modifier.size(26.dp))
+                    }
+                    IconButton(onClick = { musicViewModel.playlistManager.toggleFavorite(song.id) }) {
                         Icon(
-                            imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (playing) "Pause" else "Play",
-                            tint = Color(0xFF0D0A0A),
-                            modifier = Modifier.size(36.dp)
+                            imageVector = if (isFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = "Favorite",
+                            tint = if (isFav) Color(0xFFB8355B) else Color(0xFF555555),
+                            modifier = Modifier.size(26.dp)
                         )
                     }
                 }
             }
 
-            IconButton(onClick  = { playerService?.skipNext(isAutoCompletion = false) }, enabled  = playerState.hasNext, modifier = Modifier.size(48.dp)) {
-                Icon(imageVector = Icons.Default.SkipNext, contentDescription = "Next", tint = if (playerState.hasNext) Color.White else Color.White.copy(alpha = 0.3f), modifier = Modifier.size(34.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Slider(
+                value = seekValue,
+                onValueChange = { value ->
+                    isSeeking  = true
+                    seekValue  = value
+                    livePositionMs = (value * durationMs).toLong()
+                },
+                onValueChangeFinished = {
+                    isSeeking = false
+                    playerService?.seekTo((seekValue * durationMs).toLong())
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color(0xFF3D3030))
+            )
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(formatMs(livePositionMs), color = Color(0xFFAAAAAA), fontSize = 12.sp)
+                Text(formatMs(durationMs), color = Color(0xFFAAAAAA), fontSize = 12.sp)
             }
 
-            IconButton(onClick  = { playerService?.toggleRepeat() }, modifier = Modifier.size(48.dp)) {
-                Icon(imageVector = Icons.Default.Repeat, contentDescription = "Repeat", tint = if (repeatMode == RepeatMode.ONE) Color(0xFFB8355B) else Color.White, modifier = Modifier.size(26.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Icon(imageVector = Icons.Default.VolumeDown, contentDescription = null, tint = Color(0xFF666666), modifier = Modifier.size(18.dp))
+                Slider(
+                    value = volumeValue,
+                    onValueChange = { v ->
+                        val newStep = (v * maxVolume).toInt()
+                        val oldStep = (volumeValue * maxVolume).toInt()
+                        volumeValue = v
+                        if (newStep != oldStep) {
+                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newStep, 0)
+                        }
+                    },
+                    modifier = Modifier.weight(1f).padding(horizontal = 6.dp),
+                    colors = SliderDefaults.colors(thumbColor = Color(0xFFB8355B), activeTrackColor = Color(0xFFB8355B), inactiveTrackColor = Color(0xFF3D3030))
+                )
+                Icon(imageVector = Icons.Default.VolumeUp, contentDescription = null, tint = Color(0xFF666666), modifier = Modifier.size(18.dp))
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            val eqPreset by playerService?.eqManager?.currentPreset?.collectAsState() ?: run { remember { mutableStateOf(EqPreset.OFF) } }
+            val eqActiveLabel = remember(eqPreset) { if (eqPreset == EqPreset.OFF) "EQ" else eqPreset.displayName }
+            val eqIsActive = eqPreset != EqPreset.OFF
+
+            val speedPitchActive = currentSpeed != 1.0f || currentPitch != 1.0f
+            val currentSpeedPitchLabel = if (currentPitch == 1.0f) {
+                String.format("%.2f×", currentSpeed)
+            } else {
+                String.format("%.2f× / %.2fp", currentSpeed, currentPitch)
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ExtraControlChip(icon = Icons.Default.Speed, label = currentSpeedPitchLabel, active = speedPitchActive, onClick = { showSpeedPitchDialog = true })
+                ExtraControlChip(icon = Icons.Default.Equalizer, label = eqActiveLabel, active = eqIsActive, onClick = { showEqDialog = true })
+                ExtraControlChip(icon = Icons.Default.Bedtime, label = if (sleepTimerRemainingMs > 0) formatMs(sleepTimerRemainingMs) else "Sleep", active = sleepTimerRemainingMs > 0, onClick = { showSleepTimerDialog = true })
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 36.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick  = { playerService?.toggleShuffle() }, modifier = Modifier.size(48.dp)) {
+                    Icon(imageVector = Icons.Default.Shuffle, contentDescription = "Shuffle", tint = if (isShuffled) Color(0xFFB8355B) else Color.White, modifier = Modifier.size(26.dp))
+                }
+
+                IconButton(onClick  = { playerService?.skipPrev() }, enabled  = song != null, modifier = Modifier.size(48.dp)) {
+                    Icon(imageVector = Icons.Default.SkipPrevious, contentDescription = "Previous", tint = if (song != null) Color.White else Color.White.copy(alpha = 0.3f), modifier = Modifier.size(34.dp))
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(Color.White),
+                    contentAlignment = Alignment.Center
+                ) {
+                    IconButton(
+                        onClick  = { playerService?.togglePlayPause() },
+                        enabled  = song != null,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        AnimatedContent(
+                            targetState = playerState.isPlaying,
+                            transitionSpec = {
+                                scaleIn(spring()) + fadeIn() togetherWith scaleOut(spring()) + fadeOut()
+                            },
+                            label = "PlayPauseButton"
+                        ) { playing ->
+                            Icon(
+                                imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (playing) "Pause" else "Play",
+                                tint = Color(0xFF0D0A0A),
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
+                    }
+                }
+
+                IconButton(onClick  = { playerService?.skipNext(isAutoCompletion = false) }, enabled  = playerState.hasNext, modifier = Modifier.size(48.dp)) {
+                    Icon(imageVector = Icons.Default.SkipNext, contentDescription = "Next", tint = if (playerState.hasNext) Color.White else Color.White.copy(alpha = 0.3f), modifier = Modifier.size(34.dp))
+                }
+
+                IconButton(onClick  = { playerService?.toggleRepeat() }, modifier = Modifier.size(48.dp)) {
+                    Icon(imageVector = Icons.Default.Repeat, contentDescription = "Repeat", tint = if (repeatMode == RepeatMode.ONE) Color(0xFFB8355B) else Color.White, modifier = Modifier.size(26.dp))
+                }
             }
         }
     }
@@ -522,7 +558,7 @@ fun QueuePanel(
             .fillMaxWidth()
             .heightIn(max = 260.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF1A1010))
+            .background(Color(0xFF1A1010).copy(alpha = 0.9f))
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
@@ -640,7 +676,7 @@ private fun DiscreteSliderWithLabels(
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp), // Offsets text to align with slider thumb/ticks
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             labels.forEach { label ->
@@ -658,13 +694,13 @@ private fun DiscreteSliderWithLabels(
             value = value,
             onValueChange = onValueChange,
             valueRange = 0.5f..2.0f,
-            steps = 5, // 5 steps creates 6 intervals (0.75, 1.0, 1.25, 1.5, 1.75)
+            steps = 5,
             colors = SliderDefaults.colors(
                 thumbColor = Color(0xFFB8355B),
                 activeTrackColor = Color(0xFFB8355B),
                 inactiveTrackColor = Color(0xFFB8355B).copy(alpha = 0.3f),
-                activeTickColor = Color.White,     // White dots inside the colored track
-                inactiveTickColor = Color.White    // White dots inside the inactive track
+                activeTickColor = Color.White,
+                inactiveTickColor = Color.White
             )
         )
     }
@@ -748,7 +784,6 @@ private fun extractAudioDetails(context: Context, songId: Any): AudioDetails? {
             var bitDepth   = "16"
 
             if (extractor.trackCount > 0) {
-                // Fetch Audio Track info
                 for (i in 0 until extractor.trackCount) {
                     val format = extractor.getTrackFormat(i)
                     val trackMime = format.getString(MediaFormat.KEY_MIME) ?: ""

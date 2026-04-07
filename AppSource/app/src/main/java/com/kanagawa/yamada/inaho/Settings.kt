@@ -49,7 +49,9 @@ data class AppSettings(
     val sortOption: SortOption,
     val onlyMusicFolder: Boolean,
     val amoledBlack: Boolean = false,
-    val amvModeAlwaysOn: Boolean = false
+    val amvModeAlwaysOn: Boolean = false,
+    val amvBlurAmount: Float = 40f,
+    val amvDimAmount: Float = 0.6f
 )
 
 class SettingsManager(context: Context) {
@@ -63,7 +65,9 @@ class SettingsManager(context: Context) {
             ),
             onlyMusicFolder = prefs.getBoolean("only_music_folder", true),
             amoledBlack = prefs.getBoolean("amoled_black", false),
-            amvModeAlwaysOn = prefs.getBoolean("amv_mode_always_on", false)
+            amvModeAlwaysOn = prefs.getBoolean("amv_mode_always_on", false),
+            amvBlurAmount = prefs.getFloat("amv_blur_amount", 40f),
+            amvDimAmount = prefs.getFloat("amv_dim_amount", 0.6f)
         )
     )
     val settingsFlow = _settingsFlow.asStateFlow()
@@ -91,6 +95,16 @@ class SettingsManager(context: Context) {
     fun updateAmvModeAlwaysOn(enabled: Boolean) {
         prefs.edit().putBoolean("amv_mode_always_on", enabled).apply()
         _settingsFlow.value = _settingsFlow.value.copy(amvModeAlwaysOn = enabled)
+    }
+
+    fun updateAmvBlurAmount(amount: Float) {
+        prefs.edit().putFloat("amv_blur_amount", amount).apply()
+        _settingsFlow.value = _settingsFlow.value.copy(amvBlurAmount = amount)
+    }
+
+    fun updateAmvDimAmount(amount: Float) {
+        prefs.edit().putFloat("amv_dim_amount", amount).apply()
+        _settingsFlow.value = _settingsFlow.value.copy(amvDimAmount = amount)
     }
 }
 
@@ -171,7 +185,23 @@ fun SettingsScreen(
             onToggle = { settingsManager.updateAmoledBlack(it) }
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // --- NEW AMV MODE SECTION ---
+        Text(
+            text = "AMV MODE",
+            color = Color(0xFF555555),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+        )
+
+        Text(
+            text = "Note: AMV features only support files in the .mp4 format.",
+            color = Color(0xFFB8355B),
+            fontSize = 12.sp,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+        )
 
         SettingsToggleRow(
             icon = Icons.Default.OndemandVideo,
@@ -181,7 +211,22 @@ fun SettingsScreen(
             onToggle = { settingsManager.updateAmvModeAlwaysOn(it) }
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        SettingsSliderRow(
+            title = "Background Blur",
+            value = settings.amvBlurAmount,
+            range = 0f..100f,
+            onValueChange = { settingsManager.updateAmvBlurAmount(it) }
+        )
+
+        SettingsSliderRow(
+            title = "Background Dim",
+            value = settings.amvDimAmount,
+            range = 0f..1f,
+            onValueChange = { settingsManager.updateAmvDimAmount(it) }
+        )
+        // -----------------------------
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         Text(
             text = "SORT ORDER",
@@ -302,6 +347,32 @@ private fun SettingsToggleRow(
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White, checkedTrackColor = Color(0xFFB8355B),
                 uncheckedThumbColor = Color.LightGray, uncheckedTrackColor = Color(0xFF2C2C2C)
+            )
+        )
+    }
+}
+
+@Composable
+private fun SettingsSliderRow(
+    title: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    onValueChange: (Float) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(text = title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            val displayValue = if (range.endInclusive > 1f) value.toInt().toString() else String.format("%.2f", value)
+            Text(text = displayValue, color = Color(0xFFB8355B), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        }
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = range,
+            colors = SliderDefaults.colors(
+                thumbColor = Color.White,
+                activeTrackColor = Color(0xFFB8355B),
+                inactiveTrackColor = Color(0xFF2C2C2C)
             )
         )
     }

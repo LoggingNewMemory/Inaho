@@ -42,8 +42,8 @@ data class PlayerState(
     val durationMs: Long = 0L,
     val isShuffled: Boolean = false,
     val repeatMode: RepeatMode = RepeatMode.OFF,
-    val videoWidth: Int = 0,  // <-- Added for cropping
-    val videoHeight: Int = 0  // <-- Added for cropping
+    val videoWidth: Int = 0,
+    val videoHeight: Int = 0
 ) {
     val nextSong: Song?
         get() = if (currentIndex + 1 < activeQueue.size) activeQueue[currentIndex + 1]
@@ -81,33 +81,33 @@ class PlayerService : Service() {
 
     private val binder = PlayerBinder()
     private var mediaPlayer: MediaPlayer? = null
+    private var bgMediaPlayer: MediaPlayer? = null // <-- Dual Decoder for Background
+
     private lateinit var mediaSession: MediaSessionCompat
 
     private var currentPlaybackSpeed: Float = 1.0f
     private var currentPlaybackPitch: Float = 1.0f
 
-    // ── Yamada EQ ──────────────────────────────────────────────────────────────
     lateinit var eqManager: YamadaEQManager
         private set
-    // ──────────────────────────────────────────────────────────────────────────
 
     // ── Video Surface Handling ─────────────────────────────────────────────────
-    private var currentSurface: Surface? = null // Keep track of active surface
+    private var currentSurface: Surface? = null
+    private var currentBgSurface: Surface? = null // Background surface
 
     fun setVideoSurface(surface: Surface?) {
-        // Prevent redundant surface application which can cause the video to freeze or blank out
         if (currentSurface === surface) return
-
         currentSurface = surface
-        try {
-            mediaPlayer?.setSurface(surface)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        try { mediaPlayer?.setSurface(surface) } catch (e: Exception) {}
+    }
+
+    fun setBgVideoSurface(surface: Surface?) {
+        if (currentBgSurface === surface) return
+        currentBgSurface = surface
+        try { bgMediaPlayer?.setSurface(surface) } catch (e: Exception) {}
     }
     // ──────────────────────────────────────────────────────────────────────────
 
-    // ── Audio Becoming Noisy Receiver (Auto-Pause) ────────────────────────────
     private val noisyAudioReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
@@ -117,7 +117,6 @@ class PlayerService : Service() {
             }
         }
     }
-    // ──────────────────────────────────────────────────────────────────────────
 
     override fun onBind(intent: Intent): IBinder = binder
 
@@ -229,19 +228,22 @@ class PlayerService : Service() {
             isPlaying    = false,
             positionMs   = 0L,
             durationMs   = song.durationMs,
-            videoWidth   = 0, // Reset for new song
-            videoHeight  = 0  // Reset for new song
+            videoWidth   = 0,
+            videoHeight  = 0
         )
-        prepareAndPlay(song.trackUri)
+        prepareAndPlay(song)
     }
 
     fun togglePlayPause() {
         val mp = mediaPlayer ?: return
         if (mp.isPlaying) {
             mp.pause()
+            bgMediaPlayer?.pause() // Pause Background Video
             _playerState.value = _playerState.value.copy(isPlaying = false)
         } else {
             mp.start()
+            bgMediaPlayer?.seekTo(mp.currentPosition) // Resync background on play
+            bgMediaPlayer?.start()
             _playerState.value = _playerState.value.copy(isPlaying = true)
         }
         updateMediaSessionState()
@@ -299,7 +301,7 @@ class PlayerService : Service() {
             videoWidth   = 0,
             videoHeight  = 0
         )
-        prepareAndPlay(nextSong.trackUri)
+        prepareAndPlay(nextSong)
     }
 
     fun skipPrev() {
@@ -309,6 +311,7 @@ class PlayerService : Service() {
 
         if (position > 3000) {
             mp?.seekTo(0)
+            bgMediaPlayer?.seekTo(0)
             _playerState.value = state.copy(positionMs = 0L)
             updateMediaSessionState()
             return
@@ -321,6 +324,7 @@ class PlayerService : Service() {
             state.repeatMode == RepeatMode.ALL -> state.activeQueue.size - 1
             else -> {
                 mp?.seekTo(0)
+                bgMediaPlayer?.seekTo(0)
                 _playerState.value = state.copy(positionMs = 0L)
                 updateMediaSessionState()
                 return
@@ -339,11 +343,12 @@ class PlayerService : Service() {
             videoWidth   = 0,
             videoHeight  = 0
         )
-        prepareAndPlay(prevSong.trackUri)
+        prepareAndPlay(prevSong)
     }
 
     fun seekTo(positionMs: Long) {
         mediaPlayer?.seekTo(positionMs.toInt())
+        bgMediaPlayer?.seekTo(positionMs.toInt()) // Sync Background Video
         _playerState.value = _playerState.value.copy(positionMs = positionMs)
         updateMediaSessionState()
     }
@@ -366,7 +371,7 @@ class PlayerService : Service() {
             videoWidth   = 0,
             videoHeight  = 0
         )
-        prepareAndPlay(song.trackUri)
+        prepareAndPlay(song)
     }
 
     fun setPlaybackSpeedAndPitch(speed: Float, pitch: Float) {
@@ -374,9 +379,8 @@ class PlayerService : Service() {
         currentPlaybackPitch = pitch
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             try {
-                mediaPlayer?.let { mp ->
-                    mp.playbackParams = mp.playbackParams.setSpeed(speed).setPitch(pitch)
-                }
+                mediaPlayer?.let { mp -> mp.playbackParams = mp.playbackParams.setSpeed(speed).setPitch(pitch) }
+                bgMediaPlayer?.let { bg -> bg.playbackParams = bg.playbackParams.setSpeed(speed).setPitch(pitch) }
             } catch (_: Exception) {}
         }
     }
@@ -384,12 +388,20 @@ class PlayerService : Service() {
     fun stopPlayback() {
         eqManager.release()
 
+        bgMediaPlayer?.apply {
+            if (isPlaying) stop()
+            reset()
+            release()
+        }
+        bgMediaPlayer = null
+
         mediaPlayer?.apply {
             if (isPlaying) stop()
             reset()
             release()
         }
         mediaPlayer = null
+
         _playerState.value = PlayerState()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -401,8 +413,18 @@ class PlayerService : Service() {
         stopSelf()
     }
 
-    private fun prepareAndPlay(uri: Uri) {
+    private fun prepareAndPlay(song: Song) {
         eqManager.release()
+
+        val uri = song.trackUri
+
+        bgMediaPlayer?.apply {
+            setOnPreparedListener(null)
+            if (isPlaying) stop()
+            reset()
+            release()
+        }
+        bgMediaPlayer = null
 
         val oldPlayer = mediaPlayer
         mediaPlayer = null
@@ -415,17 +437,30 @@ class PlayerService : Service() {
             release()
         }
 
-        mediaPlayer = MediaPlayer().apply {
-            setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .build()
-            )
+        // --- Prepare Background Player (Muted) ---
+        if (song.isVideo) {
+            bgMediaPlayer = MediaPlayer().apply {
+                setAudioAttributes(AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).setUsage(AudioAttributes.USAGE_MEDIA).build())
+                setSurface(currentBgSurface)
+                setVolume(0f, 0f) // Muted!
+                try {
+                    setDataSource(applicationContext, uri)
+                    setOnPreparedListener { mp ->
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && (currentPlaybackSpeed != 1.0f || currentPlaybackPitch != 1.0f)) {
+                            try { mp.playbackParams = mp.playbackParams.setSpeed(currentPlaybackSpeed).setPitch(currentPlaybackPitch) } catch (_: Exception) {}
+                        }
+                        mp.start()
+                    }
+                    prepareAsync()
+                } catch (e: Exception) {}
+            }
+        }
 
+        // --- Prepare Main Player ---
+        mediaPlayer = MediaPlayer().apply {
+            setAudioAttributes(AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).setUsage(AudioAttributes.USAGE_MEDIA).build())
             setSurface(currentSurface)
 
-            // Listen for video sizes to pass to Compose for cropping
             setOnVideoSizeChangedListener { _, width, height ->
                 if (width > 0 && height > 0) {
                     _playerState.value = _playerState.value.copy(
@@ -441,17 +476,15 @@ class PlayerService : Service() {
                     eqManager.attach(mp.audioSessionId)
 
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && (currentPlaybackSpeed != 1.0f || currentPlaybackPitch != 1.0f)) {
-                        try {
-                            mp.playbackParams = mp.playbackParams.setSpeed(currentPlaybackSpeed).setPitch(currentPlaybackPitch)
-                        } catch (_: Exception) {}
+                        try { mp.playbackParams = mp.playbackParams.setSpeed(currentPlaybackSpeed).setPitch(currentPlaybackPitch) } catch (_: Exception) {}
                     }
                     mp.start()
 
                     _playerState.value = _playerState.value.copy(
                         isPlaying  = true,
                         durationMs = mp.duration.toLong(),
-                        videoWidth = mp.videoWidth,    // Capture size immediately if available
-                        videoHeight = mp.videoHeight   // Capture size immediately if available
+                        videoWidth = mp.videoWidth,
+                        videoHeight = mp.videoHeight
                     )
                     updateMediaSessionState()
                     startForeground(NOTIF_ID, buildNotification())
@@ -529,6 +562,13 @@ class PlayerService : Service() {
         runCatching { unregisterReceiver(noisyAudioReceiver) }
 
         eqManager.release()
+
+        bgMediaPlayer?.apply {
+            setOnPreparedListener(null)
+            release()
+        }
+        bgMediaPlayer = null
+
         mediaPlayer?.apply {
             setOnCompletionListener(null)
             setOnPreparedListener(null)
