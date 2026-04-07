@@ -96,11 +96,13 @@ fun PlayerScreen(
     val currentSongId = song?.id
     var currentSpeed by remember { mutableFloatStateOf(1.0f) }
     var currentPitch by remember { mutableFloatStateOf(1.0f) }
+    var isAmvModeActive by remember { mutableStateOf(settings.amvModeAlwaysOn) }
 
     // Reset parameters when the song changes to match service behaviour
     LaunchedEffect(currentSongId) {
         currentSpeed = 1.0f
         currentPitch = 1.0f
+        isAmvModeActive = settings.amvModeAlwaysOn
     }
 
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
@@ -243,10 +245,15 @@ fun PlayerScreen(
                     .aspectRatio(1f)
                     .scale(artScale)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(surfaceColor),
+                    .background(surfaceColor)
+                    .clickable { isAmvModeActive = !isAmvModeActive },
                 contentAlignment = Alignment.Center
             ) {
-                if (coverBitmap != null) {
+                val isVideoFormat = song?.isVideo == true
+
+                if (isAmvModeActive && isVideoFormat) {
+                    AMVVideoSurface(playerService = playerService)
+                } else if (coverBitmap != null) {
                     Image(
                         bitmap = coverBitmap.asImageBitmap(),
                         contentDescription = "Album Art",
@@ -724,7 +731,7 @@ private fun extractAudioDetails(context: Context, songId: Any): AudioDetails? {
             val formatStr = when {
                 mime.contains("flac", true) -> "FLAC"
                 mime.contains("mpeg", true) -> "MP3"
-                mime.contains("mp4",  true) -> "M4A"
+                mime.contains("mp4",  true) -> "M4A/MP4"
                 mime.contains("wav",  true) -> "WAV"
                 mime.contains("ogg",  true) -> "OGG"
                 mime.contains("aac",  true) -> "AAC"
@@ -741,21 +748,28 @@ private fun extractAudioDetails(context: Context, songId: Any): AudioDetails? {
             var bitDepth   = "16"
 
             if (extractor.trackCount > 0) {
-                val format = extractor.getTrackFormat(0)
-                if (format.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
-                    val sr = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-                    sampleRate = if (sr % 1000 == 0) "${sr / 1000}" else "${sr / 1000f}"
-                }
-                if (format.containsKey("bits-per-sample")) {
-                    bitDepth = format.getInteger("bits-per-sample").toString()
-                } else if (format.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
-                    val pcm = format.getInteger(MediaFormat.KEY_PCM_ENCODING)
-                    bitDepth = when (pcm) {
-                        AudioFormat.ENCODING_PCM_8BIT              -> "8"
-                        AudioFormat.ENCODING_PCM_16BIT             -> "16"
-                        AudioFormat.ENCODING_PCM_24BIT_PACKED      -> "24"
-                        AudioFormat.ENCODING_PCM_32BIT, AudioFormat.ENCODING_PCM_FLOAT -> "32"
-                        else -> "16"
+                // Fetch Audio Track info
+                for (i in 0 until extractor.trackCount) {
+                    val format = extractor.getTrackFormat(i)
+                    val trackMime = format.getString(MediaFormat.KEY_MIME) ?: ""
+
+                    if (trackMime.startsWith("audio/")) {
+                        if (format.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
+                            val sr = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                            sampleRate = if (sr % 1000 == 0) "${sr / 1000}" else "${sr / 1000f}"
+                        }
+                        if (format.containsKey("bits-per-sample")) {
+                            bitDepth = format.getInteger("bits-per-sample").toString()
+                        } else if (format.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
+                            val pcm = format.getInteger(MediaFormat.KEY_PCM_ENCODING)
+                            bitDepth = when (pcm) {
+                                AudioFormat.ENCODING_PCM_8BIT              -> "8"
+                                AudioFormat.ENCODING_PCM_16BIT             -> "16"
+                                AudioFormat.ENCODING_PCM_24BIT_PACKED      -> "24"
+                                AudioFormat.ENCODING_PCM_32BIT, AudioFormat.ENCODING_PCM_FLOAT -> "32"
+                                else -> "16"
+                            }
+                        }
                     }
                 }
             }

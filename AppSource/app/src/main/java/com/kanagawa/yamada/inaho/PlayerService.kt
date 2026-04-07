@@ -22,6 +22,7 @@ import android.os.IBinder
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
+import android.view.Surface
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -85,9 +86,14 @@ class PlayerService : Service() {
     private var currentPlaybackPitch: Float = 1.0f
 
     // ── Yamada EQ ──────────────────────────────────────────────────────────────
-    /** Exposed so PlayerScreen / ViewModel can bind the EQ dialog to it. */
     lateinit var eqManager: YamadaEQManager
         private set
+    // ──────────────────────────────────────────────────────────────────────────
+
+    // ── Video Surface Handling ─────────────────────────────────────────────────
+    fun setVideoSurface(surface: Surface?) {
+        mediaPlayer?.setSurface(surface)
+    }
     // ──────────────────────────────────────────────────────────────────────────
 
     // ── Audio Becoming Noisy Receiver (Auto-Pause) ────────────────────────────

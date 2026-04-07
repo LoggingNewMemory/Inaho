@@ -57,7 +57,7 @@ internal fun isArtResolved(context: Context, songId: Long): Boolean =
     artCacheFile(context, songId).exists() || artAbsentFile(context, songId).exists()
 
 // ==========================================
-// BITMAP EXTRACTION
+// BITMAP EXTRACTION (AUDIO)
 // ==========================================
 
 internal fun extractAndDownsample(context: Context, uri: Uri, targetPx: Int): Bitmap? {
@@ -95,6 +95,25 @@ internal fun extractAndDownsample(context: Context, uri: Uri, targetPx: Int): Bi
             val scaled = Bitmap.createScaledBitmap(cropped, targetPx, targetPx, true)
             if (scaled !== cropped) cropped.recycle()
             scaled
+        }
+    } catch (e: Exception) { null }
+}
+
+// ==========================================
+// BITMAP EXTRACTION (NATIVE VIDEO)
+// ==========================================
+internal fun loadVideoThumbnailNative(context: Context, uri: Uri, targetPx: Int): Bitmap? {
+    return try {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            // Native Android Q+ Way
+            context.contentResolver.loadThumbnail(uri, android.util.Size(targetPx, targetPx), null)
+        } else {
+            // Legacy Way
+            val retriever = MediaMetadataRetriever()
+            retriever.setDataSource(context, uri)
+            val frame = retriever.getFrameAtTime(-1)
+            retriever.release()
+            frame
         }
     } catch (e: Exception) { null }
 }
@@ -176,7 +195,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 val bitmap: Bitmap? = if (isArtResolved(context, song.id)) {
                     loadBitmapFromDisk(context, song.id)
                 } else {
-                    val extracted = extractAndDownsample(context, song.trackUri, targetPx = 800)
+                    // Separate the logic cleanly based on the new flag
+                    val extracted = if (song.isVideo) {
+                        loadVideoThumbnailNative(context, song.trackUri, 800)
+                    } else {
+                        extractAndDownsample(context, song.trackUri, targetPx = 800)
+                    }
                     saveBitmapToDisk(context, song.id, extracted)
                     extracted
                 }

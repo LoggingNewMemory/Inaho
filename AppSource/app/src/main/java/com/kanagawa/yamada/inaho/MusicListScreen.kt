@@ -59,12 +59,33 @@ import kotlinx.coroutines.withContext
 // ==========================================
 // 1. MODEL & PAGING
 // ==========================================
-data class Song(val id: Long, val title: String, val artist: String, val durationMs: Long, val trackUri: Uri, val formattedDuration: String)
+data class Song(
+    val id: Long,
+    val title: String,
+    val artist: String,
+    val durationMs: Long,
+    val trackUri: Uri,
+    val formattedDuration: String,
+    val isVideo: Boolean = false
+)
 
 class MusicPagingSource(private val context: Context, private val settings: AppSettings) : PagingSource<Int, Song>() {
-    private val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL) else MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-    private val projection = arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.DURATION)
+    private val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
+    } else {
+        MediaStore.Files.getContentUri("external")
+    }
+
+    private val projection = arrayOf(
+        MediaStore.Files.FileColumns._ID,
+        MediaStore.Files.FileColumns.TITLE,
+        MediaStore.Files.FileColumns.ARTIST,
+        MediaStore.Files.FileColumns.DURATION,
+        MediaStore.Files.FileColumns.MEDIA_TYPE
+    )
+
     override fun getRefreshKey(state: PagingState<Int, Song>): Int? = state.anchorPosition?.let { state.closestPageToPosition(it)?.prevKey?.plus(1) ?: state.closestPageToPosition(it)?.nextKey?.minus(1) }
+
     override suspend fun load(params: LoadParams<Int>): LoadResult<Int, Song> {
         return try {
             val page = params.key ?: 0
@@ -72,15 +93,26 @@ class MusicPagingSource(private val context: Context, private val settings: AppS
             val offset = page * pageSize
             val songs = ArrayList<Song>(pageSize)
             val sortOrder = when (settings.sortOption) {
-                SortOption.TITLE_ASC -> "${MediaStore.Audio.Media.TITLE} ASC"
-                SortOption.TITLE_DESC -> "${MediaStore.Audio.Media.TITLE} DESC"
-                SortOption.ARTIST_ASC -> "${MediaStore.Audio.Media.ARTIST} ASC"
-                SortOption.DATE_ADDED_DESC -> "${MediaStore.Audio.Media.DATE_ADDED} DESC"
-                SortOption.DURATION_ASC -> "${MediaStore.Audio.Media.DURATION} ASC"
-                SortOption.DURATION_DESC -> "${MediaStore.Audio.Media.DURATION} DESC"
+                SortOption.TITLE_ASC -> "${MediaStore.Files.FileColumns.TITLE} ASC"
+                SortOption.TITLE_DESC -> "${MediaStore.Files.FileColumns.TITLE} DESC"
+                SortOption.ARTIST_ASC -> "${MediaStore.Files.FileColumns.ARTIST} ASC"
+                SortOption.DATE_ADDED_DESC -> "${MediaStore.Files.FileColumns.DATE_ADDED} DESC"
+                SortOption.DURATION_ASC -> "${MediaStore.Files.FileColumns.DURATION} ASC"
+                SortOption.DURATION_DESC -> "${MediaStore.Files.FileColumns.DURATION} DESC"
             }
-            var selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DURATION} > 10000"
-            if (settings.onlyMusicFolder) selection += if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) " AND ${MediaStore.Audio.Media.RELATIVE_PATH} LIKE '%Music/%'" else " AND ${MediaStore.Audio.Media.DATA} LIKE '%/Music/%'"
+
+            var selection = "(" +
+                    "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ${MediaStore.Files.FileColumns.MEDIA_TYPE_AUDIO} OR " +
+                    "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ${MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO}" +
+                    ") AND ${MediaStore.Files.FileColumns.DURATION} > 10000"
+
+            if (settings.onlyMusicFolder) {
+                selection += if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    " AND ${MediaStore.Files.FileColumns.RELATIVE_PATH} LIKE '%Music/%'"
+                } else {
+                    " AND ${MediaStore.Files.FileColumns.DATA} LIKE '%/Music/%'"
+                }
+            }
 
             val cursor = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 val queryArgs = Bundle().apply {
@@ -95,14 +127,21 @@ class MusicPagingSource(private val context: Context, private val settings: AppS
             }
 
             cursor?.use { c ->
-                val idCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-                val titleCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-                val artistCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-                val durationCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                val idCol = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
+                val titleCol = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns.TITLE)
+                val artistCol = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns.ARTIST)
+                val durationCol = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DURATION)
+                val mediaTypeCol = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MEDIA_TYPE)
+
                 while (c.moveToNext()) {
                     val id = c.getLong(idCol)
                     val dur = c.getLong(durationCol)
-                    songs.add(Song(id, c.getString(titleCol) ?: "Unknown", c.getString(artistCol) ?: "Unknown", dur, ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id), String.format("%02d:%02d", (dur / 1000) / 60, (dur / 1000) % 60)))
+                    val isVideo = c.getInt(mediaTypeCol) == MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO
+
+                    val baseUri = if (isVideo) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+                    val trackUri = ContentUris.withAppendedId(baseUri, id)
+
+                    songs.add(Song(id, c.getString(titleCol) ?: "Unknown", c.getString(artistCol) ?: "Unknown", dur, trackUri, String.format("%02d:%02d", (dur / 1000) / 60, (dur / 1000) % 60), isVideo))
                 }
             }
             LoadResult.Page(songs, if (page == 0) null else page - 1, if (songs.size < pageSize) null else page + 1)
@@ -155,7 +194,9 @@ fun MusicListScreen(
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-        val storageGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) permissions[Manifest.permission.READ_MEDIA_AUDIO] == true else permissions[Manifest.permission.READ_EXTERNAL_STORAGE] == true
+        val storageGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions[Manifest.permission.READ_MEDIA_AUDIO] == true || permissions[Manifest.permission.READ_MEDIA_VIDEO] == true
+        } else permissions[Manifest.permission.READ_EXTERNAL_STORAGE] == true
         hasPermission = storageGranted
         if (storageGranted) songs.refresh()
     }
@@ -164,6 +205,7 @@ fun MusicListScreen(
         val permissions = mutableListOf<String>()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.READ_MEDIA_AUDIO)
+            permissions.add(Manifest.permission.READ_MEDIA_VIDEO)
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         } else permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
 

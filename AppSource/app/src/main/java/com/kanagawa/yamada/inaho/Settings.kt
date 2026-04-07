@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Nightlight
+import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -47,7 +48,8 @@ data class AppSettings(
     val userName: String,
     val sortOption: SortOption,
     val onlyMusicFolder: Boolean,
-    val amoledBlack: Boolean = false
+    val amoledBlack: Boolean = false,
+    val amvModeAlwaysOn: Boolean = false
 )
 
 class SettingsManager(context: Context) {
@@ -60,7 +62,8 @@ class SettingsManager(context: Context) {
                 prefs.getString("sort_option", SortOption.TITLE_ASC.name) ?: SortOption.TITLE_ASC.name
             ),
             onlyMusicFolder = prefs.getBoolean("only_music_folder", true),
-            amoledBlack = prefs.getBoolean("amoled_black", false)
+            amoledBlack = prefs.getBoolean("amoled_black", false),
+            amvModeAlwaysOn = prefs.getBoolean("amv_mode_always_on", false)
         )
     )
     val settingsFlow = _settingsFlow.asStateFlow()
@@ -83,6 +86,11 @@ class SettingsManager(context: Context) {
     fun updateAmoledBlack(enabled: Boolean) {
         prefs.edit().putBoolean("amoled_black", enabled).apply()
         _settingsFlow.value = _settingsFlow.value.copy(amoledBlack = enabled)
+    }
+
+    fun updateAmvModeAlwaysOn(enabled: Boolean) {
+        prefs.edit().putBoolean("amv_mode_always_on", enabled).apply()
+        _settingsFlow.value = _settingsFlow.value.copy(amvModeAlwaysOn = enabled)
     }
 }
 
@@ -161,6 +169,16 @@ fun SettingsScreen(
             subtitle = "Pure black background to save battery",
             checked = settings.amoledBlack,
             onToggle = { settingsManager.updateAmoledBlack(it) }
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        SettingsToggleRow(
+            icon = Icons.Default.OndemandVideo,
+            title = "AMV Mode Always On",
+            subtitle = "Automatically play video instead of thumbnail if available",
+            checked = settings.amvModeAlwaysOn,
+            onToggle = { settingsManager.updateAmvModeAlwaysOn(it) }
         )
 
         Spacer(modifier = Modifier.height(8.dp))
