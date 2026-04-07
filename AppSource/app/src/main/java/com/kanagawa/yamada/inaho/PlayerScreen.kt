@@ -49,6 +49,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -99,6 +102,29 @@ fun PlayerScreen(
     var currentPitch by remember { mutableFloatStateOf(1.0f) }
     var isAmvModeActive by remember { mutableStateOf(settings.amvModeAlwaysOn) }
 
+    // --- IMMERSIVE MODE LOGIC ---
+    DisposableEffect(Unit) {
+        val window = (context as? android.app.Activity)?.window
+        if (window != null) {
+            val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+
+            // Hide Status Bar and Navigation Bar
+            insetsController.hide(WindowInsetsCompat.Type.systemBars())
+
+            // Allow user to swipe from edges to temporarily reveal the bars without breaking layout
+            insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+
+        onDispose {
+            // Restore normal system bars when leaving the PlayerScreen (going back to music list)
+            if (window != null) {
+                val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+                insetsController.show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+    }
+    // -----------------------------
+
     LaunchedEffect(currentSongId) {
         currentSpeed = 1.0f
         currentPitch = 1.0f
@@ -126,7 +152,6 @@ fun PlayerScreen(
     }
 
     val bgColor      = if (settings.amoledBlack) Color.Black else Color(0xFF0D0A0A)
-    // Make surface slightly transparent if a background exists to let the blur bleed through
     val surfaceColor = if (settings.amoledBlack) Color(0xFF0A0A0A) else Color(0xFF1E1414).copy(alpha = 0.85f)
 
     BackHandler { onNavigateBack() }
@@ -171,19 +196,18 @@ fun PlayerScreen(
         }
     }
 
-    // --- MAIN SCREEN WRAPPED IN A BOX FOR BACKGROUNDS ---
     Box(modifier = Modifier.fillMaxSize().background(bgColor)) {
 
         val isVideoFormat = song?.isVideo == true
 
-        // 1. Dynamic Background Layer (Either Video or Thumbnail)
+        // 1. Dynamic Background Layer
         if (isAmvModeActive && isVideoFormat) {
             AMVVideoSurface(
                 playerService = playerService,
                 isBackground = true,
                 modifier = Modifier
                     .fillMaxSize()
-                    .scale(1.2f) // slightly scale up to hide white edges caused by blur
+                    .scale(1.2f)
                     .blur(settings.amvBlurAmount.dp)
             )
         } else if (coverBitmap != null) {
@@ -211,6 +235,7 @@ fun PlayerScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .displayCutoutPadding() // Protects Top Bar from camera holes in Immersive Mode
                 .padding(horizontal = 20.dp)
                 .navigationBarsPadding()
         ) {
