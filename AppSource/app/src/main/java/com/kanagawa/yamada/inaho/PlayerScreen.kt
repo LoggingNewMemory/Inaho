@@ -49,6 +49,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -174,6 +177,14 @@ fun PlayerScreen(
 
         val isVideoFormat = song?.isVideo == true
 
+        // Setup conditional blur modifier based on settings
+        val optionalBlurModifier = if (settings.enableBackgroundBlur) {
+            Modifier.blur(settings.amvBlurAmount.dp)
+        } else {
+            Modifier // No blur applied
+        }
+
+        // 1. Dynamic Background Layer (Only drawn if enabled)
         if (isAmvModeActive && isVideoFormat) {
             AMVVideoSurface(
                 playerService = playerService,
@@ -181,9 +192,9 @@ fun PlayerScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(1.2f)
-                    .blur(settings.amvBlurAmount.dp)
+                    .then(optionalBlurModifier)
             )
-        } else if (coverBitmap != null) {
+        } else if (settings.showCoverBackground && coverBitmap != null) {
             Image(
                 bitmap = coverBitmap.asImageBitmap(),
                 contentDescription = "Blurred Background",
@@ -191,11 +202,12 @@ fun PlayerScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(1.2f)
-                    .blur(settings.amvBlurAmount.dp)
+                    .then(optionalBlurModifier)
             )
         }
 
-        if ((isAmvModeActive && isVideoFormat) || coverBitmap != null) {
+        // 2. Dim Overlay Layer
+        if ((isAmvModeActive && isVideoFormat) || (settings.showCoverBackground && coverBitmap != null)) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -203,6 +215,7 @@ fun PlayerScreen(
             )
         }
 
+        // 3. Main Player UI Layer
         Column(
             modifier = Modifier
                 .fillMaxSize()

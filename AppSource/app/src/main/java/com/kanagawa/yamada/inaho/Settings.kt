@@ -11,6 +11,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.BlurOn
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Nightlight
 import androidx.compose.material.icons.filled.OndemandVideo
@@ -51,7 +53,9 @@ data class AppSettings(
     val amoledBlack: Boolean = false,
     val amvModeAlwaysOn: Boolean = false,
     val amvBlurAmount: Float = 40f,
-    val amvDimAmount: Float = 0.6f
+    val amvDimAmount: Float = 0.6f,
+    val showCoverBackground: Boolean = true,     // <-- Added Cover Background Option
+    val enableBackgroundBlur: Boolean = true     // <-- Added Blur Toggle Option
 )
 
 class SettingsManager(context: Context) {
@@ -67,7 +71,9 @@ class SettingsManager(context: Context) {
             amoledBlack = prefs.getBoolean("amoled_black", false),
             amvModeAlwaysOn = prefs.getBoolean("amv_mode_always_on", false),
             amvBlurAmount = prefs.getFloat("amv_blur_amount", 40f),
-            amvDimAmount = prefs.getFloat("amv_dim_amount", 0.6f)
+            amvDimAmount = prefs.getFloat("amv_dim_amount", 0.6f),
+            showCoverBackground = prefs.getBoolean("show_cover_background", true),
+            enableBackgroundBlur = prefs.getBoolean("enable_background_blur", true)
         )
     )
     val settingsFlow = _settingsFlow.asStateFlow()
@@ -105,6 +111,16 @@ class SettingsManager(context: Context) {
     fun updateAmvDimAmount(amount: Float) {
         prefs.edit().putFloat("amv_dim_amount", amount).apply()
         _settingsFlow.value = _settingsFlow.value.copy(amvDimAmount = amount)
+    }
+
+    fun updateShowCoverBackground(enabled: Boolean) {
+        prefs.edit().putBoolean("show_cover_background", enabled).apply()
+        _settingsFlow.value = _settingsFlow.value.copy(showCoverBackground = enabled)
+    }
+
+    fun updateEnableBackgroundBlur(enabled: Boolean) {
+        prefs.edit().putBoolean("enable_background_blur", enabled).apply()
+        _settingsFlow.value = _settingsFlow.value.copy(enableBackgroundBlur = enabled)
     }
 }
 
@@ -186,9 +202,18 @@ fun SettingsScreen(
             onToggle = { settingsManager.updateAmoledBlack(it) }
         )
 
+        // --- NEW SHOW COVER BACKGROUND TOGGLE ---
+        Spacer(modifier = Modifier.height(8.dp))
+        SettingsToggleRow(
+            icon = Icons.Default.Image,
+            title = "Cover Background",
+            subtitle = "Use song cover as a full-screen background",
+            checked = settings.showCoverBackground,
+            onToggle = { settingsManager.updateShowCoverBackground(it) }
+        )
+
         Spacer(modifier = Modifier.height(16.dp))
 
-        // --- NEW AMV MODE SECTION ---
         Text(
             text = "AMV MODE",
             color = Color(0xFF555555),
@@ -212,10 +237,21 @@ fun SettingsScreen(
             onToggle = { settingsManager.updateAmvModeAlwaysOn(it) }
         )
 
+        // --- NEW ENABLE BLUR TOGGLE ---
+        Spacer(modifier = Modifier.height(8.dp))
+        SettingsToggleRow(
+            icon = Icons.Default.BlurOn,
+            title = "Enable Background Blur",
+            subtitle = "Apply blur effect to backgrounds",
+            checked = settings.enableBackgroundBlur,
+            onToggle = { settingsManager.updateEnableBackgroundBlur(it) }
+        )
+
         SettingsSliderRow(
             title = "Background Blur",
             value = settings.amvBlurAmount,
             range = 0f..100f,
+            enabled = settings.enableBackgroundBlur, // <--- Grey out logic
             onValueChange = { settingsManager.updateAmvBlurAmount(it) }
         )
 
@@ -223,9 +259,9 @@ fun SettingsScreen(
             title = "Background Dim",
             value = settings.amvDimAmount,
             range = 0f..1f,
+            enabled = true,
             onValueChange = { settingsManager.updateAmvDimAmount(it) }
         )
-        // -----------------------------
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -358,21 +394,26 @@ private fun SettingsSliderRow(
     title: String,
     value: Float,
     range: ClosedFloatingPointRange<Float>,
+    enabled: Boolean,
     onValueChange: (Float) -> Unit
 ) {
+    // Determine transparency based on whether the slider is enabled or disabled
+    val alpha = if (enabled) 1f else 0.4f
+
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(text = title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            Text(text = title, color = Color.White.copy(alpha = alpha), fontSize = 16.sp, fontWeight = FontWeight.Medium)
             val displayValue = if (range.endInclusive > 1f) value.toInt().toString() else String.format("%.2f", value)
-            Text(text = displayValue, color = Color(0xFFB8355B), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text(text = displayValue, color = Color(0xFFB8355B).copy(alpha = alpha), fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
         Slider(
             value = value,
             onValueChange = onValueChange,
             valueRange = range,
+            enabled = enabled,
             colors = SliderDefaults.colors(
-                thumbColor = Color.White,
-                activeTrackColor = Color(0xFFB8355B),
+                thumbColor = if (enabled) Color.White else Color.Gray,
+                activeTrackColor = if (enabled) Color(0xFFB8355B) else Color(0xFF555555),
                 inactiveTrackColor = Color(0xFF2C2C2C)
             )
         )
