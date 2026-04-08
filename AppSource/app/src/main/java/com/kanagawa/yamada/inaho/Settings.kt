@@ -288,7 +288,7 @@ fun SettingsScreen(
                 if (artDir.exists()) {
                     artDir.deleteRecursively()
                 }
-                Toast.makeText(context, "Cover art cache cleared!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Restart The App Please", Toast.LENGTH_SHORT).show()
             }
         )
 
