@@ -36,6 +36,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
@@ -49,9 +50,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -177,24 +175,18 @@ fun PlayerScreen(
 
         val isVideoFormat = song?.isVideo == true
 
-        // Setup conditional blur modifier based on settings
+        // Smoothly crossfade states to prevent Surface destruction (which causes audio jumps)
+        val amvAlpha by animateFloatAsState(targetValue = if (isAmvModeActive && isVideoFormat) 1f else 0f, label = "AmvAlpha")
+        val coverAlpha = 1f - amvAlpha
+
         val optionalBlurModifier = if (settings.enableBackgroundBlur) {
             Modifier.blur(settings.amvBlurAmount.dp)
         } else {
-            Modifier // No blur applied
+            Modifier
         }
 
-        // 1. Dynamic Background Layer (Only drawn if enabled)
-        if (isAmvModeActive && isVideoFormat) {
-            AMVVideoSurface(
-                playerService = playerService,
-                isBackground = true,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .scale(1.2f)
-                    .then(optionalBlurModifier)
-            )
-        } else if (settings.showCoverBackground && coverBitmap != null) {
+        // 1. Dynamic Background Layer
+        if (settings.showCoverBackground && coverBitmap != null) {
             Image(
                 bitmap = coverBitmap.asImageBitmap(),
                 contentDescription = "Blurred Background",
@@ -203,6 +195,19 @@ fun PlayerScreen(
                     .fillMaxSize()
                     .scale(1.2f)
                     .then(optionalBlurModifier)
+                    .alpha(coverAlpha) // Fades out nicely when AMV mode turns on
+            )
+        }
+
+        if (isVideoFormat) {
+            AMVVideoSurface(
+                playerService = playerService,
+                isBackground = true,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .scale(1.2f)
+                    .then(optionalBlurModifier)
+                    .alpha(amvAlpha)
             )
         }
 
@@ -295,17 +300,26 @@ fun PlayerScreen(
                         .clickable { isAmvModeActive = !isAmvModeActive },
                     contentAlignment = Alignment.Center
                 ) {
-                    if (isAmvModeActive && isVideoFormat) {
-                        AMVVideoSurface(playerService = playerService, isBackground = false)
-                    } else if (coverBitmap != null) {
+
+                    // Cover Art always below
+                    if (coverBitmap != null) {
                         Image(
                             bitmap = coverBitmap.asImageBitmap(),
                             contentDescription = "Album Art",
                             contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize().alpha(coverAlpha)
                         )
                     } else {
-                        Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = Color(0xFF3D2020), modifier = Modifier.size(80.dp))
+                        Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = Color(0xFF3D2020), modifier = Modifier.size(80.dp).alpha(coverAlpha))
+                    }
+
+                    // AMV Video Surface always in tree when video format, just fading Alpha over Cover
+                    if (isVideoFormat) {
+                        AMVVideoSurface(
+                            playerService = playerService,
+                            isBackground = false,
+                            modifier = Modifier.fillMaxSize().alpha(amvAlpha)
+                        )
                     }
                 }
             }
