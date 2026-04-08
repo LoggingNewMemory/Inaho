@@ -274,7 +274,7 @@ fun SettingsScreen(
         )
 
         Text(
-            text = "Note: AMV features only support files in the .mp4 format.",
+            text = "AMV features only support files in the .mp4 format.",
             color = accentColor,
             fontSize = 12.sp,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
