@@ -94,24 +94,40 @@ class PlayerService : Service() {
     private var playGeneration = 0
     private var isMainPrepared = false
     private var isBgPrepared = false
+    private var isMainPreparing = false
+    private var isBgPreparing = false
 
     lateinit var eqManager: YamadaEQManager
         private set
 
     // ── Video Surface Handling ─────────────────────────────────────────────────
-    private var currentSurface: Surface? = null
-    private var currentBgSurface: Surface? = null
+    var currentSurface: Surface? = null
+        private set
+    var currentBgSurface: Surface? = null
+        private set
 
     fun setVideoSurface(surface: Surface?) {
-        if (currentSurface === surface) return
-        currentSurface = surface
-        try { mediaPlayer?.setSurface(surface) } catch (_: Exception) {}
+        if (this.currentSurface === surface) return
+        this.currentSurface = surface
+
+        // Guard: Only attach dynamically if NOT in the unstable "preparing" phase
+        if (_playerState.value.currentSong?.isVideo == true && !isMainPreparing) {
+            try {
+                if (surface == null || surface.isValid) mediaPlayer?.setSurface(surface)
+            } catch (e: Exception) { e.printStackTrace() }
+        }
     }
 
     fun setBgVideoSurface(surface: Surface?) {
-        if (currentBgSurface === surface) return
-        currentBgSurface = surface
-        try { bgMediaPlayer?.setSurface(surface) } catch (_: Exception) {}
+        if (this.currentBgSurface === surface) return
+        this.currentBgSurface = surface
+
+        // Guard: Only attach dynamically if NOT in the unstable "preparing" phase
+        if (_playerState.value.currentSong?.isVideo == true && !isBgPreparing) {
+            try {
+                if (surface == null || surface.isValid) bgMediaPlayer?.setSurface(surface)
+            } catch (e: Exception) { e.printStackTrace() }
+        }
     }
     // ──────────────────────────────────────────────────────────────────────────
 
@@ -247,7 +263,6 @@ class PlayerService : Service() {
                 try { bgMediaPlayer?.pause() } catch (_: Exception) {}
                 _playerState.value = _playerState.value.copy(isPlaying = false)
             } else {
-                // Ensure bgMediaPlayer is still in sync before resuming
                 if (bgMediaPlayer != null) {
                     val diff = Math.abs(mp.currentPosition - bgMediaPlayer!!.currentPosition)
                     if (diff > 200) {
@@ -464,49 +479,25 @@ class PlayerService : Service() {
         isMainPrepared = false
         isBgPrepared = false
 
+        // Start explicit safe guards against IllegalStateException
+        isMainPreparing = true
+        isBgPreparing = false // Bg player hasn't started yet
+
         // FORCEFULLY AND SAFELY PURGE OLD PLAYERS TO PREVENT DECODER LEAKS
         safelyDestroyPlayer(bgMediaPlayer)
         bgMediaPlayer = null
         safelyDestroyPlayer(mediaPlayer)
         mediaPlayer = null
 
-        // --- Prepare Background Player (Muted) ---
-        if (song.isVideo) {
-            bgMediaPlayer = MediaPlayer().apply {
-                try {
-                    setAudioAttributes(AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).setUsage(AudioAttributes.USAGE_MEDIA).build())
-                    setSurface(currentBgSurface)
-                    setVolume(0f, 0f) // Muted!
-                    setDataSource(applicationContext, uri)
-                    setOnPreparedListener { mp ->
-                        if (generation != playGeneration) return@setOnPreparedListener
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && (currentPlaybackSpeed != 1.0f || currentPlaybackPitch != 1.0f)) {
-                            try { mp.playbackParams = mp.playbackParams.setSpeed(currentPlaybackSpeed).setPitch(currentPlaybackPitch) } catch (_: Exception) {}
-                        }
-                        isBgPrepared = true
-                        checkAndStartBoth(generation)
-                    }
-                    setOnErrorListener { _, _, _ ->
-                        if (generation == playGeneration) {
-                            isBgPrepared = true
-                            checkAndStartBoth(generation)
-                        }
-                        true
-                    }
-                    prepareAsync()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-        } else {
-            isBgPrepared = true
-        }
-
-        // --- Prepare Main Player ---
+        // --- Prepare Main Player FIRST to guarantee it gets the hardware decoder ---
         mediaPlayer = MediaPlayer().apply {
             try {
                 setAudioAttributes(AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).setUsage(AudioAttributes.USAGE_MEDIA).build())
-                setSurface(currentSurface)
+
+                // GUARD: Only set the surface if it's already generated and valid
+                if (song.isVideo && currentSurface?.isValid == true) {
+                    setSurface(currentSurface)
+                }
 
                 setOnVideoSizeChangedListener { _, width, height ->
                     if (width > 0 && height > 0) {
@@ -525,14 +516,31 @@ class PlayerService : Service() {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && (currentPlaybackSpeed != 1.0f || currentPlaybackPitch != 1.0f)) {
                         try { mp.playbackParams = mp.playbackParams.setSpeed(currentPlaybackSpeed).setPitch(currentPlaybackPitch) } catch (_: Exception) {}
                     }
+
+                    // Main is now prepared and safe to receive dynamic surfaces
+                    isMainPreparing = false
                     isMainPrepared = true
-                    checkAndStartBoth(generation)
+
+                    // Late attach surface if Compose created it *while* we were preparing
+                    if (song.isVideo && currentSurface?.isValid == true) {
+                        try { mp.setSurface(currentSurface) } catch(_: Exception) {}
+                    }
+
+                    // SEQUENTIAL DECODING: Only attempt to prepare the background video
+                    // AFTER the main video has successfully claimed a hardware decoder!
+                    if (song.isVideo) {
+                        prepareBgPlayer(song, generation)
+                    } else {
+                        isBgPrepared = true
+                        checkAndStartBoth(generation)
+                    }
                 }
                 setOnCompletionListener {
                     skipNext(isAutoCompletion = true)
                 }
                 setOnErrorListener { _, _, _ ->
                     if (generation == playGeneration) {
+                        isMainPreparing = false
                         isMainPrepared = true // Prevent deadlock
                         _playerState.value = _playerState.value.copy(isPlaying = false)
                     }
@@ -541,7 +549,57 @@ class PlayerService : Service() {
                 prepareAsync()
             } catch (e: Exception) {
                 e.printStackTrace()
+                isMainPreparing = false
                 _playerState.value = _playerState.value.copy(isPlaying = false)
+            }
+        }
+    }
+
+    private fun prepareBgPlayer(song: Song, generation: Int) {
+        if (generation != playGeneration) return
+        isBgPreparing = true
+
+        bgMediaPlayer = MediaPlayer().apply {
+            try {
+                setAudioAttributes(AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).setUsage(AudioAttributes.USAGE_MEDIA).build())
+
+                if (currentBgSurface?.isValid == true) {
+                    setSurface(currentBgSurface)
+                }
+
+                setVolume(0f, 0f) // Muted!
+                setDataSource(applicationContext, song.trackUri)
+
+                setOnPreparedListener { mp ->
+                    if (generation != playGeneration) return@setOnPreparedListener
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && (currentPlaybackSpeed != 1.0f || currentPlaybackPitch != 1.0f)) {
+                        try { mp.playbackParams = mp.playbackParams.setSpeed(currentPlaybackSpeed).setPitch(currentPlaybackPitch) } catch (_: Exception) {}
+                    }
+
+                    isBgPreparing = false
+                    isBgPrepared = true
+
+                    if (currentBgSurface?.isValid == true) {
+                        try { mp.setSurface(currentBgSurface) } catch(_: Exception) {}
+                    }
+                    checkAndStartBoth(generation)
+                }
+                setOnErrorListener { _, _, _ ->
+                    // If the device denies a second hardware decoder, we catch it here gracefully.
+                    // We mark it as prepared anyway so the Main Player can still play perfectly!
+                    if (generation == playGeneration) {
+                        isBgPreparing = false
+                        isBgPrepared = true
+                        checkAndStartBoth(generation)
+                    }
+                    true
+                }
+                prepareAsync()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                isBgPreparing = false
+                isBgPrepared = true
+                checkAndStartBoth(generation)
             }
         }
     }

@@ -20,8 +20,6 @@ fun AMVVideoSurface(
     modifier: Modifier = Modifier
 ) {
     val playerState by PlayerService.playerState.collectAsState()
-
-    // We get the actual video sizes to calculate the Center Crop
     val vw = playerState.videoWidth.toFloat()
     val vh = playerState.videoHeight.toFloat()
 
@@ -33,7 +31,6 @@ fun AMVVideoSurface(
                     ViewGroup.LayoutParams.MATCH_PARENT
                 )
 
-                // Re-calculate the crop if the phone rotates or layout shifts
                 addOnLayoutChangeListener { v, left, top, right, bottom, _, _, _, _ ->
                     val width = right - left
                     val height = bottom - top
@@ -73,18 +70,25 @@ fun AMVVideoSurface(
             }
         },
         update = { view ->
-            val surface = view.tag as? Surface
-            if (surface != null && playerService != null) {
-                if (isBackground) playerService.setBgVideoSurface(surface)
-                else playerService.setVideoSurface(surface)
-            } else if (view.isAvailable && playerService != null && view.tag == null) {
-                val newSurface = Surface(view.surfaceTexture)
-                view.tag = newSurface
-                if (isBackground) playerService.setBgVideoSurface(newSurface)
-                else playerService.setVideoSurface(newSurface)
+            // Safely push surface, checking if it is still valid to avoid passing broken surfaces to MediaPlayer
+            if (playerService != null && view.isAvailable) {
+                var existingSurface = view.tag as? Surface
+                if (existingSurface == null || !existingSurface.isValid) {
+                    existingSurface?.release()
+                    existingSurface = Surface(view.surfaceTexture)
+                    view.tag = existingSurface
+                    if (isBackground) playerService.setBgVideoSurface(existingSurface)
+                    else playerService.setVideoSurface(existingSurface)
+                } else {
+                    if (isBackground && playerService.currentBgSurface !== existingSurface) {
+                        playerService.setBgVideoSurface(existingSurface)
+                    } else if (!isBackground && playerService.currentSurface !== existingSurface) {
+                        playerService.setVideoSurface(existingSurface)
+                    }
+                }
             }
 
-            // Apply crop immediately when Compose recomposes the video dimensions
+            // Apply crop matrix on recomposition
             if (vw > 0 && vh > 0 && view.width > 0 && view.height > 0) {
                 val viewRatio = view.width.toFloat() / view.height.toFloat()
                 val videoRatio = vw / vh

@@ -175,7 +175,7 @@ fun PlayerScreen(
 
         val isVideoFormat = song?.isVideo == true
 
-        // Smoothly crossfade states to prevent Surface destruction (which causes audio jumps and codec initialization failures)
+        // Smoothly crossfade states to prevent Surface destruction (which causes audio jumps)
         val amvAlpha by animateFloatAsState(targetValue = if (isAmvModeActive && isVideoFormat) 1f else 0f, label = "AmvAlpha")
         val coverAlpha = 1f - amvAlpha
 
@@ -185,31 +185,31 @@ fun PlayerScreen(
             Modifier
         }
 
-        // 1. Dynamic Background Layer
-        if (settings.showCoverBackground && coverBitmap != null) {
-            Image(
-                bitmap = coverBitmap.asImageBitmap(),
-                contentDescription = "Blurred Background",
-                contentScale = ContentScale.Crop,
+        // Z-INDEX FIX: Video is ALWAYS fully rendered at the bottom to stop Android destroying the SurfaceTexture
+        Box(modifier = Modifier.fillMaxSize()) {
+            AMVVideoSurface(
+                playerService = playerService,
+                isBackground = true,
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(1.2f)
                     .then(optionalBlurModifier)
-                    .alpha(coverAlpha) // Fades out nicely when AMV mode turns on
             )
-        }
 
-        // AMV Surface is now ALWAYS in the tree to keep the SurfaceTexture alive
-        // It simply becomes invisible (alpha 0) when a normal audio song is playing
-        AMVVideoSurface(
-            playerService = playerService,
-            isBackground = true,
-            modifier = Modifier
-                .fillMaxSize()
-                .scale(1.2f)
-                .then(optionalBlurModifier)
-                .alpha(amvAlpha)
-        )
+            // Dynamic Background Layer FADES IN OVER the video
+            if (settings.showCoverBackground && coverBitmap != null) {
+                Image(
+                    bitmap = coverBitmap.asImageBitmap(),
+                    contentDescription = "Blurred Background",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .scale(1.2f)
+                        .then(optionalBlurModifier)
+                        .alpha(coverAlpha)
+                )
+            }
+        }
 
         // 2. Dim Overlay Layer
         if ((isAmvModeActive && isVideoFormat) || (settings.showCoverBackground && coverBitmap != null)) {
@@ -290,6 +290,7 @@ fun PlayerScreen(
                     label = "AlbumArtScale"
                 )
 
+                // Z-INDEX FIX: Video is ALWAYS fully rendered at the bottom to stop Android destroying the SurfaceTexture
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -300,8 +301,14 @@ fun PlayerScreen(
                         .clickable { isAmvModeActive = !isAmvModeActive },
                     contentAlignment = Alignment.Center
                 ) {
+                    // AMV Video Surface always at the absolute bottom
+                    AMVVideoSurface(
+                        playerService = playerService,
+                        isBackground = false,
+                        modifier = Modifier.fillMaxSize()
+                    )
 
-                    // Cover Art always below
+                    // Cover Art always ON TOP and fades IN to hide the video
                     if (coverBitmap != null) {
                         Image(
                             bitmap = coverBitmap.asImageBitmap(),
@@ -310,15 +317,13 @@ fun PlayerScreen(
                             modifier = Modifier.fillMaxSize().alpha(coverAlpha)
                         )
                     } else {
-                        Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = Color(0xFF3D2020), modifier = Modifier.size(80.dp).alpha(coverAlpha))
+                        Box(
+                            modifier = Modifier.fillMaxSize().alpha(coverAlpha).background(surfaceColor),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = Color(0xFF3D2020), modifier = Modifier.size(80.dp))
+                        }
                     }
-
-                    // AMV Video Surface always in tree, just fading Alpha over Cover
-                    AMVVideoSurface(
-                        playerService = playerService,
-                        isBackground = false,
-                        modifier = Modifier.fillMaxSize().alpha(amvAlpha)
-                    )
                 }
             }
 
