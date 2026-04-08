@@ -59,6 +59,13 @@ fun PlaylistScreen(
     val surfaceColor = if (settings.amoledBlack) Color(0xFF0A0A0A) else Color(0xFF1E1414)
     val accentColor = if (settings.theme == AppTheme.YAMADA) Color(0xFF9E9EDB) else Color(0xFFB8355B)
 
+    // Dynamic gradient for the Favorites card
+    val favGradient = if (settings.theme == AppTheme.YAMADA) {
+        listOf(Color(0xFF1F1F4D), Color(0xFF10102B)) // Yamada Blue Shades
+    } else {
+        listOf(Color(0xFF4A1525), Color(0xFF2A0D15)) // Inaho Pink Shades
+    }
+
     // Navigation state inside the screen
     var currentView by remember { mutableStateOf("LIST") } // LIST, FAV, CUSTOM
 
@@ -221,7 +228,8 @@ fun PlaylistScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(16.dp))
-                            .background(Brush.horizontalGradient(listOf(Color(0xFF4A1525), Color(0xFF2A0D15))))
+                            // Use the theme-aware gradient here
+                            .background(Brush.horizontalGradient(favGradient))
                             .clickable { currentView = "FAV" }
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
