@@ -206,23 +206,42 @@ class PlayerService : Service() {
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, song.artist)
             .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, state.durationMs)
 
-        getAlbumArtBitmap(applicationContext, song.trackUri)?.let {
+        getAlbumArtBitmap(applicationContext, song)?.let {
             metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, it)
         }
         mediaSession.setMetadata(metadataBuilder.build())
     }
 
-    private fun getAlbumArtBitmap(context: Context, uri: Uri): Bitmap? {
-        var retriever: MediaMetadataRetriever? = null
+    private fun getAlbumArtBitmap(context: Context, song: Song): Bitmap? {
+        // 1. Try reading the cached artwork first (extremely fast, prevents stutter on notification generation)
+        val cacheFile = java.io.File(context.cacheDir, "art/${song.id}.png")
+        if (cacheFile.exists()) {
+            try { return BitmapFactory.decodeFile(cacheFile.absolutePath) } catch (_: Exception) {}
+        }
+
+        // 2. Fallback to extracting metadata on the fly natively
         return try {
-            retriever = MediaMetadataRetriever()
-            retriever.setDataSource(context, uri)
-            val art = retriever.embeddedPicture
-            if (art != null) BitmapFactory.decodeByteArray(art, 0, art.size) else null
+            if (song.isVideo) {
+                // Native Android Q+ Way for Video Thumbnails
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    context.contentResolver.loadThumbnail(song.trackUri, android.util.Size(800, 800), null)
+                } else {
+                    // Legacy Way for older devices
+                    val retriever = MediaMetadataRetriever()
+                    retriever.setDataSource(context, song.trackUri)
+                    val frame = retriever.getFrameAtTime(-1)
+                    retriever.release()
+                    frame
+                }
+            } else {
+                val retriever = MediaMetadataRetriever()
+                retriever.setDataSource(context, song.trackUri)
+                val art = retriever.embeddedPicture
+                retriever.release()
+                if (art != null) BitmapFactory.decodeByteArray(art, 0, art.size) else null
+            }
         } catch (e: Exception) {
             null
-        } finally {
-            try { retriever?.release() } catch (_: Exception) {}
         }
     }
 
