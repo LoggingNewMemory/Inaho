@@ -344,6 +344,7 @@ private fun EqPresetTile(
     ) {
         Text(
             text = preset.emoji,
+            color = Color.White,
             fontSize = 20.sp,
             textAlign = TextAlign.Center
         )
