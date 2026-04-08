@@ -397,8 +397,8 @@ fun SettingsScreen(
 
         Text(
             text = buildAnnotatedString {
-                withStyle(style = SpanStyle(color = Color.White)) { append("THE ") }
-                withStyle(style = SpanStyle(color = accentColor)) { append("DEVELOPERS") }
+                withStyle(style = SpanStyle(color = Color(0xFF9E9EDB))) { append("THE ") }
+                withStyle(style = SpanStyle(color = Color(0xFFB8355B))) { append("DEVELOPERS") }
             },
             fontSize = 30.sp,
             fontWeight = FontWeight.Bold,
@@ -408,13 +408,23 @@ fun SettingsScreen(
         DeveloperProfile(
             role = "Developer",
             roleColor = Color.White,
-            avatarResId = R.drawable.ic_yamada, // Ensure this exists in your res/drawable
+            avatarResId = R.drawable.ic_yamada,
             name = "Kanagawa Yamada",
             description = "VTuber / VTeacher of Indonesia. Founder and Leader of Kanagawa Lab Community",
             socials = {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    SocialLink(iconResId = R.drawable.github, text = "GitHub", url = "https://github.com/LoggingNewMemory", accentColor = accentColor)
-                    SocialLink(iconResId = R.drawable.youtube, text = "YouTube", url = "https://www.youtube.com/@KanagawaYamada", accentColor = accentColor)
+                    SocialLink(
+                        iconResId = R.drawable.github,
+                        text = "GitHub",
+                        url = "https://github.com/LoggingNewMemory",
+                        accentColor = Color(0xFF9E9EDB)
+                    )
+                    SocialLink(
+                        iconResId = R.drawable.youtube,
+                        text = "YouTube",
+                        url = "https://www.youtube.com/@KanagawaYamada",
+                        accentColor = Color(0xFF9E9EDB)
+                    )
                 }
             }
         )
@@ -429,8 +439,16 @@ fun SettingsScreen(
             description = "Japanese VTuber under the agency of Goraku",
             socials = {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    SocialLink(iconResId = R.drawable.x, text = "X", url = "https://x.com/inaho_vt", accentColor = accentColor)
-                    SocialLink(iconResId = R.drawable.youtube, text = "YouTube", url = "https://www.youtube.com/@%E8%90%BD%E4%B9%83%E3%81%84%E3%81%AA%E3%81%BB", accentColor = accentColor)
+                    SocialLink(
+                        iconResId = R.drawable.x,
+                        text = "X",
+                        url = "https://x.com/inaho_vt",
+                        accentColor = Color(0xFFB8355B))
+                    SocialLink(
+                        iconResId = R.drawable.youtube,
+                        text = "YouTube",
+                        url = "https://www.youtube.com/@%E8%90%BD%E4%B9%83%E3%81%84%E3%81%AA%E3%81%BB",
+                        accentColor = Color(0xFFB8355B))
                 }
             }
         )
