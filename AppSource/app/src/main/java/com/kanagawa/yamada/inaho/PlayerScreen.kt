@@ -64,6 +64,7 @@ data class AudioDetails(
 @Composable
 fun PlayerScreen(
     musicViewModel: MusicViewModel,
+    isVisible: Boolean,
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -129,7 +130,8 @@ fun PlayerScreen(
     val bgColor      = if (settings.amoledBlack) Color.Black else Color(0xFF0D0A0A)
     val surfaceColor = if (settings.amoledBlack) Color(0xFF0A0A0A) else Color(0xFF1E1414).copy(alpha = 0.85f)
 
-    BackHandler { onNavigateBack() }
+    // Only intercept back presses if the PlayerScreen is actually visible
+    BackHandler(enabled = isVisible) { onNavigateBack() }
 
     LaunchedEffect(playerState.isPlaying, playerService, playerState.currentSong?.id) {
         if (playerService != null) {
