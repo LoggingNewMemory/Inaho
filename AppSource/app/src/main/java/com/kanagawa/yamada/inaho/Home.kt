@@ -63,15 +63,13 @@ fun HomeScreen(
     val nameColor = if (isVip) Color(0xFFB8355B) else Color.White
 
     var hasPermission by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(
-                context, if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
-            ) == PackageManager.PERMISSION_GRANTED
-        )
+        mutableStateOf(ContextCompat.checkSelfPermission(context, if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED)
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-        val storageGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) permissions[Manifest.permission.READ_MEDIA_AUDIO] == true else permissions[Manifest.permission.READ_EXTERNAL_STORAGE] == true
+        val storageGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions[Manifest.permission.READ_MEDIA_AUDIO] == true || permissions[Manifest.permission.READ_MEDIA_VIDEO] == true
+        } else permissions[Manifest.permission.READ_EXTERNAL_STORAGE] == true
         hasPermission = storageGranted
     }
 
@@ -79,6 +77,7 @@ fun HomeScreen(
         val permissions = mutableListOf<String>()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.READ_MEDIA_AUDIO)
+            permissions.add(Manifest.permission.READ_MEDIA_VIDEO)
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         } else permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
 
@@ -90,31 +89,72 @@ fun HomeScreen(
         if (hasPermission) {
             withContext(Dispatchers.IO) {
                 try {
-                    val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL) else MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-                    val projection = arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.DURATION)
-                    val sortOrder = when (settings.sortOption) {
-                        SortOption.TITLE_ASC -> "${MediaStore.Audio.Media.TITLE} ASC"
-                        SortOption.TITLE_DESC -> "${MediaStore.Audio.Media.TITLE} DESC"
-                        SortOption.ARTIST_ASC -> "${MediaStore.Audio.Media.ARTIST} ASC"
-                        SortOption.DATE_ADDED_DESC -> "${MediaStore.Audio.Media.DATE_ADDED} DESC"
-                        SortOption.DURATION_ASC -> "${MediaStore.Audio.Media.DURATION} ASC"
-                        SortOption.DURATION_DESC -> "${MediaStore.Audio.Media.DURATION} DESC"
+                    // Update query to check MediaStore.Files directly for both Audio & Video
+                    val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
+                    } else {
+                        MediaStore.Files.getContentUri("external")
                     }
-                    var selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DURATION} > 10000"
-                    if (settings.onlyMusicFolder) selection += if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) " AND ${MediaStore.Audio.Media.RELATIVE_PATH} LIKE '%Music/%'" else " AND ${MediaStore.Audio.Media.DATA} LIKE '%/Music/%'"
+
+                    val projection = arrayOf(
+                        MediaStore.Files.FileColumns._ID,
+                        MediaStore.Files.FileColumns.TITLE,
+                        MediaStore.Files.FileColumns.ARTIST,
+                        MediaStore.Files.FileColumns.DURATION,
+                        MediaStore.Files.FileColumns.MEDIA_TYPE
+                    )
+
+                    val sortOrder = when (settings.sortOption) {
+                        SortOption.TITLE_ASC -> "${MediaStore.Files.FileColumns.TITLE} ASC"
+                        SortOption.TITLE_DESC -> "${MediaStore.Files.FileColumns.TITLE} DESC"
+                        SortOption.ARTIST_ASC -> "${MediaStore.Files.FileColumns.ARTIST} ASC"
+                        SortOption.DATE_ADDED_DESC -> "${MediaStore.Files.FileColumns.DATE_ADDED} DESC"
+                        SortOption.DURATION_ASC -> "${MediaStore.Files.FileColumns.DURATION} ASC"
+                        SortOption.DURATION_DESC -> "${MediaStore.Files.FileColumns.DURATION} DESC"
+                    }
+
+                    var selection = "(" +
+                            "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ${MediaStore.Files.FileColumns.MEDIA_TYPE_AUDIO} OR " +
+                            "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ${MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO}" +
+                            ") AND ${MediaStore.Files.FileColumns.DURATION} > 10000"
+
+                    if (settings.onlyMusicFolder) {
+                        selection += if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            " AND ${MediaStore.Files.FileColumns.RELATIVE_PATH} LIKE '%Music/%'"
+                        } else {
+                            " AND ${MediaStore.Files.FileColumns.DATA} LIKE '%/Music/%'"
+                        }
+                    }
 
                     val tempList = mutableListOf<Song>()
                     context.contentResolver.query(collection, projection, selection, null, sortOrder)?.use { c ->
-                        val idCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-                        val titleCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-                        val artistCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-                        val durationCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                        val idCol = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
+                        val titleCol = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns.TITLE)
+                        val artistCol = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns.ARTIST)
+                        val durationCol = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DURATION)
+                        val mediaTypeCol = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MEDIA_TYPE)
+
                         while (c.moveToNext()) {
                             val id = c.getLong(idCol)
                             val dur = c.getLong(durationCol)
                             val title = c.getString(titleCol) ?: "Unknown"
                             val artist = c.getString(artistCol) ?: "Unknown"
-                            tempList.add(Song(id, title, artist, dur, ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id), String.format("%02d:%02d", (dur / 1000) / 60, (dur / 1000) % 60)))
+                            val isVideo = c.getInt(mediaTypeCol) == MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO
+
+                            val baseUri = if (isVideo) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+                            val trackUri = ContentUris.withAppendedId(baseUri, id)
+
+                            tempList.add(
+                                Song(
+                                    id = id,
+                                    title = title,
+                                    artist = artist,
+                                    durationMs = dur,
+                                    trackUri = trackUri,
+                                    formattedDuration = String.format("%02d:%02d", (dur / 1000) / 60, (dur / 1000) % 60),
+                                    isVideo = isVideo
+                                )
+                            )
                         }
                     }
                     musicViewModel.recordLoadedSongs(tempList)
