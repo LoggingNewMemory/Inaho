@@ -268,23 +268,11 @@ fun PlayerScreen(
                 }
             }
 
-            AnimatedVisibility(
-                visible = showQueueSheet,
-                enter = expandVertically(),
-                exit  = shrinkVertically()
+            // 1. Wrap the Queue Panel and Video Surface in a Box so they overlap
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.TopCenter
             ) {
-                QueuePanel(
-                    playerState = playerState,
-                    artCache    = artCache,
-                    accentColor = accentColor,
-                    onSongClick = { _, index ->
-                        playerService?.jumpToQueueIndex(index)
-                        showQueueSheet = false
-                    }
-                )
-            }
-
-            if (!showQueueSheet) {
                 val artScale by animateFloatAsState(
                     targetValue = if (playerState.isPlaying) 1f else 0.85f,
                     animationSpec = spring(
@@ -294,7 +282,12 @@ fun PlayerScreen(
                     label = "AlbumArtScale"
                 )
 
-                // Z-INDEX FIX: Video is ALWAYS fully rendered at the bottom to stop Android destroying the SurfaceTexture
+                // 2. Animate the alpha instead of removing it from composition
+                val artLayerAlpha by animateFloatAsState(
+                    targetValue = if (showQueueSheet) 0f else 1f,
+                    label = "ArtLayerAlpha"
+                )
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -302,7 +295,8 @@ fun PlayerScreen(
                         .scale(artScale)
                         .clip(RoundedCornerShape(12.dp))
                         .background(surfaceColor)
-                        .clickable { isAmvModeActive = !isAmvModeActive },
+                        .alpha(artLayerAlpha) // Apply the alpha here
+                        .clickable(enabled = !showQueueSheet) { isAmvModeActive = !isAmvModeActive }, // Disable clicks when queue is open
                     contentAlignment = Alignment.Center
                 ) {
                     // AMV Video Surface always at the absolute bottom
@@ -328,6 +322,23 @@ fun PlayerScreen(
                             Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = Color(0xFF3D2020), modifier = Modifier.size(80.dp))
                         }
                     }
+                }
+
+                // 3. Queue Panel overlays on top of the hidden video player
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showQueueSheet,
+                    enter = fadeIn() + expandVertically(),
+                    exit  = fadeOut() + shrinkVertically()
+                ) {
+                    QueuePanel(
+                        playerState = playerState,
+                        artCache    = artCache,
+                        accentColor = accentColor,
+                        onSongClick = { _, index ->
+                            playerService?.jumpToQueueIndex(index)
+                            showQueueSheet = false
+                        }
+                    )
                 }
             }
 
