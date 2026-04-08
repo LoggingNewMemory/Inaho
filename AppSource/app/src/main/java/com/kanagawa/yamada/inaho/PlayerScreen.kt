@@ -175,7 +175,7 @@ fun PlayerScreen(
 
         val isVideoFormat = song?.isVideo == true
 
-        // Smoothly crossfade states to prevent Surface destruction (which causes audio jumps)
+        // Smoothly crossfade states to prevent Surface destruction (which causes audio jumps and codec initialization failures)
         val amvAlpha by animateFloatAsState(targetValue = if (isAmvModeActive && isVideoFormat) 1f else 0f, label = "AmvAlpha")
         val coverAlpha = 1f - amvAlpha
 
@@ -199,17 +199,17 @@ fun PlayerScreen(
             )
         }
 
-        if (isVideoFormat) {
-            AMVVideoSurface(
-                playerService = playerService,
-                isBackground = true,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .scale(1.2f)
-                    .then(optionalBlurModifier)
-                    .alpha(amvAlpha)
-            )
-        }
+        // AMV Surface is now ALWAYS in the tree to keep the SurfaceTexture alive
+        // It simply becomes invisible (alpha 0) when a normal audio song is playing
+        AMVVideoSurface(
+            playerService = playerService,
+            isBackground = true,
+            modifier = Modifier
+                .fillMaxSize()
+                .scale(1.2f)
+                .then(optionalBlurModifier)
+                .alpha(amvAlpha)
+        )
 
         // 2. Dim Overlay Layer
         if ((isAmvModeActive && isVideoFormat) || (settings.showCoverBackground && coverBitmap != null)) {
@@ -313,14 +313,12 @@ fun PlayerScreen(
                         Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = Color(0xFF3D2020), modifier = Modifier.size(80.dp).alpha(coverAlpha))
                     }
 
-                    // AMV Video Surface always in tree when video format, just fading Alpha over Cover
-                    if (isVideoFormat) {
-                        AMVVideoSurface(
-                            playerService = playerService,
-                            isBackground = false,
-                            modifier = Modifier.fillMaxSize().alpha(amvAlpha)
-                        )
-                    }
+                    // AMV Video Surface always in tree, just fading Alpha over Cover
+                    AMVVideoSurface(
+                        playerService = playerService,
+                        isBackground = false,
+                        modifier = Modifier.fillMaxSize().alpha(amvAlpha)
+                    )
                 }
             }
 
