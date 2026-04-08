@@ -180,8 +180,8 @@ fun PlaylistScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .displayCutoutPadding()
             .background(bgColor)
+            .displayCutoutPadding()
     ) {
         if (currentView == "LIST") {
             // --- MAIN PLAYLIST OVERVIEW ---
