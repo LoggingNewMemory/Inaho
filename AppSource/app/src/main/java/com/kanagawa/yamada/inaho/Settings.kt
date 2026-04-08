@@ -1,6 +1,7 @@
 package com.kanagawa.yamada.inaho
 
 import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -12,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BlurOn
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Nightlight
@@ -23,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
@@ -33,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.io.File
 
 // ==========================================
 // 1. SETTINGS MODELS & MANAGER
@@ -54,8 +58,8 @@ data class AppSettings(
     val amvModeAlwaysOn: Boolean = false,
     val amvBlurAmount: Float = 40f,
     val amvDimAmount: Float = 0.6f,
-    val showCoverBackground: Boolean = true,     // <-- Added Cover Background Option
-    val enableBackgroundBlur: Boolean = true     // <-- Added Blur Toggle Option
+    val showCoverBackground: Boolean = true,
+    val enableBackgroundBlur: Boolean = true
 )
 
 class SettingsManager(context: Context) {
@@ -134,6 +138,7 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit
 ) {
     val settings by settingsManager.settingsFlow.collectAsState()
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -202,8 +207,8 @@ fun SettingsScreen(
             onToggle = { settingsManager.updateAmoledBlack(it) }
         )
 
-        // --- NEW SHOW COVER BACKGROUND TOGGLE ---
         Spacer(modifier = Modifier.height(8.dp))
+
         SettingsToggleRow(
             icon = Icons.Default.Image,
             title = "Cover Background",
@@ -237,8 +242,8 @@ fun SettingsScreen(
             onToggle = { settingsManager.updateAmvModeAlwaysOn(it) }
         )
 
-        // --- NEW ENABLE BLUR TOGGLE ---
         Spacer(modifier = Modifier.height(8.dp))
+
         SettingsToggleRow(
             icon = Icons.Default.BlurOn,
             title = "Enable Background Blur",
@@ -251,7 +256,7 @@ fun SettingsScreen(
             title = "Background Blur",
             value = settings.amvBlurAmount,
             range = 0f..100f,
-            enabled = settings.enableBackgroundBlur, // <--- Grey out logic
+            enabled = settings.enableBackgroundBlur,
             onValueChange = { settingsManager.updateAmvBlurAmount(it) }
         )
 
@@ -264,6 +269,31 @@ fun SettingsScreen(
         )
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        // --- NEW STORAGE SECTION ---
+        Text(
+            text = "STORAGE",
+            color = Color(0xFF555555),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+        )
+
+        SettingsActionRow(
+            icon = Icons.Default.Delete,
+            title = "Clear Cover Cache",
+            subtitle = "Recreate cached song cover",
+            onClick = {
+                val artDir = File(context.cacheDir, "art")
+                if (artDir.exists()) {
+                    artDir.deleteRecursively()
+                }
+                Toast.makeText(context, "Cover art cache cleared!", Toast.LENGTH_SHORT).show()
+            }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        // ---------------------------
 
         Text(
             text = "SORT ORDER",
@@ -329,12 +359,12 @@ fun SettingsScreen(
         DeveloperProfile(
             role = "Developer",
             roleColor = Color.White,
-            avatarResId = R.drawable.ic_yamada,
+            avatarResId = R.drawable.ic_yamada, // Ensure this exists in your res/drawable
             name = "Kanagawa Yamada",
             description = "VTuber / VTeacher of Indonesia. Founder and Leader of Kanagawa Lab Community",
             socials = {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    SocialLink(iconResId = R.drawable.github, text = "GitHub", url = "https://github.com/LoggingNewMemory")
+                    SocialLink(iconResId = R.drawable.github, text = "GitHub", url = "https://github.com/LoggingNewMemory") // Ensure these drawables exist
                     SocialLink(iconResId = R.drawable.youtube, text = "YouTube", url = "https://www.youtube.com/@KanagawaYamada")
                 }
             }
@@ -345,12 +375,12 @@ fun SettingsScreen(
         DeveloperProfile(
             role = "Inspired By",
             roleColor = Color(0xFFB8355B),
-            avatarResId = R.drawable.ic_inaho,
+            avatarResId = R.drawable.ic_inaho, // Ensure this exists in your res/drawable
             name = "Ochinai Inaho",
             description = "Japanese VTuber under the agency of Goraku",
             socials = {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    SocialLink(iconResId = R.drawable.x, text = "X", url = "https://x.com/inaho_vt")
+                    SocialLink(iconResId = R.drawable.x, text = "X", url = "https://x.com/inaho_vt") // Ensure this drawable exists
                     SocialLink(iconResId = R.drawable.youtube, text = "YouTube", url = "https://www.youtube.com/@%E8%90%BD%E4%B9%83%E3%81%84%E3%81%AA%E3%81%BB")
                 }
             }
@@ -397,7 +427,6 @@ private fun SettingsSliderRow(
     enabled: Boolean,
     onValueChange: (Float) -> Unit
 ) {
-    // Determine transparency based on whether the slider is enabled or disabled
     val alpha = if (enabled) 1f else 0.4f
 
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -417,6 +446,34 @@ private fun SettingsSliderRow(
                 inactiveTrackColor = Color(0xFF2C2C2C)
             )
         )
+    }
+}
+
+@Composable
+private fun SettingsActionRow(
+    icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 10.dp, horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xFF1E1414)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(imageVector = icon, contentDescription = null, tint = Color(0xFFB8355B), modifier = Modifier.size(22.dp))
+        }
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            Text(text = subtitle, color = Color(0xFF888888), fontSize = 13.sp)
+        }
     }
 }
 
