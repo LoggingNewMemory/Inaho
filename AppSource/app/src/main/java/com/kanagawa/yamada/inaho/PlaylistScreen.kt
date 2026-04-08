@@ -193,7 +193,7 @@ fun PlaylistScreen(
             ) {
                 Text(
                     text = "Your Library",
-                    color = Color.White,
+                    color = Color(0xFFB8355B),
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)

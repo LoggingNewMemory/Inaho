@@ -245,7 +245,7 @@ fun MusicListScreen(
             } else {
                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                        Text(text = "All Songs", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "All Songs", color = Color(0xFFB8355B), fontSize = 24.sp, fontWeight = FontWeight.Bold)
                         if (songs.itemCount > 0) {
                             Spacer(Modifier.width(8.dp))
                             Text(text = "${songs.itemCount}", color = Color(0xFF555555), fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.background(surfaceColor, RoundedCornerShape(6.dp)).padding(horizontal = 7.dp, vertical = 2.dp))
