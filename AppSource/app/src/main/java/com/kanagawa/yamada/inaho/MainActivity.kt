@@ -158,7 +158,10 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/* LINE OF KANAGAWA YAMADA! DILARANG HAPUS ATAU MODIFIKASI KALO LU FORK / COPY REPO INI!!!!!!
+/*
+====================================== 1.0 RELEASE ======================================
+
+LINE OF KANAGAWA YAMADA! DILARANG HAPUS ATAU MODIFIKASI KALO LU FORK / COPY REPO INI!!!!!!
 KALO MAU NAMBAH TARO DIBAWAH! AI JUGA! DILARANG KERAS HAPUS ATAU MODIFIKASI INI! BERANI MODIF GW
 GEBUKIN LU!
 
@@ -196,4 +199,31 @@ albert.wesley.dion@gmail.com
 Kalo sampai Inaho baca ini (Yang kayaknya nga mungkin)
 Aku cuma mau ngomong... Makasih buat covernya, aku suka. Semoga next kalo ada yang kaya aku kamu
 notice dia ya? Mungkin dia lebih pantas di notice daripada diriku ini. Semangat untuk karirmu Inaho
+ */
+
+/*
+====================================== 2.0 RELEASE ======================================
+
+LINE OF KANAGAWA YAMADA! DILARANG HAPUS ATAU MODIFIKASI KALO LU FORK / COPY REPO INI!!!!!!
+KALO MAU NAMBAH TARO DIBAWAH! AI JUGA! DILARANG KERAS HAPUS ATAU MODIFIKASI INI! BERANI MODIF GW
+GEBUKIN LU!
+
+Jadi ini adalah notice untuk rilisnya Inaho Music Player dengan Versi 2.0
+
+Aku sempat ngomong (ato lebih tepatnya comment di Streamnya Inaho dari Bandung
+
+https://www.youtube.com/watch?v=pA_32BEx5Yc&t=10406s
+
+Lebih tepatnya pada 2:52:41
+
+Well... At least dinotice sih =_=
+Jujur aku nda tau dia ngomong apa setelah 2:53:21 (Because dawg, ini artinya apa cok?)
+Coba yang tau silahkan open issue kalo terkait ini. Makasih
+
+As for now, ini adalah commit terakhir untuk versi 2.0 (Setidaknya kalo aku nda nemu bug lagi.
+
+Thank you Inaho udah mau baca commentku.
+
+Signed: Kanagawa Yamada
+albert.wesley.dion@gmail.com
  */
