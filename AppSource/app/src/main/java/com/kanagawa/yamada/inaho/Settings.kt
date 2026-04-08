@@ -50,6 +50,8 @@ enum class SortOption(val displayName: String) {
     DURATION_DESC("Longest First")
 }
 
+enum class AppTheme { INAHO, YAMADA }
+
 data class AppSettings(
     val userName: String,
     val sortOption: SortOption,
@@ -59,7 +61,8 @@ data class AppSettings(
     val amvBlurAmount: Float = 40f,
     val amvDimAmount: Float = 0.6f,
     val showCoverBackground: Boolean = true,
-    val enableBackgroundBlur: Boolean = true
+    val enableBackgroundBlur: Boolean = true,
+    val theme: AppTheme = AppTheme.INAHO
 )
 
 class SettingsManager(context: Context) {
@@ -77,7 +80,8 @@ class SettingsManager(context: Context) {
             amvBlurAmount = prefs.getFloat("amv_blur_amount", 40f),
             amvDimAmount = prefs.getFloat("amv_dim_amount", 0.6f),
             showCoverBackground = prefs.getBoolean("show_cover_background", true),
-            enableBackgroundBlur = prefs.getBoolean("enable_background_blur", true)
+            enableBackgroundBlur = prefs.getBoolean("enable_background_blur", true),
+            theme = AppTheme.valueOf(prefs.getString("theme", AppTheme.INAHO.name) ?: AppTheme.INAHO.name)
         )
     )
     val settingsFlow = _settingsFlow.asStateFlow()
@@ -126,6 +130,11 @@ class SettingsManager(context: Context) {
         prefs.edit().putBoolean("enable_background_blur", enabled).apply()
         _settingsFlow.value = _settingsFlow.value.copy(enableBackgroundBlur = enabled)
     }
+
+    fun updateTheme(theme: AppTheme) {
+        prefs.edit().putString("theme", theme.name).apply()
+        _settingsFlow.value = _settingsFlow.value.copy(theme = theme)
+    }
 }
 
 // ==========================================
@@ -139,6 +148,8 @@ fun SettingsScreen(
 ) {
     val settings by settingsManager.settingsFlow.collectAsState()
     val context = LocalContext.current
+
+    val accentColor = if (settings.theme == AppTheme.YAMADA) Color(0xFF9E9EDB) else Color(0xFFB8355B)
 
     Column(
         modifier = Modifier
@@ -161,12 +172,12 @@ fun SettingsScreen(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
-                    tint = Color(0xFFB8355B)
+                    tint = accentColor
                 )
             }
             Text(
                 text = "Settings",
-                color = Color(0xFFB8355B),
+                color = accentColor,
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.offset(x = (-8).dp)
@@ -186,6 +197,7 @@ fun SettingsScreen(
             title = "Music Folder Only",
             subtitle = "Only show files in /Music folder",
             checked = settings.onlyMusicFolder,
+            accentColor = accentColor,
             onToggle = { settingsManager.updateOnlyMusicFolder(it) }
         )
 
@@ -204,6 +216,7 @@ fun SettingsScreen(
             title = "AMOLED Black",
             subtitle = "Pure black background to save battery",
             checked = settings.amoledBlack,
+            accentColor = accentColor,
             onToggle = { settingsManager.updateAmoledBlack(it) }
         )
 
@@ -214,8 +227,41 @@ fun SettingsScreen(
             title = "Cover Background",
             subtitle = "Use song cover as a full-screen background",
             checked = settings.showCoverBackground,
+            accentColor = accentColor,
             onToggle = { settingsManager.updateShowCoverBackground(it) }
         )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "THEME",
+            color = Color(0xFF555555),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            ThemeSelectorChip(
+                title = "Inaho",
+                color = Color(0xFFB8355B),
+                isSelected = settings.theme == AppTheme.INAHO,
+                onClick = { settingsManager.updateTheme(AppTheme.INAHO) },
+                modifier = Modifier.weight(1f)
+            )
+            ThemeSelectorChip(
+                title = "Yamada",
+                color = Color(0xFF9E9EDB),
+                isSelected = settings.theme == AppTheme.YAMADA,
+                onClick = { settingsManager.updateTheme(AppTheme.YAMADA) },
+                modifier = Modifier.weight(1f)
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -229,7 +275,7 @@ fun SettingsScreen(
 
         Text(
             text = "Note: AMV features only support files in the .mp4 format.",
-            color = Color(0xFFB8355B),
+            color = accentColor,
             fontSize = 12.sp,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
         )
@@ -239,6 +285,7 @@ fun SettingsScreen(
             title = "AMV Mode Always On",
             subtitle = "Automatically play video instead of thumbnail if available",
             checked = settings.amvModeAlwaysOn,
+            accentColor = accentColor,
             onToggle = { settingsManager.updateAmvModeAlwaysOn(it) }
         )
 
@@ -249,6 +296,7 @@ fun SettingsScreen(
             title = "Enable Background Blur",
             subtitle = "Apply blur effect to backgrounds",
             checked = settings.enableBackgroundBlur,
+            accentColor = accentColor,
             onToggle = { settingsManager.updateEnableBackgroundBlur(it) }
         )
 
@@ -257,6 +305,7 @@ fun SettingsScreen(
             value = settings.amvBlurAmount,
             range = 0f..100f,
             enabled = settings.enableBackgroundBlur,
+            accentColor = accentColor,
             onValueChange = { settingsManager.updateAmvBlurAmount(it) }
         )
 
@@ -265,12 +314,12 @@ fun SettingsScreen(
             value = settings.amvDimAmount,
             range = 0f..1f,
             enabled = true,
+            accentColor = accentColor,
             onValueChange = { settingsManager.updateAmvDimAmount(it) }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // --- NEW STORAGE SECTION ---
         Text(
             text = "STORAGE",
             color = Color(0xFF555555),
@@ -283,6 +332,7 @@ fun SettingsScreen(
             icon = Icons.Default.Delete,
             title = "Clear Cover Cache",
             subtitle = "Recreate cached song cover",
+            accentColor = accentColor,
             onClick = {
                 val artDir = File(context.cacheDir, "art")
                 if (artDir.exists()) {
@@ -293,7 +343,6 @@ fun SettingsScreen(
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-        // ---------------------------
 
         Text(
             text = "SORT ORDER",
@@ -320,7 +369,7 @@ fun SettingsScreen(
                 ) {
                     Text(
                         text = option.displayName,
-                        color = if (isSelected) Color(0xFFB8355B) else Color.White,
+                        color = if (isSelected) accentColor else Color.White,
                         fontSize = 16.sp,
                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                         modifier = Modifier.weight(1f)
@@ -330,7 +379,7 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .size(8.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFFB8355B))
+                                .background(accentColor)
                         )
                     }
                 }
@@ -349,7 +398,7 @@ fun SettingsScreen(
         Text(
             text = buildAnnotatedString {
                 withStyle(style = SpanStyle(color = Color.White)) { append("THE ") }
-                withStyle(style = SpanStyle(color = Color(0xFFB8355B))) { append("DEVELOPERS") }
+                withStyle(style = SpanStyle(color = accentColor)) { append("DEVELOPERS") }
             },
             fontSize = 30.sp,
             fontWeight = FontWeight.Bold,
@@ -364,8 +413,8 @@ fun SettingsScreen(
             description = "VTuber / VTeacher of Indonesia. Founder and Leader of Kanagawa Lab Community",
             socials = {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    SocialLink(iconResId = R.drawable.github, text = "GitHub", url = "https://github.com/LoggingNewMemory") // Ensure these drawables exist
-                    SocialLink(iconResId = R.drawable.youtube, text = "YouTube", url = "https://www.youtube.com/@KanagawaYamada")
+                    SocialLink(iconResId = R.drawable.github, text = "GitHub", url = "https://github.com/LoggingNewMemory", accentColor = accentColor)
+                    SocialLink(iconResId = R.drawable.youtube, text = "YouTube", url = "https://www.youtube.com/@KanagawaYamada", accentColor = accentColor)
                 }
             }
         )
@@ -374,14 +423,14 @@ fun SettingsScreen(
 
         DeveloperProfile(
             role = "Inspired By",
-            roleColor = Color(0xFFB8355B),
+            roleColor = accentColor,
             avatarResId = R.drawable.ic_inaho, // Ensure this exists in your res/drawable
             name = "Ochinai Inaho",
             description = "Japanese VTuber under the agency of Goraku",
             socials = {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    SocialLink(iconResId = R.drawable.x, text = "X", url = "https://x.com/inaho_vt") // Ensure this drawable exists
-                    SocialLink(iconResId = R.drawable.youtube, text = "YouTube", url = "https://www.youtube.com/@%E8%90%BD%E4%B9%83%E3%81%84%E3%81%AA%E3%81%BB")
+                    SocialLink(iconResId = R.drawable.x, text = "X", url = "https://x.com/inaho_vt", accentColor = accentColor)
+                    SocialLink(iconResId = R.drawable.youtube, text = "YouTube", url = "https://www.youtube.com/@%E8%90%BD%E4%B9%83%E3%81%84%E3%81%AA%E3%81%BB", accentColor = accentColor)
                 }
             }
         )
@@ -391,8 +440,36 @@ fun SettingsScreen(
 }
 
 @Composable
+private fun ThemeSelectorChip(
+    title: String,
+    color: Color,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val bgColor = if (isSelected) color else Color(0xFF1E1414)
+    val contentColor = if (isSelected) Color.White else color
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(bgColor)
+            .clickable(onClick = onClick)
+            .padding(vertical = 14.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = title,
+            color = contentColor,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
 private fun SettingsToggleRow(
-    icon: ImageVector, title: String, subtitle: String, checked: Boolean, onToggle: (Boolean) -> Unit
+    icon: ImageVector, title: String, subtitle: String, checked: Boolean, accentColor: Color, onToggle: (Boolean) -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().clickable { onToggle(!checked) }.padding(vertical = 10.dp, horizontal = 12.dp),
@@ -402,7 +479,7 @@ private fun SettingsToggleRow(
             modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF1E1414)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(imageVector = icon, contentDescription = null, tint = Color(0xFFB8355B), modifier = Modifier.size(22.dp))
+            Icon(imageVector = icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(22.dp))
         }
         Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -412,7 +489,7 @@ private fun SettingsToggleRow(
         Switch(
             checked = checked, onCheckedChange = onToggle,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White, checkedTrackColor = Color(0xFFB8355B),
+                checkedThumbColor = Color.White, checkedTrackColor = accentColor,
                 uncheckedThumbColor = Color.LightGray, uncheckedTrackColor = Color(0xFF2C2C2C)
             )
         )
@@ -425,6 +502,7 @@ private fun SettingsSliderRow(
     value: Float,
     range: ClosedFloatingPointRange<Float>,
     enabled: Boolean,
+    accentColor: Color,
     onValueChange: (Float) -> Unit
 ) {
     val alpha = if (enabled) 1f else 0.4f
@@ -433,7 +511,7 @@ private fun SettingsSliderRow(
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(text = title, color = Color.White.copy(alpha = alpha), fontSize = 16.sp, fontWeight = FontWeight.Medium)
             val displayValue = if (range.endInclusive > 1f) value.toInt().toString() else String.format("%.2f", value)
-            Text(text = displayValue, color = Color(0xFFB8355B).copy(alpha = alpha), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text(text = displayValue, color = accentColor.copy(alpha = alpha), fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
         Slider(
             value = value,
@@ -442,7 +520,7 @@ private fun SettingsSliderRow(
             enabled = enabled,
             colors = SliderDefaults.colors(
                 thumbColor = if (enabled) Color.White else Color.Gray,
-                activeTrackColor = if (enabled) Color(0xFFB8355B) else Color(0xFF555555),
+                activeTrackColor = if (enabled) accentColor else Color(0xFF555555),
                 inactiveTrackColor = Color(0xFF2C2C2C)
             )
         )
@@ -451,7 +529,7 @@ private fun SettingsSliderRow(
 
 @Composable
 private fun SettingsActionRow(
-    icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit
+    icon: ImageVector, title: String, subtitle: String, accentColor: Color, onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -467,7 +545,7 @@ private fun SettingsActionRow(
                 .background(Color(0xFF1E1414)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(imageVector = icon, contentDescription = null, tint = Color(0xFFB8355B), modifier = Modifier.size(22.dp))
+            Icon(imageVector = icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(22.dp))
         }
         Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -504,14 +582,14 @@ private fun DeveloperProfile(
 }
 
 @Composable
-private fun SocialLink(iconResId: Int, text: String, url: String) {
+private fun SocialLink(iconResId: Int, text: String, url: String, accentColor: Color) {
     val uriHandler = LocalUriHandler.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.clip(RoundedCornerShape(4.dp)).clickable { uriHandler.openUri(url) }.padding(vertical = 4.dp, horizontal = 2.dp)
     ) {
-        Icon(painter = painterResource(id = iconResId), contentDescription = text, tint = Color(0xFFB8355B), modifier = Modifier.size(20.dp))
+        Icon(painter = painterResource(id = iconResId), contentDescription = text, tint = accentColor, modifier = Modifier.size(20.dp))
         Spacer(modifier = Modifier.width(6.dp))
-        Text(text = text, color = Color(0xFFB8355B), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Text(text = text, color = accentColor, fontSize = 14.sp, fontWeight = FontWeight.Medium)
     }
 }

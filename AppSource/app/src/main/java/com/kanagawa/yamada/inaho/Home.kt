@@ -56,11 +56,12 @@ fun HomeScreen(
 
     val bgColor = if (settings.amoledBlack) Color.Black else Color(0xFF120E0E)
     val surfaceColor = if (settings.amoledBlack) Color(0xFF0A0A0A) else Color(0xFF1E1414)
+    val accentColor = if (settings.theme == AppTheme.YAMADA) Color(0xFF9E9EDB) else Color(0xFFB8355B)
 
     val isVip = remember(settings.userName) {
         listOf("Kanagawa Yamada", "Ochinai Inaho", "落乃いなほ").contains(settings.userName.trim())
     }
-    val nameColor = if (isVip) Color(0xFFB8355B) else Color.White
+    val nameColor = if (isVip) accentColor else Color.White
 
     var hasPermission by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED)
@@ -89,7 +90,6 @@ fun HomeScreen(
         if (hasPermission) {
             withContext(Dispatchers.IO) {
                 try {
-                    // Update query to check MediaStore.Files directly for both Audio & Video
                     val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
                     } else {
@@ -259,7 +259,7 @@ fun HomeScreen(
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2020))
             ) {
-                Text("Let Inaho Make Your Playlist Today!", color = Color(0xFFB8355B), fontWeight = FontWeight.SemiBold)
+                Text("Let Inaho Make Your Playlist Today!", color = accentColor, fontWeight = FontWeight.SemiBold)
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -277,6 +277,7 @@ fun HomeScreen(
                             song = song,
                             coverBitmap = artCache[song.id],
                             isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
+                            accentColor = accentColor,
                             onClick = {
                                 val safeQueue = if (fullLibrary.isNotEmpty()) fullLibrary else listOf(song)
                                 val queueIndex = safeQueue.indexOfFirst { it.id == song.id }.takeIf { it >= 0 } ?: 0
@@ -315,7 +316,7 @@ fun HomeScreen(
             val targetProgress = (livePositionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
             val animatedProgress by animateFloatAsState(
                 targetValue = targetProgress,
-                animationSpec = tween(durationMillis = 200, easing = LinearEasing), // Match delay for smooth sync
+                animationSpec = tween(durationMillis = 200, easing = LinearEasing),
                 label = "MiniPlayerProgress"
             )
 
@@ -327,10 +328,10 @@ fun HomeScreen(
                         // 1. Static surface background
                         drawRect(color = surfaceColor)
 
-                        // 2. Dynamic pink progress bar on top
+                        // 2. Dynamic progress bar on top
                         val progressWidth = size.width * animatedProgress
                         drawRect(
-                            color = Color(0xFFB8355B).copy(alpha = 0.25f), // Adjust alpha here if you want it more/less opaque
+                            color = accentColor.copy(alpha = 0.25f),
                             size = Size(width = progressWidth, height = size.height)
                         )
                     }
@@ -339,10 +340,11 @@ fun HomeScreen(
                     playerState = playerState,
                     playerService = playerService,
                     coverBitmap = playerState.currentSong?.let { artCache[it.id] },
+                    accentColor = accentColor,
                     onPlayPause = { playerService?.togglePlayPause() },
                     onNext = { playerService?.skipNext() },
                     onExpand = onNavigateToPlayer,
-                    surfaceColor = Color.Transparent // Ensures our custom drawn background shines through!
+                    surfaceColor = Color.Transparent
                 )
             }
         }

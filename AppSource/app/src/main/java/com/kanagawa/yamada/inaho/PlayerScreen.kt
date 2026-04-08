@@ -129,6 +129,7 @@ fun PlayerScreen(
 
     val bgColor      = if (settings.amoledBlack) Color.Black else Color(0xFF0D0A0A)
     val surfaceColor = if (settings.amoledBlack) Color(0xFF0A0A0A) else Color(0xFF1E1414).copy(alpha = 0.85f)
+    val accentColor  = if (settings.theme == AppTheme.YAMADA) Color(0xFF9E9EDB) else Color(0xFFB8355B)
 
     // Only intercept back presses if the PlayerScreen is actually visible
     BackHandler(enabled = isVisible) { onNavigateBack() }
@@ -241,7 +242,7 @@ fun PlayerScreen(
                         .align(Alignment.CenterStart)
                         .offset(x = (-12).dp)
                 ) {
-                    Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color(0xFFB8355B))
+                    Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = accentColor)
                 }
 
                 audioDetails?.let { details ->
@@ -263,7 +264,7 @@ fun PlayerScreen(
                         .align(Alignment.CenterEnd)
                         .offset(x = 12.dp)
                 ) {
-                    Icon(imageVector = Icons.Default.QueueMusic, contentDescription = "Queue", tint = if (showQueueSheet) Color(0xFFB8355B) else Color.White)
+                    Icon(imageVector = Icons.Default.QueueMusic, contentDescription = "Queue", tint = if (showQueueSheet) accentColor else Color.White)
                 }
             }
 
@@ -275,6 +276,7 @@ fun PlayerScreen(
                 QueuePanel(
                     playerState = playerState,
                     artCache    = artCache,
+                    accentColor = accentColor,
                     onSongClick = { _, index ->
                         playerService?.jumpToQueueIndex(index)
                         showQueueSheet = false
@@ -362,7 +364,7 @@ fun PlayerScreen(
                         Icon(
                             imageVector = if (isFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                             contentDescription = "Favorite",
-                            tint = if (isFav) Color(0xFFB8355B) else Color.White,
+                            tint = if (isFav) accentColor else Color.White,
                             modifier = Modifier.size(26.dp)
                         )
                     }
@@ -406,7 +408,7 @@ fun PlayerScreen(
                         }
                     },
                     modifier = Modifier.weight(1f).padding(horizontal = 6.dp),
-                    colors = SliderDefaults.colors(thumbColor = Color(0xFFB8355B), activeTrackColor = Color(0xFFB8355B), inactiveTrackColor = Color(0xFF3D3030))
+                    colors = SliderDefaults.colors(thumbColor = accentColor, activeTrackColor = accentColor, inactiveTrackColor = Color(0xFF3D3030))
                 )
                 Icon(imageVector = Icons.Default.VolumeUp, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
             }
@@ -429,9 +431,9 @@ fun PlayerScreen(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                ExtraControlChip(icon = Icons.Default.Speed, label = currentSpeedPitchLabel, active = speedPitchActive, onClick = { showSpeedPitchDialog = true })
-                ExtraControlChip(icon = Icons.Default.Equalizer, label = eqActiveLabel, active = eqIsActive, onClick = { showEqDialog = true })
-                ExtraControlChip(icon = Icons.Default.Bedtime, label = if (sleepTimerRemainingMs > 0) formatMs(sleepTimerRemainingMs) else "Sleep", active = sleepTimerRemainingMs > 0, onClick = { showSleepTimerDialog = true })
+                ExtraControlChip(icon = Icons.Default.Speed, label = currentSpeedPitchLabel, active = speedPitchActive, accentColor = accentColor, onClick = { showSpeedPitchDialog = true })
+                ExtraControlChip(icon = Icons.Default.Equalizer, label = eqActiveLabel, active = eqIsActive, accentColor = accentColor, onClick = { showEqDialog = true })
+                ExtraControlChip(icon = Icons.Default.Bedtime, label = if (sleepTimerRemainingMs > 0) formatMs(sleepTimerRemainingMs) else "Sleep", active = sleepTimerRemainingMs > 0, accentColor = accentColor, onClick = { showSleepTimerDialog = true })
             }
 
             Row(
@@ -440,7 +442,7 @@ fun PlayerScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick  = { playerService?.toggleShuffle() }, modifier = Modifier.size(48.dp)) {
-                    Icon(imageVector = Icons.Default.Shuffle, contentDescription = "Shuffle", tint = if (isShuffled) Color(0xFFB8355B) else Color.White, modifier = Modifier.size(26.dp))
+                    Icon(imageVector = Icons.Default.Shuffle, contentDescription = "Shuffle", tint = if (isShuffled) accentColor else Color.White, modifier = Modifier.size(26.dp))
                 }
 
                 IconButton(onClick  = { playerService?.skipPrev() }, enabled  = song != null, modifier = Modifier.size(48.dp)) {
@@ -481,7 +483,7 @@ fun PlayerScreen(
                 }
 
                 IconButton(onClick  = { playerService?.toggleRepeat() }, modifier = Modifier.size(48.dp)) {
-                    Icon(imageVector = Icons.Default.Repeat, contentDescription = "Repeat", tint = if (repeatMode == RepeatMode.ONE) Color(0xFFB8355B) else Color.White, modifier = Modifier.size(26.dp))
+                    Icon(imageVector = Icons.Default.Repeat, contentDescription = "Repeat", tint = if (repeatMode == RepeatMode.ONE) accentColor else Color.White, modifier = Modifier.size(26.dp))
                 }
             }
         }
@@ -491,6 +493,7 @@ fun PlayerScreen(
         SpeedAndPitchDialog(
             initialSpeed = currentSpeed,
             initialPitch = currentPitch,
+            accentColor = accentColor,
             onApply = { s, p ->
                 currentSpeed = s
                 currentPitch = p
@@ -548,6 +551,7 @@ private fun ExtraControlChip(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     active: Boolean,
+    accentColor: Color,
     onClick: () -> Unit
 ) {
     Box(
@@ -559,9 +563,9 @@ private fun ExtraControlChip(
         contentAlignment = Alignment.Center
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(imageVector = icon, contentDescription = label, tint = if (active) Color(0xFFB8355B) else Color(0xFF888888), modifier = Modifier.size(16.dp))
+            Icon(imageVector = icon, contentDescription = label, tint = if (active) accentColor else Color(0xFF888888), modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
-            Text(text = label, color = if (active) Color(0xFFB8355B) else Color.White, fontSize = 13.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.SemiBold)
+            Text(text = label, color = if (active) accentColor else Color.White, fontSize = 13.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.SemiBold)
         }
     }
 }
@@ -570,6 +574,7 @@ private fun ExtraControlChip(
 fun QueuePanel(
     playerState: PlayerState,
     artCache: Map<Long, Bitmap?>,
+    accentColor: Color,
     onSongClick: (Song, Int) -> Unit
 ) {
     val listState = rememberLazyListState()
@@ -616,11 +621,11 @@ fun QueuePanel(
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(text = qSong.title, color = if (isCurrentSong) Color(0xFFB8355B) else Color.White, fontSize = 14.sp, fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Normal, maxLines = 1, modifier = Modifier.basicMarquee())
+                        Text(text = qSong.title, color = if (isCurrentSong) accentColor else Color.White, fontSize = 14.sp, fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Normal, maxLines = 1, modifier = Modifier.basicMarquee())
                         Text(text = qSong.artist, color = Color(0xFF888888), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     if (isCurrentSong) {
-                        Icon(imageVector = Icons.Default.VolumeUp, contentDescription = "Now playing", tint = Color(0xFFB8355B), modifier = Modifier.size(16.dp))
+                        Icon(imageVector = Icons.Default.VolumeUp, contentDescription = "Now playing", tint = accentColor, modifier = Modifier.size(16.dp))
                     } else {
                         Text(text = qSong.formattedDuration, color = Color(0xFF666666), fontSize = 12.sp)
                     }
@@ -635,6 +640,7 @@ fun QueuePanel(
 fun SpeedAndPitchDialog(
     initialSpeed: Float,
     initialPitch: Float,
+    accentColor: Color,
     onApply: (Float, Float) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -652,7 +658,8 @@ fun SpeedAndPitchDialog(
             DiscreteSliderWithLabels(
                 value = speed,
                 onValueChange = { speed = it; onApply(speed, pitch) },
-                labels = labels
+                labels = labels,
+                accentColor = accentColor
             )
 
             Spacer(Modifier.height(24.dp))
@@ -662,7 +669,8 @@ fun SpeedAndPitchDialog(
             DiscreteSliderWithLabels(
                 value = pitch,
                 onValueChange = { pitch = it; onApply(speed, pitch) },
-                labels = labels
+                labels = labels,
+                accentColor = accentColor
             )
 
             Spacer(Modifier.height(32.dp))
@@ -685,7 +693,7 @@ fun SpeedAndPitchDialog(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFFB8355B))
+                        .background(accentColor)
                         .clickable { onDismiss() }
                         .padding(horizontal = 20.dp, vertical = 10.dp)
                 ) {
@@ -700,7 +708,8 @@ fun SpeedAndPitchDialog(
 private fun DiscreteSliderWithLabels(
     value: Float,
     onValueChange: (Float) -> Unit,
-    labels: List<String>
+    labels: List<String>,
+    accentColor: Color
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -712,7 +721,7 @@ private fun DiscreteSliderWithLabels(
                 val isSelected = (value == numValue)
                 Text(
                     text = label,
-                    color = if (isSelected) Color(0xFFB8355B) else Color.White,
+                    color = if (isSelected) accentColor else Color.White,
                     fontSize = 13.sp,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                 )
@@ -724,9 +733,9 @@ private fun DiscreteSliderWithLabels(
             valueRange = 0.5f..2.0f,
             steps = 5,
             colors = SliderDefaults.colors(
-                thumbColor = Color(0xFFB8355B),
-                activeTrackColor = Color(0xFFB8355B),
-                inactiveTrackColor = Color(0xFFB8355B).copy(alpha = 0.3f),
+                thumbColor = accentColor,
+                activeTrackColor = accentColor,
+                inactiveTrackColor = accentColor.copy(alpha = 0.3f),
                 activeTickColor = Color.White,
                 inactiveTickColor = Color.White
             )

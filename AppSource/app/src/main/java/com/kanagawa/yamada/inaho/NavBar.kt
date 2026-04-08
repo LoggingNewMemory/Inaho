@@ -16,10 +16,10 @@ import androidx.compose.ui.unit.dp
 fun NavBar(
     currentScreen: AppScreen,
     onNavigate: (AppScreen) -> Unit,
-    amoledBlack: Boolean
+    amoledBlack: Boolean,
+    accentColor: Color
 ) {
     val containerColor = if (amoledBlack) Color(0xFF0A0A0A) else Color(0xFF1E1414)
-    val selectedColor = Color(0xFFB8355B)
     val unselectedColor = Color(0xFF888888)
 
     NavigationBar(
@@ -34,8 +34,8 @@ fun NavBar(
             icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
             label = { Text("Home") },
             colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = selectedColor,
-                selectedTextColor = selectedColor,
+                selectedIconColor = accentColor,
+                selectedTextColor = accentColor,
                 unselectedIconColor = unselectedColor,
                 unselectedTextColor = unselectedColor,
                 indicatorColor = Color.Transparent
@@ -48,8 +48,8 @@ fun NavBar(
             icon = { Icon(Icons.Default.List, contentDescription = "Songs") },
             label = { Text("Songs") },
             colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = selectedColor,
-                selectedTextColor = selectedColor,
+                selectedIconColor = accentColor,
+                selectedTextColor = accentColor,
                 unselectedIconColor = unselectedColor,
                 unselectedTextColor = unselectedColor,
                 indicatorColor = Color.Transparent
@@ -62,8 +62,8 @@ fun NavBar(
             icon = { Icon(Icons.Default.QueueMusic, contentDescription = "Playlists") },
             label = { Text("Playlists") },
             colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = selectedColor,
-                selectedTextColor = selectedColor,
+                selectedIconColor = accentColor,
+                selectedTextColor = accentColor,
                 unselectedIconColor = unselectedColor,
                 unselectedTextColor = unselectedColor,
                 indicatorColor = Color.Transparent
@@ -76,8 +76,8 @@ fun NavBar(
             icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
             label = { Text("Settings") },
             colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = selectedColor,
-                selectedTextColor = selectedColor,
+                selectedIconColor = accentColor,
+                selectedTextColor = accentColor,
                 unselectedIconColor = unselectedColor,
                 unselectedTextColor = unselectedColor,
                 indicatorColor = Color.Transparent

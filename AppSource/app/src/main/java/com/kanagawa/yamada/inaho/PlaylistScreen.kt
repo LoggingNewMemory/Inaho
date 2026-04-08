@@ -57,6 +57,7 @@ fun PlaylistScreen(
 
     val bgColor = if (settings.amoledBlack) Color.Black else Color(0xFF120E0E)
     val surfaceColor = if (settings.amoledBlack) Color(0xFF0A0A0A) else Color(0xFF1E1414)
+    val accentColor = if (settings.theme == AppTheme.YAMADA) Color(0xFF9E9EDB) else Color(0xFFB8355B)
 
     // Navigation state inside the screen
     var currentView by remember { mutableStateOf("LIST") } // LIST, FAV, CUSTOM
@@ -89,10 +90,10 @@ fun PlaylistScreen(
                     colors = TextFieldDefaults.colors(
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
-                        cursorColor = Color(0xFFB8355B),
+                        cursorColor = accentColor,
                         focusedContainerColor = Color.Transparent,
                         unfocusedContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color(0xFFB8355B),
+                        focusedIndicatorColor = accentColor,
                         unfocusedIndicatorColor = Color(0xFF333333)
                     )
                 )
@@ -101,7 +102,7 @@ fun PlaylistScreen(
                 TextButton(onClick = {
                     if (newName.isNotBlank()) musicViewModel.playlistManager.createPlaylist(newName.trim())
                     showCreateDialog = false
-                }) { Text("Create", color = Color(0xFFB8355B), fontWeight = FontWeight.Bold) }
+                }) { Text("Create", color = accentColor, fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
                 TextButton(onClick = { showCreateDialog = false }) { Text("Cancel", color = Color.LightGray) }
@@ -124,10 +125,10 @@ fun PlaylistScreen(
                     colors = TextFieldDefaults.colors(
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
-                        cursorColor = Color(0xFFB8355B),
+                        cursorColor = accentColor,
                         focusedContainerColor = Color.Transparent,
                         unfocusedContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color(0xFFB8355B),
+                        focusedIndicatorColor = accentColor,
                         unfocusedIndicatorColor = Color(0xFF333333)
                     )
                 )
@@ -139,7 +140,7 @@ fun PlaylistScreen(
                     }
                     showRenameDialog = false
                     renameTarget = null
-                }) { Text("Rename", color = Color(0xFFB8355B), fontWeight = FontWeight.Bold) }
+                }) { Text("Rename", color = accentColor, fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
                 TextButton(onClick = { showRenameDialog = false; renameTarget = null }) {
@@ -167,7 +168,7 @@ fun PlaylistScreen(
                     showDeleteDialog = false
                     deleteTarget = null
                     currentView = "LIST" // Go back to list if we delete the currently viewed playlist
-                }) { Text("Delete", color = Color(0xFFB8355B), fontWeight = FontWeight.Bold) }
+                }) { Text("Delete", color = accentColor, fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteDialog = false; deleteTarget = null }) {
@@ -193,7 +194,7 @@ fun PlaylistScreen(
             ) {
                 Text(
                     text = "Your Library",
-                    color = Color(0xFFB8355B),
+                    color = accentColor,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
@@ -202,7 +203,7 @@ fun PlaylistScreen(
                     onClick = { showCreateDialog = true },
                     modifier = Modifier.background(Color(0xFF2C2020), RoundedCornerShape(12.dp))
                 ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = "Create Playlist", tint = Color(0xFFB8355B))
+                    Icon(imageVector = Icons.Default.Add, contentDescription = "Create Playlist", tint = accentColor)
                 }
             }
 
@@ -349,7 +350,7 @@ fun PlaylistScreen(
                         currentView = "LIST"
                         isEditMode = false // Reset edit mode when leaving
                     }) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color(0xFFB8355B))
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = accentColor)
                     }
 
                     // 3-Dot Menu for Custom Playlists (Favorites shouldn't be renamed/deleted)
@@ -394,9 +395,9 @@ fun PlaylistScreen(
                                 // Delete Playlist
                                 DropdownMenuItem(
                                     leadingIcon = {
-                                        Icon(imageVector = Icons.Default.Delete, contentDescription = null, tint = Color(0xFFB8355B), modifier = Modifier.size(20.dp))
+                                        Icon(imageVector = Icons.Default.Delete, contentDescription = null, tint = accentColor, modifier = Modifier.size(20.dp))
                                     },
-                                    text = { Text("Delete Playlist", color = Color(0xFFB8355B), fontSize = 14.sp) },
+                                    text = { Text("Delete Playlist", color = accentColor, fontSize = 14.sp) },
                                     onClick = {
                                         showTopMenu = false
                                         deleteTarget = selectedPlaylist
@@ -420,7 +421,7 @@ fun PlaylistScreen(
                             .size(110.dp)
                             .shadow(12.dp, RoundedCornerShape(12.dp))
                             .clip(RoundedCornerShape(12.dp))
-                            .background(if (isFavView) Color(0xFFB8355B) else Color(0xFF2C2C2C)),
+                            .background(if (isFavView) accentColor else Color(0xFF2C2C2C)),
                         contentAlignment = Alignment.Center
                     ) {
                         if (heroCover != null) {
@@ -457,7 +458,7 @@ fun PlaylistScreen(
                                 enabled = songsToDisplay.isNotEmpty() && !isEditMode,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color.White,
-                                    contentColor = Color(0xFFB8355B),
+                                    contentColor = accentColor,
                                     disabledContainerColor = Color.White.copy(alpha = 0.2f),
                                     disabledContentColor = Color.White.copy(alpha = 0.5f)
                                 ),
@@ -484,9 +485,9 @@ fun PlaylistScreen(
                                 },
                                 enabled = songsToDisplay.isNotEmpty() && !isEditMode,
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFFB8355B),
+                                    containerColor = accentColor,
                                     contentColor = Color.White,
-                                    disabledContainerColor = Color(0xFFB8355B).copy(alpha = 0.2f),
+                                    disabledContainerColor = accentColor.copy(alpha = 0.2f),
                                     disabledContentColor = Color.White.copy(alpha = 0.5f)
                                 ),
                                 shape = RoundedCornerShape(24.dp),
@@ -556,6 +557,7 @@ fun PlaylistScreen(
                                         coverBitmap = artCache[song.id],
                                         isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying && !isEditMode,
                                         showRemove = isEditMode && !isFavView && selectedPlaylist != null,
+                                        accentColor = accentColor,
                                         modifier = Modifier.weight(1f),
                                         onRemove = {
                                             if (selectedPlaylist != null) {
@@ -579,6 +581,7 @@ private fun PlaylistSongRow(
     coverBitmap: Bitmap?,
     isPlaying: Boolean,
     showRemove: Boolean,
+    accentColor: Color,
     onRemove: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -611,7 +614,7 @@ private fun PlaylistSongRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = song.title,
-                color = if (isPlaying) Color(0xFFB8355B) else Color.White,
+                color = if (isPlaying) accentColor else Color.White,
                 fontSize = 16.sp,
                 fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Medium,
                 maxLines = 1,
@@ -634,7 +637,7 @@ private fun PlaylistSongRow(
                 Icon(
                     imageVector = Icons.Default.RemoveCircleOutline,
                     contentDescription = "Remove from playlist",
-                    tint = Color(0xFFB8355B)
+                    tint = accentColor
                 )
             }
         } else {

@@ -17,6 +17,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.graphics.Color
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -31,7 +32,6 @@ class InahoApp : Application(), SingletonImageLoader.Factory {
 }
 
 // --- Screen Enum Updated ---
-// Removed PLAYER. Player will now act as a persistent overlay to prevent Surface destruction.
 enum class AppScreen {
     SETUP, HOME, LIST, PLAYLIST, SETTINGS
 }
@@ -53,6 +53,8 @@ class MainActivity : ComponentActivity() {
             HaloMusicTheme {
                 val musicViewModel: MusicViewModel = viewModel()
                 val settings by musicViewModel.settingsManager.settingsFlow.collectAsState()
+
+                val accentColor = if (settings.theme == AppTheme.YAMADA) Color(0xFF9E9EDB) else Color(0xFFB8355B)
 
                 // Route to SETUP if name is blank, otherwise go to HOME
                 var currentScreen by rememberSaveable {
@@ -79,7 +81,8 @@ class MainActivity : ComponentActivity() {
                                 NavBar(
                                     currentScreen = currentScreen,
                                     onNavigate = { currentScreen = it },
-                                    amoledBlack = settings.amoledBlack
+                                    amoledBlack = settings.amoledBlack,
+                                    accentColor = accentColor
                                 )
                             }
                         }
@@ -129,7 +132,6 @@ class MainActivity : ComponentActivity() {
                     }
 
                     // --- Persistent Player Overlay ---
-                    // By modifying translationY, the composable stays active in the background, keeping the TextureView Surface alive.
                     val playerOffsetY by animateFloatAsState(
                         targetValue = if (showPlayerScreen) 0f else 1f,
                         animationSpec = tween(400),

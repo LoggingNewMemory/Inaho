@@ -184,6 +184,7 @@ fun MusicListScreen(
 
     val bgColor = if (settings.amoledBlack) Color.Black else Color(0xFF120E0E)
     val surfaceColor = if (settings.amoledBlack) Color(0xFF0A0A0A) else Color(0xFF1E1414)
+    val accentColor = if (settings.theme == AppTheme.YAMADA) Color(0xFF9E9EDB) else Color(0xFFB8355B)
 
     var showOverflowMenu by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
@@ -230,22 +231,22 @@ fun MusicListScreen(
             if (active) {
                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Row(modifier = Modifier.weight(1f).background(surfaceColor, RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = Color(0xFFB8355B), modifier = Modifier.size(18.dp))
+                        Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                         BasicTextField(
                             value = searchQuery, onValueChange = { searchQuery = it }, singleLine = true, textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
-                            cursorBrush = SolidColor(Color(0xFFB8355B)), modifier = Modifier.weight(1f),
+                            cursorBrush = SolidColor(accentColor), modifier = Modifier.weight(1f),
                             decorationBox = { inner -> if (searchQuery.isEmpty()) Text("Search songs, artists…", color = Color(0xFF888888), fontSize = 16.sp); inner() }
                         )
                         if (searchQuery.isNotEmpty()) Icon(imageVector = Icons.Default.Close, contentDescription = "Clear", tint = Color(0xFFAAAAAA), modifier = Modifier.size(18.dp).clickable { searchQuery = "" })
                     }
                     Spacer(Modifier.width(8.dp))
-                    Text(text = "Cancel", color = Color(0xFFB8355B), fontSize = 14.sp, modifier = Modifier.clickable { isSearchActive = false; searchQuery = "" })
+                    Text(text = "Cancel", color = accentColor, fontSize = 14.sp, modifier = Modifier.clickable { isSearchActive = false; searchQuery = "" })
                 }
             } else {
                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                        Text(text = "All Songs", color = Color(0xFFB8355B), fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "All Songs", color = accentColor, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                         if (songs.itemCount > 0) {
                             Spacer(Modifier.width(8.dp))
                             Text(text = "${songs.itemCount}", color = Color(0xFF555555), fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.background(surfaceColor, RoundedCornerShape(6.dp)).padding(horizontal = 7.dp, vertical = 2.dp))
@@ -272,7 +273,7 @@ fun MusicListScreen(
         Box(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
             when {
                 !hasPermission -> Text("Storage permission is required.", color = Color.White)
-                songs.loadState.refresh is LoadState.Loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator(color = Color(0xFFB8355B)) }
+                songs.loadState.refresh is LoadState.Loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator(color = accentColor) }
                 songs.itemCount == 0 -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text("No music files found.", color = Color.LightGray) }
                 filteredSongs != null -> {
                     if (filteredSongs.isEmpty()) Box(Modifier.fillMaxSize(), Alignment.Center) { Text("No results for \"$searchQuery\"", color = Color.LightGray) }
@@ -284,6 +285,7 @@ fun MusicListScreen(
                                 SongListItem(
                                     song = song, coverBitmap = artCache[song.id],
                                     isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
+                                    accentColor = accentColor,
                                     onClick = {
                                         playerService?.playSong(song, filteredSongs, index)
                                         musicViewModel.preloadQueueWindow(filteredSongs, index)
@@ -303,6 +305,7 @@ fun MusicListScreen(
                                 SongListItem(
                                     song = song, coverBitmap = artCache[song.id],
                                     isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
+                                    accentColor = accentColor,
                                     onClick = {
                                         val safeQueue = if (fullLibrary.isNotEmpty()) fullLibrary else listOf(song)
                                         val queueIndex = safeQueue.indexOfFirst { it.id == song.id }.takeIf { it >= 0 } ?: 0
@@ -319,14 +322,14 @@ fun MusicListScreen(
         }
 
         AnimatedVisibility(visible = playerState.currentSong != null, enter = slideInVertically(initialOffsetY = { it }) + fadeIn(), exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()) {
-            MiniPlayerBar(playerState = playerState, playerService = playerService, coverBitmap = playerState.currentSong?.let { artCache[it.id] }, onPlayPause = { playerService?.togglePlayPause() }, onNext = { playerService?.skipNext() }, onExpand = onNavigateToPlayer, surfaceColor = surfaceColor)
+            MiniPlayerBar(playerState = playerState, playerService = playerService, coverBitmap = playerState.currentSong?.let { artCache[it.id] }, accentColor = accentColor, onPlayPause = { playerService?.togglePlayPause() }, onNext = { playerService?.skipNext() }, onExpand = onNavigateToPlayer, surfaceColor = surfaceColor)
         }
     }
 }
 
 // Keep the Shared UI Components here for use across screens
 @Composable
-fun MiniPlayerBar(playerState: PlayerState, playerService: PlayerService?, coverBitmap: Bitmap?, onPlayPause: () -> Unit, onNext: () -> Unit, onExpand: () -> Unit, surfaceColor: Color) {
+fun MiniPlayerBar(playerState: PlayerState, playerService: PlayerService?, coverBitmap: Bitmap?, accentColor: Color, onPlayPause: () -> Unit, onNext: () -> Unit, onExpand: () -> Unit, surfaceColor: Color) {
     val song = playerState.currentSong ?: return
     var livePositionMs by remember(song.id) { mutableLongStateOf(playerState.positionMs) }
     LaunchedEffect(playerState.isPlaying, playerService, song.id) {
@@ -338,7 +341,7 @@ fun MiniPlayerBar(playerState: PlayerState, playerService: PlayerService?, cover
     val progress = if (playerState.durationMs > 0) (livePositionMs.toFloat() / playerState.durationMs.toFloat()).coerceIn(0f, 1f) else 0f
     Surface(modifier = Modifier.fillMaxWidth().clickable { onExpand() }, color = surfaceColor, tonalElevation = 4.dp) {
         Column {
-            Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(Color(0xFF2C2C2C))) { Box(modifier = Modifier.fillMaxWidth(progress).height(2.dp).background(Color(0xFFB8355B))) }
+            Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(Color(0xFF2C2C2C))) { Box(modifier = Modifier.fillMaxWidth(progress).height(2.dp).background(accentColor)) }
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (coverBitmap != null) Image(bitmap = coverBitmap.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)))
                 else Box(modifier = Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF2C2C2C)))
@@ -359,13 +362,13 @@ fun MiniPlayerBar(playerState: PlayerState, playerService: PlayerService?, cover
 }
 
 @Composable
-fun SongListItem(song: Song, coverBitmap: Bitmap?, isPlaying: Boolean = false, onClick: () -> Unit) {
+fun SongListItem(song: Song, coverBitmap: Bitmap?, isPlaying: Boolean = false, accentColor: Color, onClick: () -> Unit) {
     Row(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick), verticalAlignment = Alignment.CenterVertically) {
         if (coverBitmap != null) Image(bitmap = coverBitmap.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(50.dp).clip(RoundedCornerShape(4.dp)))
         else Box(modifier = Modifier.size(50.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF2C2C2C)))
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(text = song.title, color = if (isPlaying) Color(0xFFB8355B) else Color.White, fontSize = 16.sp, fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(text = song.title, color = if (isPlaying) accentColor else Color.White, fontSize = 16.sp, fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(text = song.artist, color = Color.LightGray, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.width(4.dp))
