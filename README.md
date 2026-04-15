@@ -20,6 +20,7 @@ No accounts. No streaming. No cloud. Just your music, on your device.
 - **AMOLED Black theme** — a true-black option to save battery on OLED/AMOLED displays
 - **Animated mini-player** — persistent bar at the bottom of your library with a live progress strip and animated play/pause icon
 - **Dynamic album art** — extracted, downsampled, and aggressively cached (LRU + disk) for stutter-free scrolling
+- **AMV Mode** — Allow users to play .mp4 (Like song covers, etc)
 
 ### 🎧 Advanced Audio & Playback
 
@@ -27,6 +28,7 @@ No accounts. No streaming. No cloud. Just your music, on your device.
   - *Smart* preset uses `DynamicsProcessing` (API 28+) for dynamic gain riding — boosting signal on beat drops and lifts, with automatic `LoudnessEnhancer` fallback on older devices
   - All presets backed by Android's native `Equalizer`; EQ choice persists across sessions
 - **Playback speed control** — 0.5× to 2.0× in six steps, pitch-stable
+- **Pitch control** — Idk why I even add this, this is done because someone request it
 - **Sleep timer** — auto-pause after 5, 10, 15, 20, 30, or 60 minutes
 - **Background & lock screen playback** — full `MediaSessionCompat` integration for rich media notifications and hardware controls
 
@@ -36,6 +38,8 @@ No accounts. No streaming. No cloud. Just your music, on your device.
 - **Folder filtering** — optionally restrict your library to the `/Music` folder, keeping out voice notes and app audio
 - **Favorites** — heart any track to build a dedicated favorites list, persisted locally
 - **Queue view** — "Up Next" panel that auto-scrolls to the current song and lets you jump to any track
+- **Custom Playlist** — Go make your own playlist! 
+- **Clear Cover Cache** — Clear it sometimes, it won't hurt
 
 ---
 
