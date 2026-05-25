@@ -413,16 +413,34 @@ fun NoiseMaskingPanel(noiseManager: YamadaNoiseManager) {
         if (isEnabled) {
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Masking Volume Slider
             Text("Layer Volume", color = Color(0xFF888888), fontSize = 10.sp)
-            Slider(
-                value = volume,
-                onValueChange = { noiseManager.setVolume(it) },
-                colors = SliderDefaults.colors(
-                    thumbColor = Color(0xFFD4577A),
-                    activeTrackColor = Color(0xFFB8355B)
+
+            // 🧪 KOYORI'S UI UPGRADE: The Slider and the % Text side-by-side!
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Slider(
+                    value = volume,
+                    onValueChange = { noiseManager.setVolume(it) },
+                    modifier = Modifier.weight(1f), // Pushes the text to the edge
+                    colors = SliderDefaults.colors(
+                        thumbColor = Color(0xFFD4577A),
+                        activeTrackColor = Color(0xFFB8355B)
+                    )
                 )
-            )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Calculates 0.0-1.0 into 0-100 format!
+                Text(
+                    text = "${(volume * 100).toInt()}%",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.defaultMinSize(minWidth = 36.dp) // Keeps layout stable
+                )
+            }
         }
     }
 }

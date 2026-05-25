@@ -155,7 +155,7 @@ class PlayerService : Service() {
         setupMediaSession()
 
         eqManager = YamadaEQManager(applicationContext)
-        noiseManager = YamadaNoiseManager()
+        noiseManager = YamadaNoiseManager(applicationContext)
 
         val filter = IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

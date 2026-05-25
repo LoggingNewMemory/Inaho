@@ -5,6 +5,7 @@ Copyright (C) 2026 Kanagawa Yamada
 
 package com.kanagawa.yamada.inaho
 
+import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
@@ -13,13 +14,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlin.random.Random
 
-class YamadaNoiseManager {
+class YamadaNoiseManager(private val context: Context) {
 
-    private val _isEnabled = MutableStateFlow(false)
+    // 🧪 KOYORI'S MEMORY BANK: Initialize SharedPreferences
+    private val prefs = context.getSharedPreferences("inaho_noise", Context.MODE_PRIVATE)
+
+    // Load saved states, defaulting to false and 50% if nothing is saved yet!
+    private val _isEnabled = MutableStateFlow(prefs.getBoolean("is_enabled", false))
     val isEnabled = _isEnabled.asStateFlow()
 
-    // 0.0 to 1.0 (UI Volume)
-    private val _volume = MutableStateFlow(0.5f)
+    private val _volume = MutableStateFlow(prefs.getFloat("volume", 0.5f))
     val volume = _volume.asStateFlow()
 
     private var isMusicPlaying = false
@@ -36,6 +40,7 @@ class YamadaNoiseManager {
 
     fun toggleNoise(enabled: Boolean) {
         _isEnabled.value = enabled
+        prefs.edit().putBoolean("is_enabled", enabled).apply() // 💾 Save state!
         evaluateEngine()
     }
 
@@ -46,11 +51,11 @@ class YamadaNoiseManager {
 
     fun setVolume(value: Float) {
         _volume.value = value.coerceIn(0f, 1f)
-        audioTrack?.setVolume(_volume.value * 0.2f)
+        prefs.edit().putFloat("volume", _volume.value).apply() // 💾 Save volume!
+        audioTrack?.setVolume(_volume.value * 0.6f) // 60% boost limit still active!
     }
 
     private fun evaluateEngine() {
-        // Only run the engine if it is BOTH enabled in the UI AND the music is actually playing!
         if (_isEnabled.value && isMusicPlaying) {
             startEngine()
         } else {
@@ -69,26 +74,20 @@ class YamadaNoiseManager {
             bufferSize,
             AudioTrack.MODE_STREAM
         ).apply {
-            setVolume(_volume.value * 0.2f) // Apply the 20% limit here too!
+            setVolume(_volume.value * 0.6f)
             play()
         }
 
         noiseJob = coroutineScope.launch(Dispatchers.Default) {
             val audioData = ShortArray(bufferSize)
-            var brownState = 0f // Pure Brown Noise state!
+            var brownState = 0f
 
             while (isActive) {
                 for (i in audioData.indices) {
                     val white = Random.nextFloat() * 2f - 1f
-
-                    // Filter into deep, warm Brown Noise
                     brownState = (brownState + (0.02f * white)) / 1.02f
                     var brown = brownState * 3.5f
-
-                    // Prevent hard clipping
                     brown = brown.coerceIn(-1f, 1f)
-
-                    // Convert Float to 16-bit PCM Short
                     audioData[i] = (brown * Short.MAX_VALUE).toInt().toShort()
                 }
                 audioTrack?.write(audioData, 0, bufferSize)
