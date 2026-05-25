@@ -388,13 +388,13 @@ fun NoiseMaskingPanel(noiseManager: YamadaNoiseManager) {
         ) {
             Column {
                 Text(
-                    text = "Acoustic Masking Layer",
+                    text = "Audio Masking",
                     color = Color.White,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = if (isEnabled) "Active: Deep Brown Noise" else "Off",
+                    text = if (isEnabled) "Audio Masking Online" else "Audio Masking Offline",
                     color = Color(0xFF888888),
                     fontSize = 11.sp
                 )
