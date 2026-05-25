@@ -17,6 +17,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -252,6 +256,7 @@ class YamadaEQManager(private val context: Context) {
 @Composable
 fun EqDialog(
     eqManager: YamadaEQManager,
+    noiseManager: YamadaNoiseManager, // Passed our shiny new manager here!
     onDismiss: () -> Unit
 ) {
     val currentPreset by eqManager.currentPreset.collectAsState()
@@ -314,8 +319,12 @@ fun EqDialog(
 
             if (currentPreset != EqPreset.OFF) {
                 Spacer(modifier = Modifier.height(8.dp))
-                EqBandVisualizer(preset = currentPreset)
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Injected the Acoustic Masking Panel!
+            NoiseMaskingPanel(noiseManager = noiseManager)
         }
     }
 }
@@ -365,58 +374,79 @@ private fun EqPresetTile(
 }
 
 @Composable
-private fun EqBandVisualizer(preset: EqPreset) {
-    val bandLabels = listOf("60", "230", "910", "3.6k", "14k")
-    val maxGain = 1000
+fun NoiseMaskingPanel(noiseManager: YamadaNoiseManager) {
+    val isEnabled by noiseManager.isEnabled.collectAsState()
+    val warmth by noiseManager.warmth.collectAsState()
+    val volume by noiseManager.volume.collectAsState()
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "FREQUENCY RESPONSE",
-            color = Color(0xFF555555),
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFF251818))
+            .padding(16.dp)
+    ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            preset.bands.forEachIndexed { i, gainMb ->
-                val fraction = ((gainMb + maxGain).toFloat() / (2 * maxGain)).coerceIn(0.05f, 1f)
-                Column(
-                    modifier = Modifier.weight(1f),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(fraction)
-                            .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                            .background(
-                                if (gainMb > 0) Color(0xFFB8355B)
-                                else if (gainMb < 0) Color(0xFF553030)
-                                else Color(0xFF3A2424)
-                            )
-                    )
-                }
-            }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            bandLabels.forEach { label ->
+            Column {
                 Text(
-                    text = label,
-                    color = Color(0xFF666666),
-                    fontSize = 9.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f)
+                    text = "Acoustic Masking Layer",
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = if (isEnabled) "Active: Blocking distractions" else "Off",
+                    color = Color(0xFF888888),
+                    fontSize = 11.sp
                 )
             }
+            Switch(
+                checked = isEnabled,
+                onCheckedChange = { noiseManager.toggleNoise(it) },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = Color(0xFFB8355B),
+                    uncheckedTrackColor = Color(0xFF3A2424)
+                )
+            )
+        }
+
+        if (isEnabled) {
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Masking Volume Slider
+            Text("Layer Volume", color = Color(0xFF888888), fontSize = 10.sp)
+            Slider(
+                value = volume,
+                onValueChange = { noiseManager.setVolume(it) },
+                colors = SliderDefaults.colors(
+                    thumbColor = Color(0xFFD4577A),
+                    activeTrackColor = Color(0xFFB8355B)
+                )
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Warmth (Pink/Brown) Mixer Slider
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Pink", color = Color(0xFF888888), fontSize = 10.sp)
+                Text("Brown", color = Color(0xFF888888), fontSize = 10.sp)
+            }
+            Slider(
+                value = warmth,
+                onValueChange = { noiseManager.setWarmth(it) },
+                colors = SliderDefaults.colors(
+                    thumbColor = Color(0xFFD4577A),
+                    activeTrackColor = Color(0xFFB8355B)
+                )
+            )
         }
     }
 }

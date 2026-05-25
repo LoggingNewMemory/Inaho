@@ -622,7 +622,11 @@ fun PlayerScreen(
     if (showEqDialog) {
         val service = playerService
         if (service != null) {
-            EqDialog(eqManager = service.eqManager, onDismiss = { showEqDialog = false })
+            EqDialog(
+                eqManager = service.eqManager,
+                noiseManager = service.noiseManager,
+                onDismiss = { showEqDialog = false }
+            )
         } else {
             Dialog(onDismissRequest = { showEqDialog = false }) {
                 Box(modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(Color(0xFF1A1010)).padding(24.dp), contentAlignment = Alignment.Center) {

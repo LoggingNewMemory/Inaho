@@ -105,6 +105,9 @@ class PlayerService : Service() {
     lateinit var eqManager: YamadaEQManager
         private set
 
+    lateinit var noiseManager: YamadaNoiseManager
+        private set
+
     // ── Video Surface Handling ─────────────────────────────────────────────────
     var currentSurface: Surface? = null
         private set
@@ -150,7 +153,9 @@ class PlayerService : Service() {
         super.onCreate()
         createNotificationChannel()
         setupMediaSession()
+
         eqManager = YamadaEQManager(applicationContext)
+        noiseManager = YamadaNoiseManager()
 
         val filter = IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -218,20 +223,16 @@ class PlayerService : Service() {
     }
 
     private fun getAlbumArtBitmap(context: Context, song: Song): Bitmap? {
-        // 1. Try reading the cached artwork first (extremely fast, prevents stutter on notification generation)
         val cacheFile = java.io.File(context.cacheDir, "art/${song.id}.png")
         if (cacheFile.exists()) {
             try { return BitmapFactory.decodeFile(cacheFile.absolutePath) } catch (_: Exception) {}
         }
 
-        // 2. Fallback to extracting metadata on the fly natively
         return try {
             if (song.isVideo) {
-                // Native Android Q+ Way for Video Thumbnails
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     context.contentResolver.loadThumbnail(song.trackUri, android.util.Size(800, 800), null)
                 } else {
-                    // Legacy Way for older devices
                     val retriever = MediaMetadataRetriever()
                     retriever.setDataSource(context, song.trackUri)
                     val frame = retriever.getFrameAtTime(-1)
@@ -440,7 +441,6 @@ class PlayerService : Service() {
         }
     }
 
-    // ── NATIVE HARDWARE DECODER CLEANUP ──────────────────────────────────────────
     private fun safelyDestroyPlayer(mp: MediaPlayer?) {
         if (mp == null) return
         try { mp.setOnPreparedListener(null) } catch (_: Exception) {}
@@ -451,10 +451,10 @@ class PlayerService : Service() {
         try { mp.reset() } catch (_: Exception) {}
         try { mp.release() } catch (_: Exception) {}
     }
-    // ──────────────────────────────────────────────────────────────────────────
 
     fun stopPlayback() {
         eqManager.release()
+        noiseManager.release()
 
         safelyDestroyPlayer(bgMediaPlayer)
         bgMediaPlayer = null
@@ -503,22 +503,18 @@ class PlayerService : Service() {
         isMainPrepared = false
         isBgPrepared = false
 
-        // Start explicit safe guards against IllegalStateException
         isMainPreparing = true
-        isBgPreparing = false // Bg player hasn't started yet
+        isBgPreparing = false
 
-        // FORCEFULLY AND SAFELY PURGE OLD PLAYERS TO PREVENT DECODER LEAKS
         safelyDestroyPlayer(bgMediaPlayer)
         bgMediaPlayer = null
         safelyDestroyPlayer(mediaPlayer)
         mediaPlayer = null
 
-        // --- Prepare Main Player FIRST to guarantee it gets the hardware decoder ---
         mediaPlayer = MediaPlayer().apply {
             try {
                 setAudioAttributes(AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).setUsage(AudioAttributes.USAGE_MEDIA).build())
 
-                // GUARD: Only set the surface if it's already generated and valid
                 if (song.isVideo && currentSurface?.isValid == true) {
                     setSurface(currentSurface)
                 }
@@ -541,17 +537,13 @@ class PlayerService : Service() {
                         try { mp.playbackParams = mp.playbackParams.setSpeed(currentPlaybackSpeed).setPitch(currentPlaybackPitch) } catch (_: Exception) {}
                     }
 
-                    // Main is now prepared and safe to receive dynamic surfaces
                     isMainPreparing = false
                     isMainPrepared = true
 
-                    // Late attach surface if Compose created it *while* we were preparing
                     if (song.isVideo && currentSurface?.isValid == true) {
                         try { mp.setSurface(currentSurface) } catch(_: Exception) {}
                     }
 
-                    // SEQUENTIAL DECODING: Only attempt to prepare the background video
-                    // AFTER the main video has successfully claimed a hardware decoder!
                     if (song.isVideo) {
                         prepareBgPlayer(song, generation)
                     } else {
@@ -565,7 +557,7 @@ class PlayerService : Service() {
                 setOnErrorListener { _, _, _ ->
                     if (generation == playGeneration) {
                         isMainPreparing = false
-                        isMainPrepared = true // Prevent deadlock
+                        isMainPrepared = true
                         _playerState.value = _playerState.value.copy(isPlaying = false)
                     }
                     true
@@ -591,7 +583,7 @@ class PlayerService : Service() {
                     setSurface(currentBgSurface)
                 }
 
-                setVolume(0f, 0f) // Muted!
+                setVolume(0f, 0f)
                 setDataSource(applicationContext, song.trackUri)
 
                 setOnPreparedListener { mp ->
@@ -609,8 +601,6 @@ class PlayerService : Service() {
                     checkAndStartBoth(generation)
                 }
                 setOnErrorListener { _, _, _ ->
-                    // If the device denies a second hardware decoder, we catch it here gracefully.
-                    // We mark it as prepared anyway so the Main Player can still play perfectly!
                     if (generation == playGeneration) {
                         isBgPreparing = false
                         isBgPrepared = true
@@ -685,7 +675,9 @@ class PlayerService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         runCatching { unregisterReceiver(noisyAudioReceiver) }
+
         eqManager.release()
+        noiseManager.release()
 
         safelyDestroyPlayer(bgMediaPlayer)
         bgMediaPlayer = null
