@@ -321,9 +321,6 @@ fun EqDialog(
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Injected the Acoustic Masking Panel!
             NoiseMaskingPanel(noiseManager = noiseManager)
         }
     }
@@ -372,11 +369,9 @@ private fun EqPresetTile(
         )
     }
 }
-
 @Composable
 fun NoiseMaskingPanel(noiseManager: YamadaNoiseManager) {
     val isEnabled by noiseManager.isEnabled.collectAsState()
-    val warmth by noiseManager.warmth.collectAsState()
     val volume by noiseManager.volume.collectAsState()
 
     Column(
@@ -399,7 +394,7 @@ fun NoiseMaskingPanel(noiseManager: YamadaNoiseManager) {
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = if (isEnabled) "Active: Blocking distractions" else "Off",
+                    text = if (isEnabled) "Active: Deep Brown Noise" else "Off",
                     color = Color(0xFF888888),
                     fontSize = 11.sp
                 )
@@ -423,25 +418,6 @@ fun NoiseMaskingPanel(noiseManager: YamadaNoiseManager) {
             Slider(
                 value = volume,
                 onValueChange = { noiseManager.setVolume(it) },
-                colors = SliderDefaults.colors(
-                    thumbColor = Color(0xFFD4577A),
-                    activeTrackColor = Color(0xFFB8355B)
-                )
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // Warmth (Pink/Brown) Mixer Slider
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("Pink", color = Color(0xFF888888), fontSize = 10.sp)
-                Text("Brown", color = Color(0xFF888888), fontSize = 10.sp)
-            }
-            Slider(
-                value = warmth,
-                onValueChange = { noiseManager.setWarmth(it) },
                 colors = SliderDefaults.colors(
                     thumbColor = Color(0xFFD4577A),
                     activeTrackColor = Color(0xFFB8355B)

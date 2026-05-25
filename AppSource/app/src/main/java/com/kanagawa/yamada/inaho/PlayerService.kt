@@ -287,6 +287,7 @@ class PlayerService : Service() {
                 mp.pause()
                 try { bgMediaPlayer?.pause() } catch (_: Exception) {}
                 _playerState.value = _playerState.value.copy(isPlaying = false)
+                noiseManager.syncWithPlayer(false)
             } else {
                 if (bgMediaPlayer != null) {
                     val diff = Math.abs(mp.currentPosition - bgMediaPlayer!!.currentPosition)
@@ -301,6 +302,7 @@ class PlayerService : Service() {
                 bgMediaPlayer?.start()
                 mp.start()
                 _playerState.value = _playerState.value.copy(isPlaying = true)
+                noiseManager.syncWithPlayer(true)
             }
             updateMediaSessionState()
             updateNotification()
@@ -487,6 +489,7 @@ class PlayerService : Service() {
                     videoWidth = mp.videoWidth,
                     videoHeight = mp.videoHeight
                 )
+                noiseManager.syncWithPlayer(true)
                 updateMediaSessionState()
                 startForeground(NOTIF_ID, buildNotification())
             } catch (e: Exception) {
@@ -559,6 +562,7 @@ class PlayerService : Service() {
                         isMainPreparing = false
                         isMainPrepared = true
                         _playerState.value = _playerState.value.copy(isPlaying = false)
+                        noiseManager.syncWithPlayer(false)
                     }
                     true
                 }
