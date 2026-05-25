@@ -22,6 +22,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -89,7 +90,9 @@ class MainActivity : ComponentActivity() {
                 val configuration = androidx.compose.ui.platform.LocalConfiguration.current
                 val isTablet = configuration.screenWidthDp >= 600
 
-                Box(modifier = Modifier.fillMaxSize()) {
+                val bgColor = if (settings.amoledBlack) Color.Black else Color(0xFF121212)
+
+                Box(modifier = Modifier.fillMaxSize().background(bgColor)) {
                     if (isTablet) {
                         androidx.compose.foundation.layout.Row(modifier = Modifier.fillMaxSize()) {
                             if (currentScreen in listOf(AppScreen.HOME, AppScreen.LIST, AppScreen.PLAYLIST, AppScreen.SETTINGS)) {
@@ -104,7 +107,7 @@ class MainActivity : ComponentActivity() {
                                 AnimatedContent(
                                     targetState = currentScreen,
                                     transitionSpec = {
-                                        slideInHorizontally(animationSpec = tween(300), initialOffsetX = { it }) + fadeIn() togetherWith slideOutHorizontally(animationSpec = tween(300), targetOffsetX = { -it / 4 }) + fadeOut()
+                                        fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
                                     },
                                     label = "Screen Transition"
                                 ) { screen ->
@@ -121,6 +124,7 @@ class MainActivity : ComponentActivity() {
                     } else {
                         Scaffold(
                             modifier = Modifier.fillMaxSize(),
+                            containerColor = Color.Transparent,
                             bottomBar = {
                                 if (currentScreen in listOf(AppScreen.HOME, AppScreen.LIST, AppScreen.PLAYLIST, AppScreen.SETTINGS)) {
                                     NavBar(
@@ -136,7 +140,7 @@ class MainActivity : ComponentActivity() {
                                 AnimatedContent(
                                     targetState = currentScreen,
                                     transitionSpec = {
-                                        slideInHorizontally(animationSpec = tween(300), initialOffsetX = { it }) + fadeIn() togetherWith slideOutHorizontally(animationSpec = tween(300), targetOffsetX = { -it / 4 }) + fadeOut()
+                                        fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
                                     },
                                     label = "Screen Transition"
                                 ) { screen ->
