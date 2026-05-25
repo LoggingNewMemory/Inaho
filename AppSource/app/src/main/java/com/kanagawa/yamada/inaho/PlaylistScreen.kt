@@ -23,6 +23,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -228,99 +231,204 @@ fun PlaylistScreen(
                 }
             }
 
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = if (playerState.currentSong != null) 100.dp else 24.dp)
-            ) {
-                // 1. Favorites Playlist Card
-                item {
-                    val firstFavSong = remember(favorites, loadedSongs) { loadedSongs.find { it.id == favorites.firstOrNull() } }
-                    LaunchedEffect(firstFavSong?.id) { firstFavSong?.let { musicViewModel.loadArtIfNeeded(it) } }
-                    val favCover = firstFavSong?.let { artCache[it.id] }
+            val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+            val isTablet = configuration.screenWidthDp >= 600
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            // Use the theme-aware gradient here
-                            .background(Brush.horizontalGradient(favGradient))
-                            .clickable { currentView = "FAV" }
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (favCover != null) {
-                            Image(
-                                bitmap = favCover.asImageBitmap(),
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color.White.copy(alpha = 0.1f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(imageVector = Icons.Default.Favorite, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
+            if (isTablet) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = if (playerState.currentSong != null) 100.dp else 24.dp)
+                ) {
+                    // 1. Favorites Playlist Card
+                    item {
+                        val firstFavSong = remember(favorites, loadedSongs) { loadedSongs.find { it.id == favorites.firstOrNull() } }
+                        LaunchedEffect(firstFavSong?.id) { firstFavSong?.let { musicViewModel.loadArtIfNeeded(it) } }
+                        val favCover = firstFavSong?.let { artCache[it.id] }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                // Use the theme-aware gradient here
+                                .background(Brush.horizontalGradient(favGradient))
+                                .clickable { currentView = "FAV" }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (favCover != null) {
+                                Image(
+                                    bitmap = favCover.asImageBitmap(),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color.White.copy(alpha = 0.1f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(imageVector = Icons.Default.Favorite, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = "Favorites", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(text = "${favorites.size} saved songs", color = Color(0xFFCCCCCC), fontSize = 13.sp)
+                            }
+                            Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, tint = Color.White.copy(alpha = 0.5f))
+                        }
+                    }
+
+                    // 2. Custom Playlists
+                    items(customPlaylists, key = { it.id }) { playlist ->
+                        val firstSong = remember(playlist.songIds, loadedSongs) { loadedSongs.find { it.id == playlist.songIds.firstOrNull() } }
+                        LaunchedEffect(firstSong?.id) { firstSong?.let { musicViewModel.loadArtIfNeeded(it) } }
+                        val cover = firstSong?.let { artCache[it.id] }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(surfaceColor)
+                                .clickable {
+                                    selectedPlaylistId = playlist.id
+                                    currentView = "CUSTOM"
+                                }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (cover != null) {
+                                Image(
+                                    bitmap = cover.asImageBitmap(),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFF2C2C2C)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(imageVector = Icons.Default.QueueMusic, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(28.dp))
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = playlist.name, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(text = "${playlist.songIds.size} songs", color = Color(0xFFAAAAAA), fontSize = 13.sp)
                             }
                         }
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = "Favorites", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(text = "${favorites.size} saved songs", color = Color(0xFFCCCCCC), fontSize = 13.sp)
-                        }
-                        Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, tint = Color.White.copy(alpha = 0.5f))
                     }
                 }
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = if (playerState.currentSong != null) 100.dp else 24.dp)
+                ) {
+                    // 1. Favorites Playlist Card
+                    item {
+                        val firstFavSong = remember(favorites, loadedSongs) { loadedSongs.find { it.id == favorites.firstOrNull() } }
+                        LaunchedEffect(firstFavSong?.id) { firstFavSong?.let { musicViewModel.loadArtIfNeeded(it) } }
+                        val favCover = firstFavSong?.let { artCache[it.id] }
 
-                // 2. Custom Playlists
-                items(customPlaylists, key = { it.id }) { playlist ->
-                    val firstSong = remember(playlist.songIds, loadedSongs) { loadedSongs.find { it.id == playlist.songIds.firstOrNull() } }
-                    LaunchedEffect(firstSong?.id) { firstSong?.let { musicViewModel.loadArtIfNeeded(it) } }
-                    val cover = firstSong?.let { artCache[it.id] }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(surfaceColor)
-                            .clickable {
-                                selectedPlaylistId = playlist.id
-                                currentView = "CUSTOM"
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                // Use the theme-aware gradient here
+                                .background(Brush.horizontalGradient(favGradient))
+                                .clickable { currentView = "FAV" }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (favCover != null) {
+                                Image(
+                                    bitmap = favCover.asImageBitmap(),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color.White.copy(alpha = 0.1f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(imageVector = Icons.Default.Favorite, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
+                                }
                             }
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (cover != null) {
-                            Image(
-                                bitmap = cover.asImageBitmap(),
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0xFF2C2C2C)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(imageVector = Icons.Default.QueueMusic, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(28.dp))
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = "Favorites", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(text = "${favorites.size} saved songs", color = Color(0xFFCCCCCC), fontSize = 13.sp)
                             }
+                            Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, tint = Color.White.copy(alpha = 0.5f))
                         }
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = playlist.name, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(text = "${playlist.songIds.size} songs", color = Color(0xFFAAAAAA), fontSize = 13.sp)
+                    }
+
+                    // 2. Custom Playlists
+                    items(customPlaylists, key = { it.id }) { playlist ->
+                        val firstSong = remember(playlist.songIds, loadedSongs) { loadedSongs.find { it.id == playlist.songIds.firstOrNull() } }
+                        LaunchedEffect(firstSong?.id) { firstSong?.let { musicViewModel.loadArtIfNeeded(it) } }
+                        val cover = firstSong?.let { artCache[it.id] }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(surfaceColor)
+                                .clickable {
+                                    selectedPlaylistId = playlist.id
+                                    currentView = "CUSTOM"
+                                }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (cover != null) {
+                                Image(
+                                    bitmap = cover.asImageBitmap(),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFF2C2C2C)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(imageVector = Icons.Default.QueueMusic, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(28.dp))
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = playlist.name, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(text = "${playlist.songIds.size} songs", color = Color(0xFFAAAAAA), fontSize = 13.sp)
+                            }
                         }
                     }
                 }

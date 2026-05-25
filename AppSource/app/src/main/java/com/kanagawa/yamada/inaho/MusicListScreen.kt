@@ -35,6 +35,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
@@ -284,6 +287,9 @@ fun MusicListScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+        val isTablet = configuration.screenWidthDp >= 600
+
         Box(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
             when {
                 !hasPermission -> Text("Storage permission is required.", color = Color.White)
@@ -292,42 +298,94 @@ fun MusicListScreen(
                 filteredSongs != null -> {
                     if (filteredSongs.isEmpty()) Box(Modifier.fillMaxSize(), Alignment.Center) { Text("No results for \"$searchQuery\"", color = Color.LightGray) }
                     else {
-                        LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = if (playerState.currentSong != null) 88.dp else 16.dp)) {
-                            items(filteredSongs.size, key = { filteredSongs[it].id }) { index ->
-                                val song = filteredSongs[index]
-                                LaunchedEffect(song.id) { musicViewModel.loadArtIfNeeded(song) }
-                                SongListItem(
-                                    song = song, coverBitmap = artCache[song.id],
-                                    isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
-                                    accentColor = accentColor,
-                                    onClick = {
-                                        playerService?.playSong(song, filteredSongs, index)
-                                        musicViewModel.preloadQueueWindow(filteredSongs, index)
-                                        onNavigateToPlayer()
-                                    }
-                                )
+                        if (isTablet) {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(2),
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                contentPadding = PaddingValues(bottom = if (playerState.currentSong != null) 88.dp else 16.dp)
+                            ) {
+                                items(filteredSongs.size, key = { filteredSongs[it].id }) { index ->
+                                    val song = filteredSongs[index]
+                                    LaunchedEffect(song.id) { musicViewModel.loadArtIfNeeded(song) }
+                                    SongListItem(
+                                        song = song, coverBitmap = artCache[song.id],
+                                        isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
+                                        accentColor = accentColor,
+                                        onClick = {
+                                            playerService?.playSong(song, filteredSongs, index)
+                                            musicViewModel.preloadQueueWindow(filteredSongs, index)
+                                            onNavigateToPlayer()
+                                        }
+                                    )
+                                }
+                            }
+                        } else {
+                            LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = if (playerState.currentSong != null) 88.dp else 16.dp)) {
+                                items(filteredSongs.size, key = { filteredSongs[it].id }) { index ->
+                                    val song = filteredSongs[index]
+                                    LaunchedEffect(song.id) { musicViewModel.loadArtIfNeeded(song) }
+                                    SongListItem(
+                                        song = song, coverBitmap = artCache[song.id],
+                                        isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
+                                        accentColor = accentColor,
+                                        onClick = {
+                                            playerService?.playSong(song, filteredSongs, index)
+                                            musicViewModel.preloadQueueWindow(filteredSongs, index)
+                                            onNavigateToPlayer()
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
                 }
                 else -> {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = if (playerState.currentSong != null) 88.dp else 16.dp)) {
-                        items(count = songs.itemCount, key = songs.itemKey { it.id }) { index ->
-                            val song = songs[index]
-                            if (song != null) {
-                                LaunchedEffect(song.id) { musicViewModel.loadArtIfNeeded(song) }
-                                SongListItem(
-                                    song = song, coverBitmap = artCache[song.id],
-                                    isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
-                                    accentColor = accentColor,
-                                    onClick = {
-                                        val safeQueue = if (fullLibrary.isNotEmpty()) fullLibrary else listOf(song)
-                                        val queueIndex = safeQueue.indexOfFirst { it.id == song.id }.takeIf { it >= 0 } ?: 0
-                                        playerService?.playSong(song, safeQueue, queueIndex)
-                                        musicViewModel.preloadQueueWindow(safeQueue, queueIndex)
-                                        onNavigateToPlayer()
-                                    }
-                                )
+                    if (isTablet) {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            contentPadding = PaddingValues(bottom = if (playerState.currentSong != null) 88.dp else 16.dp)
+                        ) {
+                            items(count = songs.itemCount, key = songs.itemKey { it.id }) { index ->
+                                val song = songs[index]
+                                if (song != null) {
+                                    LaunchedEffect(song.id) { musicViewModel.loadArtIfNeeded(song) }
+                                    SongListItem(
+                                        song = song, coverBitmap = artCache[song.id],
+                                        isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
+                                        accentColor = accentColor,
+                                        onClick = {
+                                            val safeQueue = if (fullLibrary.isNotEmpty()) fullLibrary else listOf(song)
+                                            val queueIndex = safeQueue.indexOfFirst { it.id == song.id }.takeIf { it >= 0 } ?: 0
+                                            playerService?.playSong(song, safeQueue, queueIndex)
+                                            musicViewModel.preloadQueueWindow(safeQueue, queueIndex)
+                                            onNavigateToPlayer()
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = if (playerState.currentSong != null) 88.dp else 16.dp)) {
+                            items(count = songs.itemCount, key = songs.itemKey { it.id }) { index ->
+                                val song = songs[index]
+                                if (song != null) {
+                                    LaunchedEffect(song.id) { musicViewModel.loadArtIfNeeded(song) }
+                                    SongListItem(
+                                        song = song, coverBitmap = artCache[song.id],
+                                        isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
+                                        accentColor = accentColor,
+                                        onClick = {
+                                            val safeQueue = if (fullLibrary.isNotEmpty()) fullLibrary else listOf(song)
+                                            val queueIndex = safeQueue.indexOfFirst { it.id == song.id }.takeIf { it >= 0 } ?: 0
+                                            playerService?.playSong(song, safeQueue, queueIndex)
+                                            musicViewModel.preloadQueueWindow(safeQueue, queueIndex)
+                                            onNavigateToPlayer()
+                                        }
+                                    )
+                                }
                             }
                         }
                     }

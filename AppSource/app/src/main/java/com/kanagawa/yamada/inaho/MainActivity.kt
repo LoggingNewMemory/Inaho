@@ -86,59 +86,66 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+                val isTablet = configuration.screenWidthDp >= 600
+
                 Box(modifier = Modifier.fillMaxSize()) {
-                    Scaffold(
-                        modifier = Modifier.fillMaxSize(),
-                        bottomBar = {
-                            // Show NavBar on the 4 main sections
+                    if (isTablet) {
+                        androidx.compose.foundation.layout.Row(modifier = Modifier.fillMaxSize()) {
                             if (currentScreen in listOf(AppScreen.HOME, AppScreen.LIST, AppScreen.PLAYLIST, AppScreen.SETTINGS)) {
-                                NavBar(
+                                NavRail(
                                     currentScreen = currentScreen,
                                     onNavigate = { currentScreen = it },
                                     amoledBlack = settings.amoledBlack,
                                     accentColor = accentColor
                                 )
                             }
+                            Box(modifier = Modifier.weight(1f)) {
+                                AnimatedContent(
+                                    targetState = currentScreen,
+                                    transitionSpec = {
+                                        slideInHorizontally(animationSpec = tween(300), initialOffsetX = { it }) + fadeIn() togetherWith slideOutHorizontally(animationSpec = tween(300), targetOffsetX = { -it / 4 }) + fadeOut()
+                                    },
+                                    label = "Screen Transition"
+                                ) { screen ->
+                                    when (screen) {
+                                        AppScreen.SETUP -> SetupScreen(settingsManager = musicViewModel.settingsManager, onComplete = { currentScreen = AppScreen.HOME })
+                                        AppScreen.HOME -> HomeScreen(musicViewModel = musicViewModel, onNavigateToPlayer = { showPlayerScreen = true })
+                                        AppScreen.LIST -> MusicListScreen(musicViewModel = musicViewModel, onNavigateToPlayer = { showPlayerScreen = true })
+                                        AppScreen.PLAYLIST -> PlaylistScreen(musicViewModel = musicViewModel, onNavigateToPlayer = { showPlayerScreen = true })
+                                        AppScreen.SETTINGS -> SettingsScreen(settingsManager = musicViewModel.settingsManager, onNavigateBack = { currentScreen = AppScreen.HOME })
+                                    }
+                                }
+                            }
                         }
-                    ) { innerPadding ->
-                        Box(modifier = Modifier.padding(innerPadding)) {
-                            AnimatedContent(
-                                targetState = currentScreen,
-                                transitionSpec = {
-                                    slideInHorizontally(animationSpec = tween(300), initialOffsetX = { it }) + fadeIn() togetherWith slideOutHorizontally(animationSpec = tween(300), targetOffsetX = { -it / 4 }) + fadeOut()
-                                },
-                                label = "Screen Transition"
-                            ) { screen ->
-                                when (screen) {
-                                    AppScreen.SETUP -> {
-                                        SetupScreen(
-                                            settingsManager = musicViewModel.settingsManager,
-                                            onComplete = { currentScreen = AppScreen.HOME }
-                                        )
-                                    }
-                                    AppScreen.HOME -> {
-                                        HomeScreen(
-                                            musicViewModel = musicViewModel,
-                                            onNavigateToPlayer = { showPlayerScreen = true }
-                                        )
-                                    }
-                                    AppScreen.LIST -> {
-                                        MusicListScreen(
-                                            musicViewModel = musicViewModel,
-                                            onNavigateToPlayer = { showPlayerScreen = true }
-                                        )
-                                    }
-                                    AppScreen.PLAYLIST -> {
-                                        PlaylistScreen(
-                                            musicViewModel = musicViewModel,
-                                            onNavigateToPlayer = { showPlayerScreen = true }
-                                        )
-                                    }
-                                    AppScreen.SETTINGS -> {
-                                        SettingsScreen(
-                                            settingsManager = musicViewModel.settingsManager,
-                                            onNavigateBack = { currentScreen = AppScreen.HOME }
-                                        )
+                    } else {
+                        Scaffold(
+                            modifier = Modifier.fillMaxSize(),
+                            bottomBar = {
+                                if (currentScreen in listOf(AppScreen.HOME, AppScreen.LIST, AppScreen.PLAYLIST, AppScreen.SETTINGS)) {
+                                    NavBar(
+                                        currentScreen = currentScreen,
+                                        onNavigate = { currentScreen = it },
+                                        amoledBlack = settings.amoledBlack,
+                                        accentColor = accentColor
+                                    )
+                                }
+                            }
+                        ) { innerPadding ->
+                            Box(modifier = Modifier.padding(innerPadding)) {
+                                AnimatedContent(
+                                    targetState = currentScreen,
+                                    transitionSpec = {
+                                        slideInHorizontally(animationSpec = tween(300), initialOffsetX = { it }) + fadeIn() togetherWith slideOutHorizontally(animationSpec = tween(300), targetOffsetX = { -it / 4 }) + fadeOut()
+                                    },
+                                    label = "Screen Transition"
+                                ) { screen ->
+                                    when (screen) {
+                                        AppScreen.SETUP -> SetupScreen(settingsManager = musicViewModel.settingsManager, onComplete = { currentScreen = AppScreen.HOME })
+                                        AppScreen.HOME -> HomeScreen(musicViewModel = musicViewModel, onNavigateToPlayer = { showPlayerScreen = true })
+                                        AppScreen.LIST -> MusicListScreen(musicViewModel = musicViewModel, onNavigateToPlayer = { showPlayerScreen = true })
+                                        AppScreen.PLAYLIST -> PlaylistScreen(musicViewModel = musicViewModel, onNavigateToPlayer = { showPlayerScreen = true })
+                                        AppScreen.SETTINGS -> SettingsScreen(settingsManager = musicViewModel.settingsManager, onNavigateBack = { currentScreen = AppScreen.HOME })
                                     }
                                 }
                             }
