@@ -34,6 +34,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -181,11 +182,14 @@ fun HomeScreen(
     }
 
     val dailySongs = remember(fullLibrary) {
-        if (fullLibrary.isNotEmpty()) fullLibrary.shuffled(kotlin.random.Random(appLaunchSeed)).take(5) else emptyList()
+        if (fullLibrary.isNotEmpty()) fullLibrary.shuffled(kotlin.random.Random(appLaunchSeed)).take(21) else emptyList()
     }
     val quickList = remember(fullLibrary) {
-        if (fullLibrary.size > 5) fullLibrary.shuffled(kotlin.random.Random(appLaunchSeed + 1)).take(10) else emptyList()
+        if (fullLibrary.size > 7) fullLibrary.shuffled(kotlin.random.Random(appLaunchSeed + 1)).take(10) else emptyList()
     }
+
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val isTablet = configuration.screenWidthDp >= 600
 
     Box(
         modifier = Modifier
@@ -208,13 +212,15 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             if (dailySongs.isNotEmpty()) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val rowModifier = if (isTablet) Modifier.fillMaxWidth().height(240.dp) else Modifier.fillMaxWidth()
+                Row(modifier = rowModifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     val mainSong = dailySongs[0]
                     LaunchedEffect(mainSong.id) { musicViewModel.loadArtIfNeeded(mainSong) }
+                    
+                    val mainBoxModifier = if (isTablet) Modifier.fillMaxHeight().aspectRatio(1f) else Modifier.weight(1f).aspectRatio(1f)
+                    
                     Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .aspectRatio(1f)
+                        modifier = mainBoxModifier
                             .clip(RoundedCornerShape(8.dp))
                             .background(surfaceColor)
                             .clickable {
@@ -230,19 +236,47 @@ fun HomeScreen(
                         }
                     }
 
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .aspectRatio(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            GridSmallItem(song = dailySongs.getOrNull(1), artCache = artCache, vm = musicViewModel, ps = playerService, lib = fullLibrary, nav = onNavigateToPlayer)
-                            GridSmallItem(song = dailySongs.getOrNull(2), artCache = artCache, vm = musicViewModel, ps = playerService, lib = fullLibrary, nav = onNavigateToPlayer)
+                    if (isTablet) {
+                        androidx.compose.foundation.lazy.grid.LazyHorizontalGrid(
+                            rows = androidx.compose.foundation.lazy.grid.GridCells.Fixed(2),
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(dailySongs.drop(1)) { song ->
+                                Box(
+                                    modifier = Modifier
+                                        .aspectRatio(1f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFF2C2C2C))
+                                        .clickable {
+                                            playerService?.playSong(song, fullLibrary, fullLibrary.indexOf(song))
+                                            onNavigateToPlayer()
+                                        }
+                                ) {
+                                    LaunchedEffect(song.id) { musicViewModel.loadArtIfNeeded(song) }
+                                    val cover = artCache[song.id]
+                                    if (cover != null) {
+                                        Image(bitmap = cover.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                                    }
+                                }
+                            }
                         }
-                        Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            GridSmallItem(song = dailySongs.getOrNull(3), artCache = artCache, vm = musicViewModel, ps = playerService, lib = fullLibrary, nav = onNavigateToPlayer)
-                            GridSmallItem(song = dailySongs.getOrNull(4), artCache = artCache, vm = musicViewModel, ps = playerService, lib = fullLibrary, nav = onNavigateToPlayer)
+                    } else {
+                        val rightColModifier = Modifier.weight(1f).aspectRatio(1f)
+
+                        Column(
+                            modifier = rightColModifier,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                GridSmallItem(song = dailySongs.getOrNull(1), artCache = artCache, vm = musicViewModel, ps = playerService, lib = fullLibrary, nav = onNavigateToPlayer)
+                                GridSmallItem(song = dailySongs.getOrNull(2), artCache = artCache, vm = musicViewModel, ps = playerService, lib = fullLibrary, nav = onNavigateToPlayer)
+                            }
+                            Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                GridSmallItem(song = dailySongs.getOrNull(3), artCache = artCache, vm = musicViewModel, ps = playerService, lib = fullLibrary, nav = onNavigateToPlayer)
+                                GridSmallItem(song = dailySongs.getOrNull(4), artCache = artCache, vm = musicViewModel, ps = playerService, lib = fullLibrary, nav = onNavigateToPlayer)
+                            }
                         }
                     }
                 }
@@ -250,7 +284,7 @@ fun HomeScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .aspectRatio(2f)
+                        .height(if (isTablet) 240.dp else 180.dp)
                         .background(surfaceColor, RoundedCornerShape(8.dp)),
                     contentAlignment = Alignment.Center
                 ) {
@@ -284,9 +318,6 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Box(modifier = Modifier.weight(1f)) {
-                val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-                val isTablet = configuration.screenWidthDp >= 600
-
                 if (isTablet) {
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(2),
