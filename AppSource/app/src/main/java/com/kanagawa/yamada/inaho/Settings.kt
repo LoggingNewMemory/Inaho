@@ -6,6 +6,7 @@ Copyright (C) 2026 Kanagawa Yamada
 package com.kanagawa.yamada.inaho
 
 import android.content.Context
+import androidx.compose.material.icons.automirrored.filled.*
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -20,7 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BlurOn
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Nightlight
 import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material3.*
@@ -238,7 +239,7 @@ fun SettingsScreen(
         )
 
         SettingsToggleRow(
-            icon = Icons.Default.List,
+            icon = Icons.AutoMirrored.Filled.List,
             title = "Music Folder Only",
             subtitle = "Only show files in /Music folder",
             checked = settings.onlyMusicFolder,

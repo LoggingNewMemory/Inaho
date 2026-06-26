@@ -6,6 +6,7 @@ Copyright (C) 2026 Kanagawa Yamada
 package com.kanagawa.yamada.inaho
 
 import android.content.BroadcastReceiver
+import androidx.compose.material.icons.automirrored.filled.*
 import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
@@ -254,7 +255,7 @@ fun PlayerScreen(
                             )
                         }
                         IconButton(onClick = { showQueueSheet = !showQueueSheet }, modifier = Modifier.align(Alignment.CenterEnd).offset(x = 12.dp)) {
-                            Icon(imageVector = Icons.Default.QueueMusic, contentDescription = "Queue", tint = if (showQueueSheet) accentColor else Color.White)
+                            Icon(imageVector = Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "Queue", tint = if (showQueueSheet) accentColor else Color.White)
                         }
                     }
                     
@@ -283,7 +284,7 @@ fun PlayerScreen(
                         }
                         if (song != null) {
                             val isFav = favorites.contains(song.id)
-                            IconButton(onClick = { showAddToPlaylistDialog = true }) { Icon(imageVector = Icons.Default.PlaylistAdd, contentDescription = "Add to Playlist", tint = Color.White, modifier = Modifier.size(26.dp)) }
+                            IconButton(onClick = { showAddToPlaylistDialog = true }) { Icon(imageVector = Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Add to Playlist", tint = Color.White, modifier = Modifier.size(26.dp)) }
                             IconButton(onClick = { musicViewModel.playlistManager.toggleFavorite(song.id) }) { Icon(imageVector = if (isFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder, contentDescription = "Favorite", tint = if (isFav) accentColor else Color.White, modifier = Modifier.size(26.dp)) }
                         }
                     }
@@ -295,9 +296,9 @@ fun PlayerScreen(
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.VolumeDown, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                        Icon(imageVector = Icons.AutoMirrored.Filled.VolumeDown, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                         Slider(value = volumeValue, onValueChange = { v -> val newStep = (v * maxVolume).toInt(); val oldStep = (volumeValue * maxVolume).toInt(); volumeValue = v; if (newStep != oldStep) audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newStep, 0) }, modifier = Modifier.weight(1f).padding(horizontal = 6.dp), colors = SliderDefaults.colors(thumbColor = accentColor, activeTrackColor = accentColor, inactiveTrackColor = Color(0xFF3D3030)))
-                        Icon(imageVector = Icons.Default.VolumeUp, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                        Icon(imageVector = Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                     }
                     Spacer(modifier = Modifier.height(32.dp))
                     val eqPreset by playerService?.eqManager?.currentPreset?.collectAsState() ?: run { remember { mutableStateOf(EqPreset.OFF) } }
@@ -365,7 +366,7 @@ fun PlayerScreen(
                         .align(Alignment.CenterEnd)
                         .offset(x = 12.dp)
                 ) {
-                    Icon(imageVector = Icons.Default.QueueMusic, contentDescription = "Queue", tint = if (showQueueSheet) accentColor else Color.White)
+                    Icon(imageVector = Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "Queue", tint = if (showQueueSheet) accentColor else Color.White)
                 }
             }
 
@@ -460,7 +461,7 @@ fun PlayerScreen(
                 if (song != null) {
                     val isFav = favorites.contains(song.id)
                     IconButton(onClick = { showAddToPlaylistDialog = true }) {
-                        Icon(imageVector = Icons.Default.PlaylistAdd, contentDescription = "Add to Playlist", tint = Color.White, modifier = Modifier.size(26.dp))
+                        Icon(imageVector = Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Add to Playlist", tint = Color.White, modifier = Modifier.size(26.dp))
                     }
                     IconButton(onClick = { musicViewModel.playlistManager.toggleFavorite(song.id) }) {
                         Icon(
@@ -498,7 +499,7 @@ fun PlayerScreen(
             Spacer(modifier = Modifier.height(10.dp))
 
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = Icons.Default.VolumeDown, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                Icon(imageVector = Icons.AutoMirrored.Filled.VolumeDown, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                 Slider(
                     value = volumeValue,
                     onValueChange = { v ->
@@ -512,7 +513,7 @@ fun PlayerScreen(
                     modifier = Modifier.weight(1f).padding(horizontal = 6.dp),
                     colors = SliderDefaults.colors(thumbColor = accentColor, activeTrackColor = accentColor, inactiveTrackColor = Color(0xFF3D3030))
                 )
-                Icon(imageVector = Icons.Default.VolumeUp, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                Icon(imageVector = Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
             }
 
             Spacer(modifier = Modifier.weight(1f))
@@ -731,7 +732,7 @@ fun QueuePanel(
                         Text(text = qSong.artist, color = Color(0xFF888888), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     if (isCurrentSong) {
-                        Icon(imageVector = Icons.Default.VolumeUp, contentDescription = "Now playing", tint = accentColor, modifier = Modifier.size(16.dp))
+                        Icon(imageVector = Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Now playing", tint = accentColor, modifier = Modifier.size(16.dp))
                     } else {
                         Text(text = qSong.formattedDuration, color = Color(0xFF666666), fontSize = 12.sp)
                     }

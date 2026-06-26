@@ -6,10 +6,11 @@ Copyright (C) 2026 Kanagawa Yamada
 package com.kanagawa.yamada.inaho
 
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -49,7 +50,7 @@ fun NavRail(
         NavigationRailItem(
             selected = currentScreen == AppScreen.LIST,
             onClick = { onNavigate(AppScreen.LIST) },
-            icon = { Icon(Icons.Default.List, contentDescription = "Songs") },
+            icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Songs") },
             label = { Text("Songs") },
             colors = NavigationRailItemDefaults.colors(
                 selectedIconColor = accentColor,
@@ -63,7 +64,7 @@ fun NavRail(
         NavigationRailItem(
             selected = currentScreen == AppScreen.PLAYLIST,
             onClick = { onNavigate(AppScreen.PLAYLIST) },
-            icon = { Icon(Icons.Default.QueueMusic, contentDescription = "Playlists") },
+            icon = { Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "Playlists") },
             label = { Text("Playlists") },
             colors = NavigationRailItemDefaults.colors(
                 selectedIconColor = accentColor,

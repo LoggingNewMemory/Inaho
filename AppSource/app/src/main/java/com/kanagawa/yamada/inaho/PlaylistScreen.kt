@@ -6,6 +6,7 @@ Copyright (C) 2026 Kanagawa Yamada
 package com.kanagawa.yamada.inaho
 
 import android.graphics.Bitmap
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -28,7 +29,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material.icons.filled.Reorder
 import androidx.compose.material.icons.filled.Shuffle
@@ -354,7 +355,7 @@ fun PlaylistScreen(
                                         .background(Color(0xFF2C2C2C)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(imageVector = Icons.Default.QueueMusic, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(28.dp))
+                                    Icon(imageVector = Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(28.dp))
                                 }
                             }
                             Spacer(modifier = Modifier.width(16.dp))
@@ -455,7 +456,7 @@ fun PlaylistScreen(
                                         .background(Color(0xFF2C2C2C)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(imageVector = Icons.Default.QueueMusic, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(28.dp))
+                                    Icon(imageVector = Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(28.dp))
                                 }
                             }
                             Spacer(modifier = Modifier.width(16.dp))
@@ -593,7 +594,7 @@ fun PlaylistScreen(
                             Image(bitmap = heroCover.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                         } else {
                             Icon(
-                                imageVector = if (isFavView) Icons.Default.Favorite else Icons.Default.QueueMusic,
+                                imageVector = if (isFavView) Icons.Default.Favorite else Icons.AutoMirrored.Filled.QueueMusic,
                                 contentDescription = null,
                                 tint = Color.White.copy(alpha = 0.5f),
                                 modifier = Modifier.size(48.dp)
