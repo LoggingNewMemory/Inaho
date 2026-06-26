@@ -37,10 +37,15 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.material.icons.filled.CloudDownload
 import org.jaudiotagger.audio.AudioFileIO
 import org.jaudiotagger.tag.FieldKey
 import java.io.File
 import java.io.FileInputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
+import org.json.JSONArray
 import android.app.Activity
 import android.app.RecoverableSecurityException
 import android.content.ContentUris
@@ -229,12 +234,46 @@ fun LyricsOverlay(
                         )
                     } else {
                         if (lyrics.isBlank()) {
-                            Text(
-                                text = "No lyrics embedded.\nTap the edit button to add some.",
-                                color = Color.Gray,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.align(Alignment.Center)
-                            )
+                            Column(
+                                modifier = Modifier.align(Alignment.Center),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "No lyrics embedded.",
+                                    color = Color.Gray,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Button(
+                                    onClick = {
+                                        scope.launch {
+                                            isLoading = true
+                                            val fetched = fetchLrclibLyrics(song!!)
+                                            if (fetched != null) {
+                                                lyrics = fetched
+                                                lrcLines = parseLrc(fetched)
+                                                saveStatus = ""
+                                                val intentSender = saveLyricsToDisk(context, song, fetched)
+                                                if (intentSender != null) {
+                                                    writeLauncher.launch(IntentSenderRequest.Builder(intentSender).build())
+                                                }
+                                            } else {
+                                                saveStatus = "Lyrics not found on LRCLIB"
+                                            }
+                                            isLoading = false
+                                        }
+                                    },
+                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = accentColor)
+                                ) {
+                                    Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Fetch from LRCLIB", color = Color.White)
+                                }
+                                Spacer(modifier = Modifier.height(16.dp))
+                                androidx.compose.material3.TextButton(onClick = { isEditing = true }) {
+                                    Text("Manually add lyrics", color = accentColor)
+                                }
+                            }
                         } else if (lrcLines.isNotEmpty()) {
                             LazyColumn(
                                 state = listState,
@@ -368,4 +407,38 @@ suspend fun saveLyricsToDisk(context: android.content.Context, song: Song, lyric
         }
         throw e
     }
+}
+
+suspend fun fetchLrclibLyrics(song: Song): String? = withContext(Dispatchers.IO) {
+    try {
+        val query = URLEncoder.encode("${song.artist} ${song.title}", "UTF-8")
+        val url = URL("https://lrclib.net/api/search?q=$query")
+        val connection = url.openConnection() as HttpURLConnection
+        connection.requestMethod = "GET"
+        connection.setRequestProperty("User-Agent", "Inaho Music Player (https://github.com/inaho)")
+        connection.connectTimeout = 5000
+        connection.readTimeout = 5000
+
+        if (connection.responseCode == 200) {
+            val response = connection.inputStream.bufferedReader().use { it.readText() }
+            val jsonArray = JSONArray(response)
+            if (jsonArray.length() > 0) {
+                // Try to find one with syncedLyrics
+                for (i in 0 until jsonArray.length()) {
+                    val item = jsonArray.getJSONObject(i)
+                    if (!item.isNull("syncedLyrics") && item.getString("syncedLyrics").isNotBlank()) {
+                        return@withContext item.getString("syncedLyrics")
+                    }
+                }
+                // fallback to plainLyrics
+                val firstItem = jsonArray.getJSONObject(0)
+                if (!firstItem.isNull("plainLyrics") && firstItem.getString("plainLyrics").isNotBlank()) {
+                    return@withContext firstItem.getString("plainLyrics")
+                }
+            }
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+    return@withContext null
 }
