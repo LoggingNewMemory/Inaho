@@ -60,7 +60,7 @@ class MainActivity : ComponentActivity() {
                 val musicViewModel: MusicViewModel = viewModel()
                 val settings by musicViewModel.settingsManager.settingsFlow.collectAsState()
 
-                val accentColor = if (settings.theme == AppTheme.YAMADA) Color(0xFF9E9EDB) else Color(0xFFB8355B)
+                val accentColor = getAppAccentColor(settings.theme)
 
                 // Route to SETUP if name is blank, otherwise go to HOME
                 var currentScreen by rememberSaveable {

@@ -65,7 +65,7 @@ fun PlaylistScreen(
 
     val bgColor = if (settings.amoledBlack) Color.Black else Color(0xFF120E0E)
     val surfaceColor = if (settings.amoledBlack) Color(0xFF0A0A0A) else Color(0xFF1E1414)
-    val accentColor = if (settings.theme == AppTheme.YAMADA) Color(0xFF9E9EDB) else Color(0xFFB8355B)
+    val accentColor = getAppAccentColor(settings.theme)
 
     // Dynamic gradient for the Favorites card
     val favGradient = if (settings.theme == AppTheme.YAMADA) {

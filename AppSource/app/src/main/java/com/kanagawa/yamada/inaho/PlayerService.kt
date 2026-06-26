@@ -348,6 +348,7 @@ class PlayerService : Service() {
         currentPlaybackPitch = 1.0f
 
         val nextSong = state.activeQueue[nextIndex]
+
         _playerState.value = state.copy(
             currentSong  = nextSong,
             currentIndex = nextIndex,

@@ -55,7 +55,23 @@ enum class SortOption(val displayName: String) {
     DURATION_DESC("Longest First")
 }
 
-enum class AppTheme { INAHO, YAMADA }
+enum class AppTheme { INAHO, YAMADA, SYSTEM }
+
+@Composable
+fun getAppAccentColor(theme: AppTheme): Color {
+    val context = LocalContext.current
+    return when (theme) {
+        AppTheme.YAMADA -> Color(0xFF9E9EDB)
+        AppTheme.INAHO -> Color(0xFFB8355B)
+        AppTheme.SYSTEM -> {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                dynamicDarkColorScheme(context).primary
+            } else {
+                Color(0xFFB8355B)
+            }
+        }
+    }
+}
 
 data class AppSettings(
     val userName: String,
@@ -154,7 +170,7 @@ fun SettingsScreen(
     val settings by settingsManager.settingsFlow.collectAsState()
     val context = LocalContext.current
 
-    val accentColor = if (settings.theme == AppTheme.YAMADA) Color(0xFF9E9EDB) else Color(0xFFB8355B)
+    val accentColor = getAppAccentColor(settings.theme)
 
     Column(
         modifier = Modifier
@@ -264,6 +280,13 @@ fun SettingsScreen(
                 color = Color(0xFF9E9EDB),
                 isSelected = settings.theme == AppTheme.YAMADA,
                 onClick = { settingsManager.updateTheme(AppTheme.YAMADA) },
+                modifier = Modifier.weight(1f)
+            )
+            ThemeSelectorChip(
+                title = "System",
+                color = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) androidx.compose.material3.dynamicDarkColorScheme(context).primary else Color(0xFF555555),
+                isSelected = settings.theme == AppTheme.SYSTEM,
+                onClick = { settingsManager.updateTheme(AppTheme.SYSTEM) },
                 modifier = Modifier.weight(1f)
             )
         }

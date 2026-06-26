@@ -134,7 +134,7 @@ fun PlayerScreen(
 
     val bgColor      = if (settings.amoledBlack) Color.Black else Color(0xFF0D0A0A)
     val surfaceColor = if (settings.amoledBlack) Color(0xFF0A0A0A) else Color(0xFF1E1414).copy(alpha = 0.85f)
-    val accentColor  = if (settings.theme == AppTheme.YAMADA) Color(0xFF9E9EDB) else Color(0xFFB8355B)
+    val accentColor = getAppAccentColor(settings.theme)
 
     // Only intercept back presses if the PlayerScreen is actually visible
     BackHandler(enabled = isVisible) { onNavigateBack() }
