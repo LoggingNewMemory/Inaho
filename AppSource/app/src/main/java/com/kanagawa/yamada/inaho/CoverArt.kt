@@ -26,6 +26,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.io.FileOutputStream
+import kotlinx.coroutines.asCoroutineDispatcher
+import java.util.concurrent.Executors
 
 // ==========================================
 // DISK CACHE HELPERS
@@ -54,7 +56,7 @@ internal fun saveBitmapToDisk(context: Context, songId: Long, bitmap: Bitmap?) {
     }
     val file = artCacheFile(context, songId)
     try {
-        FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it) }
     } catch (_: Exception) { }
 }
 
@@ -67,12 +69,18 @@ internal fun isArtResolved(context: Context, songId: Long): Boolean =
 
 internal fun extractAndDownsample(context: Context, uri: Uri, targetPx: Int): Bitmap? {
     val rawBytes: ByteArray = try {
-        val retriever = MediaMetadataRetriever()
-        try {
-            retriever.setDataSource(context, uri)
-            retriever.embeddedPicture
-        } finally {
-            retriever.release()
+        // FAST PATH: Direct raw byte extraction for MP3/FLAC
+        FastArtExtractor.extractArt(context, uri) ?: run {
+            // FALLBACK: MediaMetadataRetriever for M4A/OGG/WAV
+            val retriever = MediaMetadataRetriever()
+            try {
+                context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                    retriever.setDataSource(pfd.fileDescriptor)
+                }
+                retriever.embeddedPicture
+            } finally {
+                retriever.release()
+            }
         }
     } catch (e: Exception) { null } ?: return null
 
@@ -81,7 +89,7 @@ internal fun extractAndDownsample(context: Context, uri: Uri, targetPx: Int): Bi
         BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, opts)
         var sampleSize = 1
         val (w, h) = opts.outWidth to opts.outHeight
-        while ((w / sampleSize) > targetPx * 2 && (h / sampleSize) > targetPx * 2) sampleSize *= 2
+        while ((w / sampleSize) / 2 >= targetPx && (h / sampleSize) / 2 >= targetPx) sampleSize *= 2
         val decodeOpts = BitmapFactory.Options().apply {
             inSampleSize = sampleSize
             inPreferredConfig = Bitmap.Config.ARGB_8888
@@ -166,8 +174,28 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val artCacheMutex = Mutex()
     private val inFlightIds = mutableSetOf<Long>()
 
+    // Limit concurrency to prevent MediaMetadataRetriever from thrashing the CPU/IO
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val artExtractionDispatcher = Dispatchers.IO.limitedParallelism(4)
+
     fun recordLoadedSongs(songs: List<Song>) {
         _loadedSongs.value = songs
+        
+        // Background mass-preloader: immediately start loading everything
+        viewModelScope.launch(Dispatchers.Default) {
+            for (song in songs) {
+                var skip = false
+                artCacheMutex.withLock {
+                    if (lruStore.containsKey(song.id) || inFlightIds.contains(song.id)) skip = true
+                }
+                if (!skip) {
+                    enqueueLoad(song)
+                    // Tiny delay so that if the user scrolls, the UI's enqueueLoad
+                    // can jump ahead of this loop's future iterations
+                    kotlinx.coroutines.delay(2)
+                }
+            }
+        }
     }
 
     fun loadArtIfNeeded(song: Song) {
@@ -188,7 +216,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun enqueueLoad(song: Song) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(artExtractionDispatcher) {
             artCacheMutex.withLock {
                 if (lruStore.containsKey(song.id)) return@launch
                 if (inFlightIds.contains(song.id)) return@launch
