@@ -13,6 +13,9 @@ import android.os.Build
 import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
+import android.net.Uri
+import android.content.Intent
 import androidx.compose.animation.*
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -84,6 +87,22 @@ fun HomeScreen(
             permissions[Manifest.permission.READ_MEDIA_AUDIO] == true || permissions[Manifest.permission.READ_MEDIA_VIDEO] == true
         } else permissions[Manifest.permission.READ_EXTERNAL_STORAGE] == true
         hasPermission = storageGranted
+    }
+
+    val photoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        uri?.let {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    it,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            musicViewModel.settingsManager.updateUserPhotoUri(it.toString())
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -216,6 +235,9 @@ fun HomeScreen(
                             .size(56.dp)
                             .clip(CircleShape)
                             .background(surfaceColor)
+                            .clickable {
+                                photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            }
                     )
                 } ?: run {
                     Image(
@@ -225,6 +247,9 @@ fun HomeScreen(
                             .size(56.dp)
                             .clip(CircleShape)
                             .background(Color.White)
+                            .clickable {
+                                photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            }
                     )
                 }
             }
