@@ -197,14 +197,14 @@ fun PlaylistScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(bgColor)
-            .displayCutoutPadding()
+            .safeDrawingPadding()
     ) {
         if (currentView == "LIST") {
             // --- MAIN PLAYLIST OVERVIEW ---
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 16.dp),
+                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(

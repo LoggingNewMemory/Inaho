@@ -236,9 +236,8 @@ fun PlayerScreen(
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .displayCutoutPadding()
-                    .padding(horizontal = 20.dp)
-                    .navigationBarsPadding(),
+                    .safeDrawingPadding()
+                    .padding(horizontal = 24.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Left Pane: Top Bar (Back button, details, queue) + Album Art / Video / Queue Panel
@@ -330,9 +329,8 @@ fun PlayerScreen(
             Column(
             modifier = Modifier
                 .fillMaxSize()
-                .displayCutoutPadding()
-                .padding(horizontal = 20.dp)
-                .navigationBarsPadding()
+                .safeDrawingPadding()
+                .padding(horizontal = 24.dp)
         ) {
             Box(
                 modifier = Modifier
