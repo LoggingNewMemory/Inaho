@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.material.icons.filled.CloudDownload
@@ -46,6 +47,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import org.json.JSONArray
+import org.json.JSONObject
 import android.app.Activity
 import android.app.RecoverableSecurityException
 import android.content.ContentUris
@@ -121,6 +123,13 @@ fun LyricsOverlay(
         }
     }
     
+    LaunchedEffect(saveStatus) {
+        if (saveStatus.isNotEmpty()) {
+            delay(3000)
+            saveStatus = ""
+        }
+    }
+    
     val listState = rememberLazyListState()
     val currentIndex = remember(lrcLines, currentPositionMs) {
         if (lrcLines.isEmpty()) -1 else {
@@ -129,10 +138,14 @@ fun LyricsOverlay(
         }
     }
 
-    LaunchedEffect(currentIndex, isVisible) {
+    LaunchedEffect(currentIndex, isVisible, isEditing) {
         if (isVisible && currentIndex >= 0 && !isEditing) {
             val target = (currentIndex - 3).coerceAtLeast(0)
-            listState.animateScrollToItem(target)
+            if (kotlin.math.abs(listState.firstVisibleItemIndex - target) > 10) {
+                listState.scrollToItem(target)
+            } else {
+                listState.animateScrollToItem(target)
+            }
         }
     }
 
@@ -260,18 +273,23 @@ fun LyricsOverlay(
                                     onClick = {
                                         scope.launch {
                                             isLoading = true
-                                            val fetched = fetchLrclibLyrics(song!!)
-                                            if (fetched != null) {
-                                                lyrics = fetched
-                                                originalLyrics = fetched
-                                                lrcLines = parseLrc(fetched)
-                                                saveStatus = ""
-                                                val intentSender = saveLyricsToDisk(context, song, fetched)
-                                                if (intentSender != null) {
-                                                    writeLauncher.launch(IntentSenderRequest.Builder(intentSender).build())
+                                            val result = fetchLrclibLyrics(song!!)
+                                            if (result.isSuccess) {
+                                                val fetched = result.getOrNull()
+                                                if (fetched != null) {
+                                                    lyrics = fetched
+                                                    originalLyrics = fetched
+                                                    lrcLines = parseLrc(fetched)
+                                                    saveStatus = ""
+                                                    val intentSender = saveLyricsToDisk(context, song, fetched)
+                                                    if (intentSender != null) {
+                                                        writeLauncher.launch(IntentSenderRequest.Builder(intentSender).build())
+                                                    }
+                                                } else {
+                                                    saveStatus = "Lyrics not found on LRCLIB"
                                                 }
                                             } else {
-                                                saveStatus = "Lyrics not found on LRCLIB"
+                                                saveStatus = "Network error: Connection failed or timed out"
                                             }
                                             isLoading = false
                                         }
@@ -338,7 +356,11 @@ fun LyricsOverlay(
                     }
                 }
 
-                if (saveStatus.isNotEmpty()) {
+                AnimatedVisibility(
+                    visible = saveStatus.isNotEmpty(),
+                    enter = fadeIn() + slideInVertically(initialOffsetY = { 20 }),
+                    exit = fadeOut() + slideOutVertically(targetOffsetY = { 20 })
+                ) {
                     Text(
                         text = saveStatus,
                         color = Color.Red,
@@ -422,36 +444,94 @@ suspend fun saveLyricsToDisk(context: android.content.Context, song: Song, lyric
     }
 }
 
-suspend fun fetchLrclibLyrics(song: Song): String? = withContext(Dispatchers.IO) {
+suspend fun fetchLrclibLyrics(song: Song): Result<String?> = withContext(Dispatchers.IO) {
     try {
-        val query = URLEncoder.encode("${song.artist} ${song.title}", "UTF-8")
-        val url = URL("https://lrclib.net/api/search?q=$query")
-        val connection = url.openConnection() as HttpURLConnection
-        connection.requestMethod = "GET"
-        connection.setRequestProperty("User-Agent", "Inaho Music Player (https://github.com/inaho)")
-        connection.connectTimeout = 5000
-        connection.readTimeout = 5000
+        val titleEnc = URLEncoder.encode(song.title, "UTF-8")
+        val artistEnc = URLEncoder.encode(song.artist, "UTF-8")
+        val durationSecs = song.durationMs / 1000
 
-        if (connection.responseCode == 200) {
-            val response = connection.inputStream.bufferedReader().use { it.readText() }
-            val jsonArray = JSONArray(response)
-            if (jsonArray.length() > 0) {
-                // Try to find one with syncedLyrics
-                for (i in 0 until jsonArray.length()) {
-                    val item = jsonArray.getJSONObject(i)
-                    if (!item.isNull("syncedLyrics") && item.getString("syncedLyrics").isNotBlank()) {
-                        return@withContext item.getString("syncedLyrics")
-                    }
-                }
-                // fallback to plainLyrics
-                val firstItem = jsonArray.getJSONObject(0)
-                if (!firstItem.isNull("plainLyrics") && firstItem.getString("plainLyrics").isNotBlank()) {
-                    return@withContext firstItem.getString("plainLyrics")
+        var albumEnc = ""
+        try {
+            val f = File(song.path)
+            if (f.exists()) {
+                val audioFile = AudioFileIO.read(f)
+                val album = audioFile.tag?.getFirst(FieldKey.ALBUM)
+                if (!album.isNullOrBlank()) {
+                    albumEnc = URLEncoder.encode(album, "UTF-8")
                 }
             }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
+
+        val getUrlString = buildString {
+            append("https://lrclib.net/api/get?track_name=$titleEnc&artist_name=$artistEnc&duration=$durationSecs")
+            if (albumEnc.isNotEmpty()) {
+                append("&album_name=$albumEnc")
+            }
+        }
+
+        // 1. Try /api/get
+        try {
+            val getUrl = URL(getUrlString)
+            val getConnection = getUrl.openConnection() as HttpURLConnection
+            getConnection.requestMethod = "GET"
+            getConnection.setRequestProperty("User-Agent", "Inaho Music Player (https://github.com/inaho)")
+            getConnection.connectTimeout = 5000
+            getConnection.readTimeout = 5000
+
+            if (getConnection.responseCode == 200) {
+                val response = getConnection.inputStream.bufferedReader().use { it.readText() }
+                val item = JSONObject(response)
+                if (!item.isNull("syncedLyrics") && item.getString("syncedLyrics").isNotBlank()) {
+                    return@withContext Result.success(item.getString("syncedLyrics"))
+                }
+                if (!item.isNull("plainLyrics") && item.getString("plainLyrics").isNotBlank()) {
+                    return@withContext Result.success(item.getString("plainLyrics"))
+                }
+            }
+        } catch (e: Exception) {
+            if (e is java.net.SocketTimeoutException || e is java.net.UnknownHostException || e is java.net.ConnectException) {
+                return@withContext Result.failure(e)
+            }
+            e.printStackTrace()
+        }
+
+        // 2. Fallback to /api/search
+        try {
+            val qEnc = URLEncoder.encode("${song.artist} ${song.title}", "UTF-8")
+            val searchUrl = URL("https://lrclib.net/api/search?q=$qEnc")
+            val searchConnection = searchUrl.openConnection() as HttpURLConnection
+            searchConnection.requestMethod = "GET"
+            searchConnection.setRequestProperty("User-Agent", "Inaho Music Player (https://github.com/inaho)")
+            searchConnection.connectTimeout = 5000
+            searchConnection.readTimeout = 5000
+
+            if (searchConnection.responseCode == 200) {
+                val response = searchConnection.inputStream.bufferedReader().use { it.readText() }
+                val jsonArray = JSONArray(response)
+                if (jsonArray.length() > 0) {
+                    for (i in 0 until jsonArray.length()) {
+                        val item = jsonArray.getJSONObject(i)
+                        if (!item.isNull("syncedLyrics") && item.getString("syncedLyrics").isNotBlank()) {
+                            return@withContext Result.success(item.getString("syncedLyrics"))
+                        }
+                    }
+                    val firstItem = jsonArray.getJSONObject(0)
+                    if (!firstItem.isNull("plainLyrics") && firstItem.getString("plainLyrics").isNotBlank()) {
+                        return@withContext Result.success(firstItem.getString("plainLyrics"))
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            if (e is java.net.SocketTimeoutException || e is java.net.UnknownHostException || e is java.net.ConnectException) {
+                return@withContext Result.failure(e)
+            }
+            e.printStackTrace()
+        }
+
+        return@withContext Result.success(null)
     } catch (e: Exception) {
-        e.printStackTrace()
+        return@withContext Result.failure(e)
     }
-    return@withContext null
 }
