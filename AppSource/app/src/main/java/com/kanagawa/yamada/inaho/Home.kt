@@ -20,6 +20,11 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
@@ -60,13 +65,15 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 
 private val appLaunchSeed = kotlin.random.Random.Default.nextLong()
 
 @Composable
 fun HomeScreen(
     musicViewModel: MusicViewModel = viewModel(),
-    onNavigateToPlayer: () -> Unit
+    onNavigateToPlayer: () -> Unit,
+    onNavigateToLetter: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val settings by musicViewModel.settingsManager.settingsFlow.collectAsState()
@@ -285,7 +292,26 @@ fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
-                    Text(text = "いらっしゃいませ,", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    val scope = rememberCoroutineScope()
+                    Text(
+                        text = "いらっしゃいませ,",
+                        color = Color.White,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.pointerInput(Unit) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val down = awaitFirstDown()
+                                    val job = scope.launch {
+                                        kotlinx.coroutines.delay(1000)
+                                        onNavigateToLetter?.invoke()
+                                    }
+                                    waitForUpOrCancellation()
+                                    job.cancel()
+                                }
+                            }
+                        }
+                    )
                     val nameFontSize = if (settings.userName.length > 12) 22.sp else 28.sp
                     Text(text = settings.userName, color = nameColor, fontSize = nameFontSize, fontWeight = FontWeight.Bold, lineHeight = 28.sp)
                 }

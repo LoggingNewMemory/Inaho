@@ -39,7 +39,7 @@ class InahoApp : Application(), SingletonImageLoader.Factory {
 
 // --- Screen Enum Updated ---
 enum class AppScreen {
-    SETUP, HOME, LIST, PLAYLIST, SETTINGS
+    SETUP, HOME, LIST, PLAYLIST, SETTINGS, LETTER
 }
 
 // --- Activity ---
@@ -86,7 +86,7 @@ class MainActivity : ComponentActivity() {
                 Box(modifier = Modifier.fillMaxSize().background(bgColor)) {
                     if (isTablet) {
                         androidx.compose.foundation.layout.Row(modifier = Modifier.fillMaxSize()) {
-                            if (currentScreen in listOf(AppScreen.HOME, AppScreen.LIST, AppScreen.PLAYLIST, AppScreen.SETTINGS)) {
+                            if (currentScreen in listOf(AppScreen.HOME, AppScreen.LIST, AppScreen.PLAYLIST, AppScreen.SETTINGS, AppScreen.LETTER)) {
                                 NavRail(
                                     currentScreen = currentScreen,
                                     onNavigate = { currentScreen = it },
@@ -104,10 +104,11 @@ class MainActivity : ComponentActivity() {
                                 ) { screen ->
                                     when (screen) {
                                         AppScreen.SETUP -> SetupScreen(settingsManager = musicViewModel.settingsManager, onComplete = { currentScreen = AppScreen.HOME })
-                                        AppScreen.HOME -> HomeScreen(musicViewModel = musicViewModel, onNavigateToPlayer = { showPlayerScreen = true })
+                                        AppScreen.HOME -> HomeScreen(musicViewModel = musicViewModel, onNavigateToPlayer = { showPlayerScreen = true }, onNavigateToLetter = { currentScreen = AppScreen.LETTER })
                                         AppScreen.LIST -> MusicListScreen(musicViewModel = musicViewModel, onNavigateToPlayer = { showPlayerScreen = true })
                                         AppScreen.PLAYLIST -> PlaylistScreen(musicViewModel = musicViewModel, onNavigateToPlayer = { showPlayerScreen = true })
                                         AppScreen.SETTINGS -> SettingsScreen(settingsManager = musicViewModel.settingsManager, onNavigateBack = { currentScreen = AppScreen.HOME })
+                                        AppScreen.LETTER -> LetterToInahoScreen(onNavigateBack = { currentScreen = AppScreen.HOME }, accentColor = accentColor)
                                     }
                                 }
                             }
@@ -117,7 +118,7 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.fillMaxSize(),
                             containerColor = Color.Transparent,
                             bottomBar = {
-                                if (currentScreen in listOf(AppScreen.HOME, AppScreen.LIST, AppScreen.PLAYLIST, AppScreen.SETTINGS)) {
+                                if (currentScreen in listOf(AppScreen.HOME, AppScreen.LIST, AppScreen.PLAYLIST, AppScreen.SETTINGS, AppScreen.LETTER)) {
                                     NavBar(
                                         currentScreen = currentScreen,
                                         onNavigate = { currentScreen = it },
@@ -137,10 +138,11 @@ class MainActivity : ComponentActivity() {
                                 ) { screen ->
                                     when (screen) {
                                         AppScreen.SETUP -> SetupScreen(settingsManager = musicViewModel.settingsManager, onComplete = { currentScreen = AppScreen.HOME })
-                                        AppScreen.HOME -> HomeScreen(musicViewModel = musicViewModel, onNavigateToPlayer = { showPlayerScreen = true })
+                                        AppScreen.HOME -> HomeScreen(musicViewModel = musicViewModel, onNavigateToPlayer = { showPlayerScreen = true }, onNavigateToLetter = { currentScreen = AppScreen.LETTER })
                                         AppScreen.LIST -> MusicListScreen(musicViewModel = musicViewModel, onNavigateToPlayer = { showPlayerScreen = true })
                                         AppScreen.PLAYLIST -> PlaylistScreen(musicViewModel = musicViewModel, onNavigateToPlayer = { showPlayerScreen = true })
                                         AppScreen.SETTINGS -> SettingsScreen(settingsManager = musicViewModel.settingsManager, onNavigateBack = { currentScreen = AppScreen.HOME })
+                                        AppScreen.LETTER -> LetterToInahoScreen(onNavigateBack = { currentScreen = AppScreen.HOME }, accentColor = accentColor)
                                     }
                                 }
                             }
