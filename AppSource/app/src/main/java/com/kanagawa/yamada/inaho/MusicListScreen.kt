@@ -79,7 +79,8 @@ data class Song(
     val durationMs: Long,
     val trackUri: Uri,
     val formattedDuration: String,
-    val isVideo: Boolean = false
+    val isVideo: Boolean = false,
+    val path: String = ""
 )
 
 class MusicPagingSource(private val context: Context, private val settings: AppSettings) : PagingSource<Int, Song>() {
@@ -94,7 +95,8 @@ class MusicPagingSource(private val context: Context, private val settings: AppS
         MediaStore.Files.FileColumns.TITLE,
         MediaStore.Files.FileColumns.ARTIST,
         MediaStore.Files.FileColumns.DURATION,
-        MediaStore.Files.FileColumns.MEDIA_TYPE
+        MediaStore.Files.FileColumns.MEDIA_TYPE,
+        MediaStore.Files.FileColumns.DATA
     )
 
     override fun getRefreshKey(state: PagingState<Int, Song>): Int? = state.anchorPosition?.let { state.closestPageToPosition(it)?.prevKey?.plus(1) ?: state.closestPageToPosition(it)?.nextKey?.minus(1) }
@@ -145,6 +147,7 @@ class MusicPagingSource(private val context: Context, private val settings: AppS
                 val artistCol = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns.ARTIST)
                 val durationCol = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DURATION)
                 val mediaTypeCol = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MEDIA_TYPE)
+                val dataCol = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA)
 
                 while (c.moveToNext()) {
                     val id = c.getLong(idCol)
@@ -153,8 +156,9 @@ class MusicPagingSource(private val context: Context, private val settings: AppS
 
                     val baseUri = if (isVideo) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
                     val trackUri = ContentUris.withAppendedId(baseUri, id)
+                    val path = c.getString(dataCol) ?: ""
 
-                    songs.add(Song(id, c.getString(titleCol) ?: "Unknown", c.getString(artistCol) ?: "Unknown", dur, trackUri, String.format("%02d:%02d", (dur / 1000) / 60, (dur / 1000) % 60), isVideo))
+                    songs.add(Song(id, c.getString(titleCol) ?: "Unknown", c.getString(artistCol) ?: "Unknown", dur, trackUri, String.format("%02d:%02d", (dur / 1000) / 60, (dur / 1000) % 60), isVideo, path))
                 }
             }
             LoadResult.Page(songs, if (page == 0) null else page - 1, if (songs.size < pageSize) null else page + 1)

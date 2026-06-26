@@ -145,7 +145,8 @@ fun HomeScreen(
                         MediaStore.Files.FileColumns.TITLE,
                         MediaStore.Files.FileColumns.ARTIST,
                         MediaStore.Files.FileColumns.DURATION,
-                        MediaStore.Files.FileColumns.MEDIA_TYPE
+                        MediaStore.Files.FileColumns.MEDIA_TYPE,
+                        MediaStore.Files.FileColumns.DATA
                     )
 
                     val sortOrder = when (settings.sortOption) {
@@ -177,6 +178,7 @@ fun HomeScreen(
                         val artistCol = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns.ARTIST)
                         val durationCol = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DURATION)
                         val mediaTypeCol = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MEDIA_TYPE)
+                        val dataCol = c.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA)
 
                         while (c.moveToNext()) {
                             val id = c.getLong(idCol)
@@ -187,6 +189,7 @@ fun HomeScreen(
 
                             val baseUri = if (isVideo) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
                             val trackUri = ContentUris.withAppendedId(baseUri, id)
+                            val path = c.getString(dataCol) ?: ""
 
                             tempList.add(
                                 Song(
@@ -196,7 +199,8 @@ fun HomeScreen(
                                     durationMs = dur,
                                     trackUri = trackUri,
                                     formattedDuration = String.format("%02d:%02d", (dur / 1000) / 60, (dur / 1000) % 60),
-                                    isVideo = isVideo
+                                    isVideo = isVideo,
+                                    path = path
                                 )
                             )
                         }

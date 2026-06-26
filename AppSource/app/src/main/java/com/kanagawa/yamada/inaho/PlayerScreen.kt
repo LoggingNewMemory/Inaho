@@ -97,8 +97,10 @@ fun PlayerScreen(
 
     var showSpeedPitchDialog     by remember { mutableStateOf(false) }
     var showSleepTimerDialog by remember { mutableStateOf(false) }
-    var showQueueSheet      by remember { mutableStateOf(false) }
-    var showEqDialog        by remember { mutableStateOf(false) }
+    var showQueueSheet by remember { mutableStateOf(false) }
+    var showEqDialog by remember { mutableStateOf(false) }
+    var showLyricsPage by remember { mutableStateOf(false) }
+    var isPlaying by remember { mutableStateOf(false) }
     var showAddToPlaylistDialog by remember { mutableStateOf(false) }
     var sleepTimerRemainingMs by remember { mutableLongStateOf(-1L) }
 
@@ -388,7 +390,13 @@ fun PlayerScreen(
                         .clip(RoundedCornerShape(12.dp))
                         .background(surfaceColor)
                         .alpha(artLayerAlpha) // Apply the alpha here
-                        .clickable(enabled = !showQueueSheet) { isAmvModeActive = !isAmvModeActive }, // Disable clicks when queue is open
+                        .clickable(enabled = !showQueueSheet) {
+                            if (song?.isVideo == false) {
+                                showLyricsPage = !showLyricsPage
+                            } else {
+                                isAmvModeActive = !isAmvModeActive
+                            }
+                        }, // Disable clicks when queue is open
                     contentAlignment = Alignment.Center
                 ) {
                     // AMV Video Surface always at the absolute bottom
@@ -414,6 +422,8 @@ fun PlayerScreen(
                             Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = Color(0xFF3D2020), modifier = Modifier.size(80.dp))
                         }
                     }
+
+                    // Lyrics overlay removed from here
                 }
 
                 // 3. Queue Panel overlays on top of the hidden video player
@@ -591,6 +601,15 @@ fun PlayerScreen(
             }
         }
         }
+
+        // 4. Lyrics Fullscreen Overlay
+        LyricsOverlay(
+            song = song,
+            isVisible = showLyricsPage && song?.isVideo == false,
+            onClose = { showLyricsPage = false },
+            accentColor = accentColor,
+            currentPositionMs = livePositionMs
+        )
     }
 
     if (showSpeedPitchDialog) {
