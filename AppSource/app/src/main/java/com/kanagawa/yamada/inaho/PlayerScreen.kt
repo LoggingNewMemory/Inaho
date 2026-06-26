@@ -623,7 +623,7 @@ fun PlayerScreen(
     }
 
     if (showSleepTimerDialog) {
-        SleepTimerDialog(isActive = sleepTimerRemainingMs > 0, onSelect = { minutes -> sleepTimerRemainingMs = minutes * 60 * 1000L; showSleepTimerDialog  = false }, onCancel = { sleepTimerRemainingMs = -1L; showSleepTimerDialog  = false }, onDismiss = { showSleepTimerDialog = false })
+        SleepTimerDialog(isActive = sleepTimerRemainingMs > 0, accentColor = accentColor, onSelect = { minutes -> sleepTimerRemainingMs = minutes * 60 * 1000L; showSleepTimerDialog  = false }, onCancel = { sleepTimerRemainingMs = -1L; showSleepTimerDialog  = false }, onDismiss = { showSleepTimerDialog = false })
     }
 
     if (showAddToPlaylistDialog && song != null) {
@@ -852,35 +852,96 @@ private fun DiscreteSliderWithLabels(
 @Composable
 fun SleepTimerDialog(
     isActive: Boolean,
+    accentColor: Color,
     onSelect: (Long) -> Unit,
     onCancel: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    var showCustomInput by remember { mutableStateOf(false) }
+    var customHoursStr by remember { mutableStateOf("") }
+    var customMinutesStr by remember { mutableStateOf("") }
     val options = listOf(5L to "5 min", 10L to "10 min", 15L to "15 min", 20L to "20 min", 30L to "30 min", 60L to "1 hour")
 
     Dialog(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(Color(0xFF1E1414)).padding(20.dp)) {
             Text("Sleep Timer", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp))
-            Text("Pause music after…", color = Color(0xFF888888), fontSize = 13.sp, modifier = Modifier.padding(bottom = 16.dp))
+            Text(if (showCustomInput) "Enter custom time" else "Pause music after…", color = Color(0xFF888888), fontSize = 13.sp, modifier = Modifier.padding(bottom = 16.dp))
 
-            options.chunked(3).forEach { row ->
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    row.forEach { (minutes, label) ->
-                        Box(
-                            modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(Color(0xFF2C2020)).clickable { onSelect(minutes) }.padding(vertical = 12.dp),
-                            contentAlignment = Alignment.Center
-                        ) { Text(text = label, color = Color.White, fontSize = 13.sp, textAlign = TextAlign.Center) }
-                    }
+            if (showCustomInput) {
+                Row(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = customHoursStr,
+                        onValueChange = { if (it.length <= 2 && it.all { char -> char.isDigit() }) customHoursStr = it },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = accentColor,
+                            unfocusedBorderColor = Color(0xFF888888),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            cursorColor = accentColor
+                        ),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text("Hours", color = Color.Gray) }
+                    )
+                    OutlinedTextField(
+                        value = customMinutesStr,
+                        onValueChange = { if (it.length <= 2 && it.all { char -> char.isDigit() }) customMinutesStr = it },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = accentColor,
+                            unfocusedBorderColor = Color(0xFF888888),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            cursorColor = accentColor
+                        ),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text("Minutes", color = Color.Gray) }
+                    )
                 }
-                Spacer(Modifier.height(10.dp))
-            }
-
-            if (isActive) {
-                Spacer(Modifier.height(4.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(
+                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(Color(0xFF2C2020)).clickable { showCustomInput = false }.padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) { Text("Back", color = Color.White, fontSize = 14.sp) }
+                    Box(
+                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(accentColor).clickable {
+                            val hrs = customHoursStr.toLongOrNull() ?: 0L
+                            val mins = customMinutesStr.toLongOrNull() ?: 0L
+                            val totalMins = (hrs * 60) + mins
+                            if (totalMins > 0) {
+                                onSelect(totalMins)
+                            }
+                        }.padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) { Text("Start", color = Color.Black, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                }
+            } else {
+                options.chunked(3).forEach { row ->
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        row.forEach { (minutes, label) ->
+                            Box(
+                                modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(Color(0xFF2C2020)).clickable { onSelect(minutes) }.padding(vertical = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) { Text(text = label, color = Color.White, fontSize = 13.sp, textAlign = TextAlign.Center) }
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                }
+                
                 Box(
-                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color(0xFF3D1515)).clickable { onCancel() }.padding(vertical = 12.dp),
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color(0xFF2C2020)).clickable { showCustomInput = true }.padding(vertical = 12.dp),
                     contentAlignment = Alignment.Center
-                ) { Text("Cancel Timer", color = Color(0xFFFF6B6B), fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
+                ) { Text("Custom Time", color = Color.White, fontSize = 14.sp) }
+
+                if (isActive) {
+                    Spacer(Modifier.height(10.dp))
+                    Box(
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color(0xFF3D1515)).clickable { onCancel() }.padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) { Text("Cancel Timer", color = Color(0xFFFF6B6B), fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
+                }
             }
         }
     }
