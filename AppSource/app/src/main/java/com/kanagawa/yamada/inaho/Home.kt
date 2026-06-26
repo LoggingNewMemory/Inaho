@@ -211,8 +211,11 @@ fun HomeScreen(
     val isTablet = configuration.screenWidthDp >= 600
 
     // Entrance animation trigger
-    var startAnimation by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { startAnimation = true }
+    var startAnimation by remember { mutableStateOf(ScreenAnimationState.homeAnimated) }
+    LaunchedEffect(Unit) {
+        startAnimation = true
+        ScreenAnimationState.homeAnimated = true
+    }
 
     // Section 1: Greeting row — delay 0ms
     val greetingAlpha by animateFloatAsState(

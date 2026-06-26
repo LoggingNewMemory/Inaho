@@ -233,8 +233,11 @@ fun MusicListScreen(
     }
 
     // Entrance animation trigger
-    var startAnimation by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { startAnimation = true }
+    var startAnimation by remember { mutableStateOf(ScreenAnimationState.listAnimated) }
+    LaunchedEffect(Unit) {
+        startAnimation = true
+        ScreenAnimationState.listAnimated = true
+    }
 
     // Top bar animation (delay 0ms)
     val topBarAlpha by animateFloatAsState(

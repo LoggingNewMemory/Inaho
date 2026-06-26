@@ -184,8 +184,11 @@ fun SettingsScreen(
     val accentColor = getAppAccentColor(settings.theme)
 
     // Entrance fade-in animation
-    var startAnimation by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { startAnimation = true }
+    var startAnimation by remember { mutableStateOf(ScreenAnimationState.settingsAnimated) }
+    LaunchedEffect(Unit) {
+        startAnimation = true
+        ScreenAnimationState.settingsAnimated = true
+    }
     val settingsAlpha by animateFloatAsState(
         targetValue = if (startAnimation) 1f else 0f,
         animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),

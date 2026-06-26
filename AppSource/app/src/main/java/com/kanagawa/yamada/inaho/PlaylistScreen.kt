@@ -206,8 +206,11 @@ fun PlaylistScreen(
     ) {
         if (currentView == "LIST") {
             // --- ENTRANCE ANIMATION STATE ---
-            var startAnimation by remember { mutableStateOf(false) }
-            LaunchedEffect(Unit) { startAnimation = true }
+            var startAnimation by remember { mutableStateOf(ScreenAnimationState.playlistAnimated) }
+            LaunchedEffect(Unit) {
+                startAnimation = true
+                ScreenAnimationState.playlistAnimated = true
+            }
 
             // Header animation (delay 0ms)
             val headerAlpha by animateFloatAsState(
