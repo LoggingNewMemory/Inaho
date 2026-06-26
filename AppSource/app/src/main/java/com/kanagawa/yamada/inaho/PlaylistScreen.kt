@@ -36,6 +36,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -46,6 +47,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.lifecycle.viewmodel.compose.viewModel
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -200,10 +205,40 @@ fun PlaylistScreen(
             .safeDrawingPadding()
     ) {
         if (currentView == "LIST") {
+            // --- ENTRANCE ANIMATION STATE ---
+            var startAnimation by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { startAnimation = true }
+
+            // Header animation (delay 0ms)
+            val headerAlpha by animateFloatAsState(
+                targetValue = if (startAnimation) 1f else 0f,
+                animationSpec = tween(durationMillis = 450, delayMillis = 0, easing = FastOutSlowInEasing),
+                label = "headerAlpha"
+            )
+            val headerOffsetY by animateDpAsState(
+                targetValue = if (startAnimation) 0.dp else 16.dp,
+                animationSpec = tween(durationMillis = 450, delayMillis = 0, easing = FastOutSlowInEasing),
+                label = "headerOffsetY"
+            )
+
+            // Content animation (delay 200ms)
+            val contentAlpha by animateFloatAsState(
+                targetValue = if (startAnimation) 1f else 0f,
+                animationSpec = tween(durationMillis = 450, delayMillis = 200, easing = FastOutSlowInEasing),
+                label = "contentAlpha"
+            )
+            val contentOffsetY by animateDpAsState(
+                targetValue = if (startAnimation) 0.dp else 16.dp,
+                animationSpec = tween(durationMillis = 450, delayMillis = 200, easing = FastOutSlowInEasing),
+                label = "contentOffsetY"
+            )
+
             // --- MAIN PLAYLIST OVERVIEW ---
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .alpha(headerAlpha)
+                    .offset(y = headerOffsetY)
                     .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -228,6 +263,9 @@ fun PlaylistScreen(
             if (isTablet) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
+                    modifier = Modifier
+                        .alpha(contentAlpha)
+                        .offset(y = contentOffsetY),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = if (playerState.currentSong != null) 100.dp else 24.dp)
@@ -327,6 +365,9 @@ fun PlaylistScreen(
                 }
             } else {
                 LazyColumn(
+                    modifier = Modifier
+                        .alpha(contentAlpha)
+                        .offset(y = contentOffsetY),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = if (playerState.currentSong != null) 100.dp else 24.dp)
                 ) {

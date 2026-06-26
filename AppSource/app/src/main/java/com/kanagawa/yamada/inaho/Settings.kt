@@ -25,8 +25,12 @@ import androidx.compose.material.icons.filled.Nightlight
 import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -179,11 +183,21 @@ fun SettingsScreen(
 
     val accentColor = getAppAccentColor(settings.theme)
 
+    // Entrance fade-in animation
+    var startAnimation by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { startAnimation = true }
+    val settingsAlpha by animateFloatAsState(
+        targetValue = if (startAnimation) 1f else 0f,
+        animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+        label = "settingsAlpha"
+    )
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(if (settings.amoledBlack) Color.Black else Color(0xFF120E0E))
             .safeDrawingPadding()
+            .alpha(settingsAlpha)
             .padding(start = 2.dp, end = 2.dp, bottom = 4.dp)
             .verticalScroll(rememberScrollState())
     ) {

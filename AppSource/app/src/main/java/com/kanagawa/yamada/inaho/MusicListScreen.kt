@@ -21,6 +21,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import android.content.ContentUris
 import android.net.Uri
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -43,6 +47,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -227,6 +232,34 @@ fun MusicListScreen(
         else fullLibrary.filter { it.title.contains(searchQuery, ignoreCase = true) || it.artist.contains(searchQuery, ignoreCase = true) }
     }
 
+    // Entrance animation trigger
+    var startAnimation by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { startAnimation = true }
+
+    // Top bar animation (delay 0ms)
+    val topBarAlpha by animateFloatAsState(
+        targetValue = if (startAnimation) 1f else 0f,
+        animationSpec = tween(durationMillis = 450, delayMillis = 0, easing = FastOutSlowInEasing),
+        label = "topBarAlpha"
+    )
+    val topBarOffsetY by animateDpAsState(
+        targetValue = if (startAnimation) 0.dp else 16.dp,
+        animationSpec = tween(durationMillis = 450, delayMillis = 0, easing = FastOutSlowInEasing),
+        label = "topBarOffsetY"
+    )
+
+    // Song list content animation (delay 200ms)
+    val listAlpha by animateFloatAsState(
+        targetValue = if (startAnimation) 1f else 0f,
+        animationSpec = tween(durationMillis = 450, delayMillis = 200, easing = FastOutSlowInEasing),
+        label = "listAlpha"
+    )
+    val listOffsetY by animateDpAsState(
+        targetValue = if (startAnimation) 0.dp else 16.dp,
+        animationSpec = tween(durationMillis = 450, delayMillis = 200, easing = FastOutSlowInEasing),
+        label = "listOffsetY"
+    )
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -235,6 +268,8 @@ fun MusicListScreen(
             .padding(horizontal = 4.dp)
     ) {
         // --- Top Bar (Animated Search) ---
+        // Entrance animation: fade-in + slide-up
+        Box(modifier = Modifier.alpha(topBarAlpha).offset(y = topBarOffsetY)) {
         AnimatedContent(targetState = isSearchActive, label = "SearchBarAnimation") { active ->
             if (active) {
                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -275,13 +310,14 @@ fun MusicListScreen(
                 }
             }
         }
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
         val configuration = androidx.compose.ui.platform.LocalConfiguration.current
         val isTablet = configuration.screenWidthDp >= 600
 
-        Box(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
+        Box(modifier = Modifier.weight(1f).padding(horizontal = 8.dp).alpha(listAlpha).offset(y = listOffsetY)) {
             when {
                 !hasPermission -> Text("Storage permission is required.", color = Color.White)
                 songs.loadState.refresh is LoadState.Loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator(color = accentColor) }

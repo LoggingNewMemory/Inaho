@@ -17,9 +17,12 @@ import androidx.activity.result.PickVisualMediaRequest
 import android.net.Uri
 import android.content.Intent
 import androidx.compose.animation.*
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.border
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -38,6 +41,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
@@ -47,6 +52,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -204,6 +210,58 @@ fun HomeScreen(
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isTablet = configuration.screenWidthDp >= 600
 
+    // Entrance animation trigger
+    var startAnimation by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { startAnimation = true }
+
+    // Section 1: Greeting row — delay 0ms
+    val greetingAlpha by animateFloatAsState(
+        targetValue = if (startAnimation) 1f else 0f,
+        animationSpec = tween(durationMillis = 500, delayMillis = 0, easing = FastOutSlowInEasing),
+        label = "greetingAlpha"
+    )
+    val greetingOffsetY by animateDpAsState(
+        targetValue = if (startAnimation) 0.dp else 20.dp,
+        animationSpec = tween(durationMillis = 500, delayMillis = 0, easing = FastOutSlowInEasing),
+        label = "greetingOffsetY"
+    )
+
+    // Section 2: Song of The Day — delay 150ms
+    val songOfDayAlpha by animateFloatAsState(
+        targetValue = if (startAnimation) 1f else 0f,
+        animationSpec = tween(durationMillis = 500, delayMillis = 150, easing = FastOutSlowInEasing),
+        label = "songOfDayAlpha"
+    )
+    val songOfDayOffsetY by animateDpAsState(
+        targetValue = if (startAnimation) 0.dp else 20.dp,
+        animationSpec = tween(durationMillis = 500, delayMillis = 150, easing = FastOutSlowInEasing),
+        label = "songOfDayOffsetY"
+    )
+
+    // Section 3: Shuffle button — delay 300ms
+    val shuffleAlpha by animateFloatAsState(
+        targetValue = if (startAnimation) 1f else 0f,
+        animationSpec = tween(durationMillis = 500, delayMillis = 300, easing = FastOutSlowInEasing),
+        label = "shuffleAlpha"
+    )
+    val shuffleOffsetY by animateDpAsState(
+        targetValue = if (startAnimation) 0.dp else 20.dp,
+        animationSpec = tween(durationMillis = 500, delayMillis = 300, easing = FastOutSlowInEasing),
+        label = "shuffleOffsetY"
+    )
+
+    // Section 4: Suggested for You — delay 450ms
+    val suggestedAlpha by animateFloatAsState(
+        targetValue = if (startAnimation) 1f else 0f,
+        animationSpec = tween(durationMillis = 500, delayMillis = 450, easing = FastOutSlowInEasing),
+        label = "suggestedAlpha"
+    )
+    val suggestedOffsetY by animateDpAsState(
+        targetValue = if (startAnimation) 0.dp else 20.dp,
+        animationSpec = tween(durationMillis = 500, delayMillis = 450, easing = FastOutSlowInEasing),
+        label = "suggestedOffsetY"
+    )
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -216,13 +274,17 @@ fun HomeScreen(
                 .padding(horizontal = 16.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .alpha(greetingAlpha)
+                    .offset(y = greetingOffsetY),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(text = "いらっしゃいませ,", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                    Text(text = settings.userName, color = nameColor, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                    Text(text = "いらっしゃいませ,", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    val nameFontSize = if (settings.userName.length > 12) 22.sp else 28.sp
+                    Text(text = settings.userName, color = nameColor, fontSize = nameFontSize, fontWeight = FontWeight.Bold, lineHeight = 28.sp)
                 }
                 
                 settings.userPhotoUri?.let { uri ->
@@ -233,6 +295,7 @@ fun HomeScreen(
                         modifier = Modifier
                             .size(56.dp)
                             .clip(CircleShape)
+                            .border(1.5.dp, accentColor, CircleShape)
                             .background(surfaceColor)
                             .clickable {
                                 photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
@@ -245,6 +308,7 @@ fun HomeScreen(
                         modifier = Modifier
                             .size(56.dp)
                             .clip(CircleShape)
+                            .border(1.5.dp, accentColor, CircleShape)
                             .background(Color.White)
                             .clickable {
                                 photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
@@ -255,12 +319,26 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Text(text = "Song of The Day", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            Text(
+                text = "Song of The Day",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .alpha(songOfDayAlpha)
+                    .offset(y = songOfDayOffsetY)
+            )
             Spacer(modifier = Modifier.height(8.dp))
 
             if (dailySongs.isNotEmpty()) {
+                // Song of The Day grid with entrance animation
                 val rowModifier = if (isTablet) Modifier.fillMaxWidth().height(240.dp) else Modifier.fillMaxWidth()
-                Row(modifier = rowModifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = rowModifier
+                        .alpha(songOfDayAlpha)
+                        .offset(y = songOfDayOffsetY),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     val mainSong = dailySongs[0]
                     LaunchedEffect(mainSong.id) { musicViewModel.loadArtIfNeeded(mainSong) }
                     
@@ -332,6 +410,8 @@ fun HomeScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(if (isTablet) 240.dp else 180.dp)
+                        .alpha(songOfDayAlpha)
+                        .offset(y = songOfDayOffsetY)
                         .background(surfaceColor, RoundedCornerShape(8.dp)),
                     contentAlignment = Alignment.Center
                 ) {
@@ -353,7 +433,11 @@ fun HomeScreen(
                         onNavigateToPlayer()
                     }
                 },
-                modifier = Modifier.fillMaxWidth().height(48.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .alpha(shuffleAlpha)
+                    .offset(y = shuffleOffsetY),
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2020))
             ) {
@@ -361,10 +445,23 @@ fun HomeScreen(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            Text(text = "Suggested for You", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            Text(
+                text = "Suggested for You",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .alpha(suggestedAlpha)
+                    .offset(y = suggestedOffsetY)
+            )
             Spacer(modifier = Modifier.height(8.dp))
 
-            Box(modifier = Modifier.weight(1f)) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .alpha(suggestedAlpha)
+                    .offset(y = suggestedOffsetY)
+            ) {
                 if (isTablet) {
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(2),
