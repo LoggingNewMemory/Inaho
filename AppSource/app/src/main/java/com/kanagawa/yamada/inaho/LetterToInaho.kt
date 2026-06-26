@@ -137,7 +137,7 @@ Thank you Ochinai Inaho, sudah jadi inspirasi. Semoga karirmu menjadi VTuber suk
 Salam untuk Goraku Production juga.
 
 Signed: Kanagawa Yamada
-albert.wesley.dion@gmail.com on LetterToInaho.kt under 2.0
+albert.wesley.dion@gmail.com
 """
 
     @Composable
