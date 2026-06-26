@@ -105,9 +105,6 @@ class PlayerService : Service() {
     lateinit var eqManager: YamadaEQManager
         private set
 
-    lateinit var noiseManager: YamadaNoiseManager
-        private set
-
     // ── Video Surface Handling ─────────────────────────────────────────────────
     var currentSurface: Surface? = null
         private set
@@ -155,7 +152,6 @@ class PlayerService : Service() {
         setupMediaSession()
 
         eqManager = YamadaEQManager(applicationContext)
-        noiseManager = YamadaNoiseManager(applicationContext)
 
         val filter = IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -287,7 +283,6 @@ class PlayerService : Service() {
                 mp.pause()
                 try { bgMediaPlayer?.pause() } catch (_: Exception) {}
                 _playerState.value = _playerState.value.copy(isPlaying = false)
-                noiseManager.syncWithPlayer(false)
             } else {
                 if (bgMediaPlayer != null) {
                     val diff = Math.abs(mp.currentPosition - bgMediaPlayer!!.currentPosition)
@@ -302,7 +297,6 @@ class PlayerService : Service() {
                 bgMediaPlayer?.start()
                 mp.start()
                 _playerState.value = _playerState.value.copy(isPlaying = true)
-                noiseManager.syncWithPlayer(true)
             }
             updateMediaSessionState()
             updateNotification()
@@ -456,7 +450,6 @@ class PlayerService : Service() {
 
     fun stopPlayback() {
         eqManager.release()
-        noiseManager.release()
 
         safelyDestroyPlayer(bgMediaPlayer)
         bgMediaPlayer = null
@@ -489,7 +482,6 @@ class PlayerService : Service() {
                     videoWidth = mp.videoWidth,
                     videoHeight = mp.videoHeight
                 )
-                noiseManager.syncWithPlayer(true)
                 updateMediaSessionState()
                 startForeground(NOTIF_ID, buildNotification())
             } catch (e: Exception) {
@@ -562,7 +554,6 @@ class PlayerService : Service() {
                         isMainPreparing = false
                         isMainPrepared = true
                         _playerState.value = _playerState.value.copy(isPlaying = false)
-                        noiseManager.syncWithPlayer(false)
                     }
                     true
                 }
@@ -681,7 +672,6 @@ class PlayerService : Service() {
         runCatching { unregisterReceiver(noisyAudioReceiver) }
 
         eqManager.release()
-        noiseManager.release()
 
         safelyDestroyPlayer(bgMediaPlayer)
         bgMediaPlayer = null

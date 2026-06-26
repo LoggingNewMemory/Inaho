@@ -624,7 +624,6 @@ fun PlayerScreen(
         if (service != null) {
             EqDialog(
                 eqManager = service.eqManager,
-                noiseManager = service.noiseManager,
                 onDismiss = { showEqDialog = false }
             )
         } else {

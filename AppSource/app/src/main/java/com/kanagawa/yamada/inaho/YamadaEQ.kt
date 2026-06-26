@@ -256,7 +256,6 @@ class YamadaEQManager(private val context: Context) {
 @Composable
 fun EqDialog(
     eqManager: YamadaEQManager,
-    noiseManager: YamadaNoiseManager, // Passed our shiny new manager here!
     onDismiss: () -> Unit
 ) {
     val currentPreset by eqManager.currentPreset.collectAsState()
@@ -320,8 +319,6 @@ fun EqDialog(
             if (currentPreset != EqPreset.OFF) {
                 Spacer(modifier = Modifier.height(8.dp))
             }
-
-            NoiseMaskingPanel(noiseManager = noiseManager)
         }
     }
 }
@@ -367,80 +364,5 @@ private fun EqPresetTile(
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
             textAlign = TextAlign.Center
         )
-    }
-}
-@Composable
-fun NoiseMaskingPanel(noiseManager: YamadaNoiseManager) {
-    val isEnabled by noiseManager.isEnabled.collectAsState()
-    val volume by noiseManager.volume.collectAsState()
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF251818))
-            .padding(16.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column {
-                Text(
-                    text = "Audio Masking",
-                    color = Color.White,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = if (isEnabled) "Audio Masking Online" else "Audio Masking Offline",
-                    color = Color(0xFF888888),
-                    fontSize = 11.sp
-                )
-            }
-            Switch(
-                checked = isEnabled,
-                onCheckedChange = { noiseManager.toggleNoise(it) },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.White,
-                    checkedTrackColor = Color(0xFFB8355B),
-                    uncheckedTrackColor = Color(0xFF3A2424)
-                )
-            )
-        }
-
-        if (isEnabled) {
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text("Layer Volume", color = Color(0xFF888888), fontSize = 10.sp)
-
-            // 🧪 KOYORI'S UI UPGRADE: The Slider and the % Text side-by-side!
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Slider(
-                    value = volume,
-                    onValueChange = { noiseManager.setVolume(it) },
-                    modifier = Modifier.weight(1f), // Pushes the text to the edge
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color(0xFFD4577A),
-                        activeTrackColor = Color(0xFFB8355B)
-                    )
-                )
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Calculates 0.0-1.0 into 0-100 format!
-                Text(
-                    text = "${(volume * 100).toInt()}%",
-                    color = Color.White,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.defaultMinSize(minWidth = 36.dp) // Keeps layout stable
-                )
-            }
-        }
     }
 }
