@@ -66,6 +66,7 @@ fun LyricsOverlay(
     currentPositionMs: Long = 0L
 ) {
     var lyrics by remember(song) { mutableStateOf("") }
+    var originalLyrics by remember(song) { mutableStateOf("") }
     var lrcLines by remember(song) { mutableStateOf<List<LrcLine>>(emptyList()) }
     var isEditing by remember(song) { mutableStateOf(false) }
     var isLoading by remember(song) { mutableStateOf(false) }
@@ -83,6 +84,7 @@ fun LyricsOverlay(
                     if (intentSender == null) {
                         saveStatus = ""
                         isEditing = false
+                        originalLyrics = lyrics
                         lrcLines = parseLrc(lyrics)
                     } else {
                         saveStatus = "Failed again!"
@@ -106,6 +108,7 @@ fun LyricsOverlay(
                     if (f.exists()) {
                         val audioFile = AudioFileIO.read(f)
                         val text = audioFile.tag?.getFirst(FieldKey.LYRICS) ?: ""
+                        originalLyrics = text
                         lrcLines = parseLrc(text)
                         text
                     } else ""
@@ -159,8 +162,16 @@ fun LyricsOverlay(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = onClose) {
-                        Icon(imageVector = Icons.Default.Close, contentDescription = "Close Lyrics", tint = Color.White)
+                    IconButton(onClick = {
+                        if (isEditing) {
+                            lyrics = originalLyrics
+                            lrcLines = parseLrc(originalLyrics)
+                            isEditing = false
+                        } else {
+                            onClose()
+                        }
+                    }) {
+                        Icon(imageVector = Icons.Default.Close, contentDescription = if (isEditing) "Cancel Edit" else "Close Lyrics", tint = Color.White)
                     }
 
                     Text(
@@ -181,6 +192,7 @@ fun LyricsOverlay(
                                         val intentSender = saveLyricsToDisk(context, song, lyrics)
                                         if (intentSender == null) {
                                             saveStatus = ""
+                                            originalLyrics = lyrics
                                             isEditing = false
                                         } else {
                                             writeLauncher.launch(IntentSenderRequest.Builder(intentSender).build())
@@ -251,6 +263,7 @@ fun LyricsOverlay(
                                             val fetched = fetchLrclibLyrics(song!!)
                                             if (fetched != null) {
                                                 lyrics = fetched
+                                                originalLyrics = fetched
                                                 lrcLines = parseLrc(fetched)
                                                 saveStatus = ""
                                                 val intentSender = saveLyricsToDisk(context, song, fetched)
