@@ -309,7 +309,7 @@ fun LyricsOverlay(
                             LazyColumn(
                                 state = listState,
                                 modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(vertical = 120.dp),
+                                contentPadding = PaddingValues(top = 16.dp, bottom = 120.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 itemsIndexed(lrcLines) { index, line ->
@@ -330,7 +330,7 @@ fun LyricsOverlay(
                                         textAlign = TextAlign.Center,
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(vertical = 8.dp)
+                                            .padding(vertical = 4.dp)
                                             .clickable {
                                                 // Optional: seek to line.timeMs? Left out for now as it needs playerService
                                             }
