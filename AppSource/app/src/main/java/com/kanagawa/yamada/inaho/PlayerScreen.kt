@@ -59,10 +59,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
-data class AudioDetails(
+data class MediaDetails(
     val format: String,
-    val sampleRate: String,
-    val bitDepth: String,
+    val info1: String,
+    val info2: String,
     val bitRate: String
 )
 
@@ -92,7 +92,7 @@ fun PlayerScreen(
     var seekValue       by remember { mutableFloatStateOf(0f) }
     var livePositionMs  by remember { mutableLongStateOf(0L) }
 
-    var audioDetails by remember { mutableStateOf<AudioDetails?>(null) }
+    var mediaDetails by remember { mutableStateOf<MediaDetails?>(null) }
 
     var showSpeedPitchDialog     by remember { mutableStateOf(false) }
     var showSleepTimerDialog by remember { mutableStateOf(false) }
@@ -159,9 +159,9 @@ fun PlayerScreen(
 
     LaunchedEffect(song?.id) {
         if (song != null) {
-            withContext(Dispatchers.IO) { audioDetails = extractAudioDetails(context, song.id) }
+            withContext(Dispatchers.IO) { mediaDetails = extractMediaDetails(context, song.trackUri) }
         } else {
-            audioDetails = null
+            mediaDetails = null
         }
     }
 
@@ -247,9 +247,9 @@ fun PlayerScreen(
                         IconButton(onClick = onNavigateBack, modifier = Modifier.align(Alignment.CenterStart).offset(x = (-12).dp)) {
                             Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = accentColor)
                         }
-                        audioDetails?.let { details ->
+                        mediaDetails?.let { details ->
                             Text(
-                                text = "${details.format} • ${details.sampleRate} • ${details.bitDepth} • ${details.bitRate}",
+                                text = "${details.format} • ${details.info1} • ${details.info2} • ${details.bitRate}",
                                 color = Color(0xFFAAAAAA), fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.align(Alignment.Center).background(surfaceColor, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 6.dp)
                             )
@@ -349,9 +349,9 @@ fun PlayerScreen(
                     Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = accentColor)
                 }
 
-                audioDetails?.let { details ->
+                mediaDetails?.let { details ->
                     Text(
-                        text = "${details.format} • ${details.sampleRate} • ${details.bitDepth} • ${details.bitRate}",
+                        text = "${details.format} • ${details.info1} • ${details.info2} • ${details.bitRate}",
                         color = Color(0xFFAAAAAA),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -904,14 +904,7 @@ private fun formatMs(ms: Long): String {
     return String.format("%02d:%02d", totalSeconds / 60, totalSeconds % 60)
 }
 
-private fun extractAudioDetails(context: Context, songId: Any): AudioDetails? {
-    val uri = try {
-        val idAsLong = songId.toString().toLong()
-        ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, idAsLong)
-    } catch (e: Exception) {
-        Uri.parse(songId.toString())
-    }
-
+private fun extractMediaDetails(context: Context, uri: Uri): MediaDetails? {
     return try {
         val retriever = MediaMetadataRetriever()
         val extractor = MediaExtractor()
@@ -919,22 +912,16 @@ private fun extractAudioDetails(context: Context, songId: Any): AudioDetails? {
         try {
             retriever.setDataSource(context, uri)
 
-            val mime = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE) ?: ""
-            val formatStr = when {
-                mime.contains("flac", true) -> "FLAC"
-                mime.contains("mpeg", true) -> "MP3"
-                mime.contains("mp4",  true) -> "M4A/MP4"
-                mime.contains("wav",  true) -> "WAV"
-                mime.contains("ogg",  true) -> "OGG"
-                mime.contains("aac",  true) -> "AAC"
-                mime.isNotEmpty()           -> mime.substringAfterLast("/").uppercase()
-                else                        -> "UNKNOWN"
-            }
-
             val bitrateStr  = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)
             val bitrateKbps = bitrateStr?.toLongOrNull()?.div(1000)?.toString() ?: "Unknown"
 
             extractor.setDataSource(context, uri, null)
+
+            var isVideo = false
+            var videoWidth = 0
+            var videoHeight = 0
+            var frameRate = 0f
+            var videoMime = ""
 
             var sampleRate = "Unknown"
             var bitDepth   = "16"
@@ -944,7 +931,25 @@ private fun extractAudioDetails(context: Context, songId: Any): AudioDetails? {
                     val format = extractor.getTrackFormat(i)
                     val trackMime = format.getString(MediaFormat.KEY_MIME) ?: ""
 
-                    if (trackMime.startsWith("audio/")) {
+                    if (trackMime.startsWith("video/")) {
+                        isVideo = true
+                        videoMime = trackMime
+                        if (format.containsKey(MediaFormat.KEY_WIDTH)) {
+                            videoWidth = format.getInteger(MediaFormat.KEY_WIDTH)
+                        }
+                        if (format.containsKey(MediaFormat.KEY_HEIGHT)) {
+                            videoHeight = format.getInteger(MediaFormat.KEY_HEIGHT)
+                        }
+                        if (format.containsKey(MediaFormat.KEY_FRAME_RATE)) {
+                            try {
+                                frameRate = format.getInteger(MediaFormat.KEY_FRAME_RATE).toFloat()
+                            } catch (e: Exception) {
+                                try {
+                                    frameRate = format.getFloat(MediaFormat.KEY_FRAME_RATE)
+                                } catch (e2: Exception) {}
+                            }
+                        }
+                    } else if (trackMime.startsWith("audio/")) {
                         if (format.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
                             val sr = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
                             sampleRate = if (sr % 1000 == 0) "${sr / 1000}" else "${sr / 1000f}"
@@ -965,7 +970,37 @@ private fun extractAudioDetails(context: Context, songId: Any): AudioDetails? {
                 }
             }
 
-            AudioDetails(formatStr, "${sampleRate} kHz", "$bitDepth Bit", "$bitrateKbps kbps")
+            if (isVideo) {
+                val formatStr = when {
+                    videoMime.contains("avc", true) -> "AVC"
+                    videoMime.contains("hevc", true) -> "HEVC"
+                    videoMime.contains("vp9", true) -> "VP9"
+                    videoMime.contains("vp8", true) -> "VP8"
+                    videoMime.contains("mp4v", true) -> "MP4V"
+                    videoMime.isNotEmpty() -> videoMime.substringAfterLast("/").uppercase()
+                    else -> "VIDEO"
+                }
+                
+                val resStr = if (videoWidth > 0 && videoHeight > 0) "${videoWidth}x${videoHeight}" else "Unknown Res"
+                val fpsStr = if (frameRate > 0f) {
+                    if (frameRate == frameRate.toInt().toFloat()) "${frameRate.toInt()} FPS" else "${String.format("%.2f", frameRate)} FPS"
+                } else "Unknown FPS"
+                
+                MediaDetails(formatStr, resStr, fpsStr, "$bitrateKbps kbps")
+            } else {
+                val mime = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE) ?: ""
+                val formatStr = when {
+                    mime.contains("flac", true) -> "FLAC"
+                    mime.contains("mpeg", true) -> "MP3"
+                    mime.contains("mp4",  true) -> "M4A/MP4"
+                    mime.contains("wav",  true) -> "WAV"
+                    mime.contains("ogg",  true) -> "OGG"
+                    mime.contains("aac",  true) -> "AAC"
+                    mime.isNotEmpty()           -> mime.substringAfterLast("/").uppercase()
+                    else                        -> "UNKNOWN"
+                }
+                MediaDetails(formatStr, "${sampleRate} kHz", "$bitDepth Bit", "$bitrateKbps kbps")
+            }
         } finally {
             extractor.release()
             retriever.release()
