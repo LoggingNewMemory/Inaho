@@ -260,9 +260,8 @@ fun PlayerScreen(
                     }
                     
                     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                        val artScale by animateFloatAsState(targetValue = if (playerState.isPlaying) 1f else 0.85f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow), label = "AlbumArtScale")
                         val artLayerAlpha by animateFloatAsState(targetValue = if (showQueueSheet) 0f else 1f, label = "ArtLayerAlpha")
-                        Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f).scale(artScale).clip(RoundedCornerShape(12.dp)).background(surfaceColor).alpha(artLayerAlpha).clickable(enabled = !showQueueSheet) { isAmvModeActive = !isAmvModeActive }, contentAlignment = Alignment.Center) {
+                        Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp)).background(surfaceColor).alpha(artLayerAlpha).clickable(enabled = !showQueueSheet) { isAmvModeActive = !isAmvModeActive }, contentAlignment = Alignment.Center) {
                             AMVVideoSurface(playerService = playerService, isBackground = false, modifier = Modifier.fillMaxSize())
                             if (coverBitmap != null) Image(bitmap = coverBitmap.asImageBitmap(), contentDescription = "Album Art", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().alpha(coverAlpha))
                             else Box(modifier = Modifier.fillMaxSize().alpha(coverAlpha).background(surfaceColor), contentAlignment = Alignment.Center) { Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = Color(0xFF3D2020), modifier = Modifier.size(80.dp)) }
@@ -377,15 +376,6 @@ fun PlayerScreen(
                 modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.TopCenter
             ) {
-                val artScale by animateFloatAsState(
-                    targetValue = if (playerState.isPlaying) 1f else 0.85f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessLow
-                    ),
-                    label = "AlbumArtScale"
-                )
-
                 // 2. Animate the alpha instead of removing it from composition
                 val artLayerAlpha by animateFloatAsState(
                     targetValue = if (showQueueSheet) 0f else 1f,
@@ -396,7 +386,6 @@ fun PlayerScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)
-                        .scale(artScale)
                         .clip(RoundedCornerShape(12.dp))
                         .background(surfaceColor)
                         .alpha(artLayerAlpha) // Apply the alpha here
@@ -708,9 +697,9 @@ fun QueuePanel(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(max = 260.dp)
+            .aspectRatio(1f)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF1A1010).copy(alpha = 0.9f))
+            .background(Color.Transparent)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
