@@ -8,6 +8,7 @@ package com.kanagawa.yamada.inaho
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
@@ -51,6 +53,7 @@ fun SetupScreen(
     val settings by settingsManager.settingsFlow.collectAsState()
     val bgColor = if (settings.amoledBlack) Color.Black else Color(0xFF120E0E)
     val accentColor = Color(0xFFB8355B)
+    val accentDim = Color(0xFF8A2844)
     val context = LocalContext.current
 
     val photoPicker = rememberLauncherForActivityResult(
@@ -76,179 +79,180 @@ fun SetupScreen(
         startAnimation = true
     }
 
-    // ─── Logo: spring scale punch-in + rotation ───────────────────────────────
-    val logoScale by animateFloatAsState(
-        targetValue = if (startAnimation) 1f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-            visibilityThreshold = 0.001f
-        ),
-        label = "logoScale"
+    // ─── Avatar: smooth scale + fade ──────────────────────────────────────────
+    val avatarScale by animateFloatAsState(
+        targetValue = if (startAnimation) 1f else 0.6f,
+        animationSpec = tween(durationMillis = 700, delayMillis = 100, easing = FastOutSlowInEasing),
+        label = "avatarScale"
     )
-    val logoRotate by animateFloatAsState(
-        targetValue = if (startAnimation) 0f else -30f,
-        animationSpec = tween(durationMillis = 700, delayMillis = 80, easing = FastOutSlowInEasing),
-        label = "logoRotate"
-    )
-    val logoAlpha by animateFloatAsState(
+    val avatarAlpha by animateFloatAsState(
         targetValue = if (startAnimation) 1f else 0f,
-        animationSpec = tween(durationMillis = 400, delayMillis = 80),
-        label = "logoAlpha"
+        animationSpec = tween(durationMillis = 500, delayMillis = 100),
+        label = "avatarAlpha"
     )
 
-    // ─── Title: clip-reveal slide up from below ────────────────────────────────
+    // ─── Title: slide up + fade ───────────────────────────────────────────────
     val titleOffsetY by animateDpAsState(
-        targetValue = if (startAnimation) 0.dp else 48.dp,
-        animationSpec = tween(durationMillis = 650, delayMillis = 280, easing = FastOutSlowInEasing),
+        targetValue = if (startAnimation) 0.dp else 32.dp,
+        animationSpec = tween(durationMillis = 600, delayMillis = 350, easing = FastOutSlowInEasing),
         label = "titleOffsetY"
     )
     val titleAlpha by animateFloatAsState(
         targetValue = if (startAnimation) 1f else 0f,
-        animationSpec = tween(durationMillis = 500, delayMillis = 280),
+        animationSpec = tween(durationMillis = 500, delayMillis = 350),
         label = "titleAlpha"
     )
 
-    // ─── Subtitle: spring bounce scale + slide ────────────────────────────────
-    val subtitleScale by animateFloatAsState(
-        targetValue = if (startAnimation) 1f else 0.92f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "subtitleScale"
-    )
+    // ─── Subtitle: slide up + fade ────────────────────────────────────────────
     val subtitleOffsetY by animateDpAsState(
-        targetValue = if (startAnimation) 0.dp else 24.dp,
-        animationSpec = tween(durationMillis = 600, delayMillis = 440, easing = FastOutSlowInEasing),
+        targetValue = if (startAnimation) 0.dp else 20.dp,
+        animationSpec = tween(durationMillis = 550, delayMillis = 500, easing = FastOutSlowInEasing),
         label = "subtitleOffsetY"
     )
     val subtitleAlpha by animateFloatAsState(
         targetValue = if (startAnimation) 1f else 0f,
-        animationSpec = tween(durationMillis = 500, delayMillis = 440),
+        animationSpec = tween(durationMillis = 450, delayMillis = 500),
         label = "subtitleAlpha"
     )
 
-    // ─── Input: slide in from left + spring scale ─────────────────────────────
-    val inputOffsetX by animateDpAsState(
-        targetValue = if (startAnimation) 0.dp else (-36).dp,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        ),
-        label = "inputOffsetX"
-    )
-    val inputScale by animateFloatAsState(
-        targetValue = if (startAnimation) 1f else 0.97f,
-        animationSpec = tween(durationMillis = 600, delayMillis = 580),
-        label = "inputScale"
+    // ─── Input: slide up + fade ───────────────────────────────────────────────
+    val inputOffsetY by animateDpAsState(
+        targetValue = if (startAnimation) 0.dp else 24.dp,
+        animationSpec = tween(durationMillis = 550, delayMillis = 650, easing = FastOutSlowInEasing),
+        label = "inputOffsetY"
     )
     val inputAlpha by animateFloatAsState(
         targetValue = if (startAnimation) 1f else 0f,
-        animationSpec = tween(durationMillis = 500, delayMillis = 580),
+        animationSpec = tween(durationMillis = 450, delayMillis = 650),
         label = "inputAlpha"
     )
 
-    // ─── Button: scale spring pop + slide up ──────────────────────────────────
-    val buttonScale by animateFloatAsState(
-        targetValue = if (startAnimation) 1f else 0.85f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "buttonScale"
-    )
+    // ─── Button: slide up + fade ──────────────────────────────────────────────
     val buttonOffsetY by animateDpAsState(
-        targetValue = if (startAnimation) 0.dp else 16.dp,
-        animationSpec = tween(durationMillis = 550, delayMillis = 700, easing = FastOutSlowInEasing),
+        targetValue = if (startAnimation) 0.dp else 20.dp,
+        animationSpec = tween(durationMillis = 500, delayMillis = 800, easing = FastOutSlowInEasing),
         label = "buttonOffsetY"
     )
     val buttonAlpha by animateFloatAsState(
         targetValue = if (startAnimation) 1f else 0f,
-        animationSpec = tween(durationMillis = 450, delayMillis = 700),
+        animationSpec = tween(durationMillis = 400, delayMillis = 800),
         label = "buttonAlpha"
+    )
+
+    // ─── Glow ring pulse ──────────────────────────────────────────────────────
+    val infiniteTransition = rememberInfiniteTransition(label = "glowPulse")
+    val glowAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.7f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2000, easing = FastOutSlowInEasing),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        ),
+        label = "glowAlpha"
     )
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(bgColor)
-            .padding(horizontal = 32.dp),
+            .safeDrawingPadding()
+            .padding(horizontal = 36.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
 
-        // Logo — spring scale punch-in with rotation
+        // ─── Avatar with glow ring ────────────────────────────────────────────
         Box(
             modifier = Modifier
-                .wrapContentSize()
-                .alpha(logoAlpha)
+                .alpha(avatarAlpha)
                 .graphicsLayer {
-                    scaleX = logoScale
-                    scaleY = logoScale
-                    rotationZ = logoRotate
-                }
+                    scaleX = avatarScale
+                    scaleY = avatarScale
+                },
+            contentAlignment = Alignment.Center
         ) {
+            // Glow ring behind avatar
             Box(
                 modifier = Modifier
-                    .size(100.dp)
+                    .size(128.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF222222))
+                    .border(
+                        width = 2.dp,
+                        brush = Brush.sweepGradient(
+                            listOf(
+                                accentColor.copy(alpha = glowAlpha),
+                                accentDim.copy(alpha = glowAlpha * 0.5f),
+                                accentColor.copy(alpha = glowAlpha)
+                            )
+                        ),
+                        shape = CircleShape
+                    )
+            )
+
+            // Avatar image
+            Box(
+                modifier = Modifier
+                    .size(120.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF1A1A1A))
                     .clickable {
                         photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     },
                 contentAlignment = Alignment.Center
             ) {
-            if (photoUri != null) {
-                AsyncImage(
-                    model = photoUri,
-                    contentDescription = "User Photo",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Image(
-                    painter = painterResource(id = R.drawable.ic_inaho),
-                    contentDescription = "Inaho Logo",
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(CircleShape)
-                )
+                if (photoUri != null) {
+                    AsyncImage(
+                        model = photoUri,
+                        contentDescription = "User Photo",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_inaho),
+                        contentDescription = "Inaho Logo",
+                        modifier = Modifier
+                            .size(88.dp)
+                            .clip(CircleShape)
+                    )
+                }
             }
-        } // Close inner Box
 
-        // Add Edit / Camera Badge over the Box
+            // Camera badge
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .size(32.dp)
+                    .offset(x = (-4).dp, y = (-4).dp)
+                    .size(34.dp)
                     .clip(CircleShape)
                     .background(accentColor)
+                    .border(2.dp, bgColor, CircleShape)
                     .clickable {
                         photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = androidx.compose.material.icons.Icons.Rounded.Person,
+                    imageVector = Icons.Rounded.Person,
                     contentDescription = "Change Photo",
                     tint = Color.White,
                     modifier = Modifier.size(18.dp)
                 )
             }
-        } // Close outer Box
+        }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
+
         Text(
-            text = "Tap to set photo",
-            color = Color(0xFF888888),
+            text = "Tap to set your photo",
+            color = Color(0xFF666666),
             fontSize = 12.sp,
-            modifier = Modifier.alpha(logoAlpha)
+            modifier = Modifier.alpha(avatarAlpha)
         )
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
-        // Title — clip reveal: text slides up from behind a clipping boundary
+        // ─── Title ────────────────────────────────────────────────────────────
         Box(
             modifier = Modifier
                 .wrapContentSize()
@@ -257,37 +261,34 @@ fun SetupScreen(
             Text(
                 text = "Welcome to Inaho",
                 color = Color.White,
-                fontSize = 34.sp,
+                fontSize = 32.sp,
                 fontWeight = FontWeight.ExtraBold,
                 textAlign = TextAlign.Center,
+                letterSpacing = (-0.5).sp,
                 modifier = Modifier
                     .alpha(titleAlpha)
                     .offset(y = titleOffsetY)
             )
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // Subtitle — spring bounce scale + slide
+        // ─── Subtitle ────────────────────────────────────────────────────────
         Text(
             text = "How should we call you?",
-            color = accentColor.copy(alpha = 0.85f),
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Medium,
+            color = Color(0xFFAAAAAA),
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Normal,
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .alpha(subtitleAlpha)
                 .offset(y = subtitleOffsetY)
-                .graphicsLayer {
-                    scaleX = subtitleScale
-                    scaleY = subtitleScale
-                }
         )
 
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(40.dp))
 
-        // Input — slides in from the left with spring scale
-        OutlinedTextField(
+        // ─── Name input ───────────────────────────────────────────────────────
+        TextField(
             value = name,
             onValueChange = { name = it },
             singleLine = true,
@@ -306,13 +307,13 @@ fun SetupScreen(
                 )
             },
             colors = TextFieldDefaults.colors(
-                focusedIndicatorColor = accentColor,
-                unfocusedIndicatorColor = Color(0xFF333333),
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
                 focusedTextColor = Color.White,
                 unfocusedTextColor = Color.White,
                 cursorColor = accentColor,
-                focusedContainerColor = bgColor,
-                unfocusedContainerColor = bgColor
+                focusedContainerColor = Color(0xFF1E1E1E),
+                unfocusedContainerColor = Color(0xFF1A1A1A)
             ),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(
@@ -326,50 +327,44 @@ fun SetupScreen(
             ),
             modifier = Modifier
                 .fillMaxWidth()
+                .height(58.dp)
                 .alpha(inputAlpha)
-                .offset(x = inputOffsetX)
-                .graphicsLayer {
-                    scaleX = inputScale
-                    scaleY = inputScale
-                }
+                .offset(y = inputOffsetY)
         )
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        // Button — scale spring pop from below
+        // ─── Continue button ──────────────────────────────────────────────────
         Button(
             onClick = {
                 if (name.isNotBlank()) {
                     settingsManager.updateUserName(name.trim())
+                    settingsManager.updateUserPhotoUri(photoUri?.toString())
                     onComplete()
                 }
             },
             enabled = name.isNotBlank(),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
+                .height(54.dp)
                 .alpha(buttonAlpha)
-                .offset(y = buttonOffsetY)
-                .graphicsLayer {
-                    scaleX = buttonScale
-                    scaleY = buttonScale
-                },
+                .offset(y = buttonOffsetY),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = accentColor,
-                disabledContainerColor = Color(0xFF2A2A2A),
+                disabledContainerColor = Color(0xFF1E1E1E),
                 contentColor = Color.White,
-                disabledContentColor = Color(0xFF666666)
+                disabledContentColor = Color(0xFF555555)
             ),
             elevation = ButtonDefaults.buttonElevation(
-                defaultElevation = if (name.isNotBlank()) 8.dp else 0.dp
+                defaultElevation = 0.dp
             )
         ) {
             Text(
                 text = "Let's Go",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.5.sp
             )
         }
     }
