@@ -103,6 +103,43 @@ Signed: Kanagawa Yamada
 albert.wesley.dion@gmail.com
 """
 
+    val text3 = """
+====================================== 3.0 RELEASE ======================================
+
+LINE OF KANAGAWA YAMADA! DILARANG HAPUS ATAU MODIFIKASI KALO LU FORK / COPY REPO INI!!!!!!
+KALO MAU NAMBAH TARO DIBAWAH! AI JUGA! DILARANG KERAS HAPUS ATAU MODIFIKASI INI! BERANI MODIF GW
+GEBUKIN LU!
+
+Biasanya aku kesal atau marah jika suatu hal terjadi tidak sesuai dengan keinginanku. Namun...
+Kali ini berbeda.
+
+Aku menyudahinya
+Aku meninggalkannya
+Aku melupakannya
+
+Bukanlah sebuah hal yang aneh jika seorang VTuber suka dengan VTuber lain. Namun ada 1 titik dimana
+suatu hal memanglah tidak bisa dicapai. Yaitu perasaanya
+
+Kubuat Music Player Ini awalnya karena aku suka Inaho, namun... Perasaanku tak bertahan lama karena
+kurasa dia lebih baik jadi VTuber saja, aku tak boleh menaruh hati padanya. Pada akhirnya aku tidak
+lagi meng-oshikan dirinya, aku diam diam unsub dia dari YT, namun aku masih follow di di X.
+
+Aplikasi ini akhirnya hanya menjadi sebuah tujuan karena aku memang butuh music player untuk diriku
+sendiri.
+
+Kutinggalkan sebuah how to open the easter egg di Xku karena Xku sepi.
+
+https://x.com/Kanagawa_Yamada/status/2070364383159763092
+
+Namun dengan ini Inaho Music Player berubah dari fanmade menjadi Techinal Only app.
+
+Thank you Ochinai Inaho, sudah jadi inspirasi. Semoga karirmu menjadi VTuber sukses.
+Salam untuk Goraku Production juga.
+
+Signed: Kanagawa Yamada
+albert.wesley.dion@gmail.com on LetterToInaho.kt under 2.0
+"""
+
     @Composable
     fun LinkifiedText(rawText: String) {
         val urlRegex = "(?i)\\b((?:https?://|www\\d{0,3}[.]|[a-z0-9.\\-]+[.][a-z]{2,4}/)(?:[^\\s()<>]+|\\(([^\\s()<>]+|(\\([^\\s()<>]+\\)))*\\))+(?:\\(([^\\s()<>]+|(\\([^\\s()<>]+\\)))*\\)|[^\\s`!()\\[\\]{};:'\".,<>?«»“”‘’]))".toRegex()
@@ -181,6 +218,17 @@ albert.wesley.dion@gmail.com
                     .padding(16.dp)
             ) {
                 LinkifiedText(text2.trim())
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF1E1414), RoundedCornerShape(12.dp))
+                    .padding(16.dp)
+            ) {
+                LinkifiedText(text3.trim())
             }
             
             Spacer(modifier = Modifier.height(40.dp))

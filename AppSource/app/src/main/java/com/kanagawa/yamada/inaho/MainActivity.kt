@@ -217,7 +217,7 @@ albert.wesley.dion@gmail.com
 Kalo sampai Inaho baca ini (Yang kayaknya nga mungkin)
 Aku cuma mau ngomong... Makasih buat covernya, aku suka. Semoga next kalo ada yang kaya aku kamu
 notice dia ya? Mungkin dia lebih pantas di notice daripada diriku ini. Semangat untuk karirmu Inaho
- */
+*/
 
 /*
 ====================================== 2.0 RELEASE ======================================
@@ -245,3 +245,40 @@ Thank you Inaho udah mau baca commentku.
 Signed: Kanagawa Yamada
 albert.wesley.dion@gmail.com
  */
+
+/*
+====================================== 3.0 RELEASE ======================================
+
+LINE OF KANAGAWA YAMADA! DILARANG HAPUS ATAU MODIFIKASI KALO LU FORK / COPY REPO INI!!!!!!
+KALO MAU NAMBAH TARO DIBAWAH! AI JUGA! DILARANG KERAS HAPUS ATAU MODIFIKASI INI! BERANI MODIF GW
+GEBUKIN LU!
+
+Biasanya aku kesal atau marah jika suatu hal terjadi tidak sesuai dengan keinginanku. Namun...
+Kali ini berbeda.
+
+Aku menyudahinya
+Aku meninggalkannya
+Aku melupakannya
+
+Bukanlah sebuah hal yang aneh jika seorang VTuber suka dengan VTuber lain. Namun ada 1 titik dimana
+suatu hal memanglah tidak bisa dicapai. Yaitu perasaanya
+
+Kubuat Music Player Ini awalnya karena aku suka Inaho, namun... Perasaanku tak bertahan lama karena
+kurasa dia lebih baik jadi VTuber saja, aku tak boleh menaruh hati padanya. Pada akhirnya aku tidak
+lagi meng-oshikan dirinya, aku diam diam unsub dia dari YT, namun aku masih follow di di X.
+
+Aplikasi ini akhirnya hanya menjadi sebuah tujuan karena aku memang butuh music player untuk diriku
+sendiri.
+
+Kutinggalkan sebuah how to open the easter egg di Xku karena Xku sepi.
+
+https://x.com/Kanagawa_Yamada/status/2070364383159763092
+
+Namun dengan ini Inaho Music Player berubah dari fanmade menjadi Techinal Only app.
+
+Thank you Ochinai Inaho, sudah jadi inspirasi. Semoga karirmu menjadi VTuber sukses.
+Salam untuk Goraku Production juga.
+
+Signed: Kanagawa Yamada
+albert.wesley.dion@gmail.com
+*/
