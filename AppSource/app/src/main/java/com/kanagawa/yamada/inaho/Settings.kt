@@ -83,7 +83,8 @@ data class AppSettings(
     val amvDimAmount: Float = 0.6f,
     val showCoverBackground: Boolean = true,
     val enableBackgroundBlur: Boolean = true,
-    val theme: AppTheme = AppTheme.INAHO
+    val theme: AppTheme = AppTheme.INAHO,
+    val userPhotoUri: String? = null
 )
 
 class SettingsManager(context: Context) {
@@ -102,7 +103,8 @@ class SettingsManager(context: Context) {
             amvDimAmount = prefs.getFloat("amv_dim_amount", 0.6f),
             showCoverBackground = prefs.getBoolean("show_cover_background", true),
             enableBackgroundBlur = prefs.getBoolean("enable_background_blur", true),
-            theme = AppTheme.valueOf(prefs.getString("theme", AppTheme.INAHO.name) ?: AppTheme.INAHO.name)
+            theme = AppTheme.valueOf(prefs.getString("theme", AppTheme.INAHO.name) ?: AppTheme.INAHO.name),
+            userPhotoUri = prefs.getString("user_photo_uri", null)
         )
     )
     val settingsFlow = _settingsFlow.asStateFlow()
@@ -155,6 +157,11 @@ class SettingsManager(context: Context) {
     fun updateTheme(theme: AppTheme) {
         prefs.edit().putString("theme", theme.name).apply()
         _settingsFlow.value = _settingsFlow.value.copy(theme = theme)
+    }
+
+    fun updateUserPhotoUri(uri: String?) {
+        prefs.edit().putString("user_photo_uri", uri).apply()
+        _settingsFlow.value = _settingsFlow.value.copy(userPhotoUri = uri)
     }
 }
 

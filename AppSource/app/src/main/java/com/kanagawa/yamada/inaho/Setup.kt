@@ -30,6 +30,15 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
+import coil3.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.clickable
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
+import android.content.Intent
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,9 +47,27 @@ fun SetupScreen(
     onComplete: () -> Unit
 ) {
     var name by remember { mutableStateOf("") }
+    var photoUri by remember { mutableStateOf<Uri?>(null) }
     val settings by settingsManager.settingsFlow.collectAsState()
     val bgColor = if (settings.amoledBlack) Color.Black else Color(0xFF120E0E)
     val accentColor = Color(0xFFB8355B)
+    val context = LocalContext.current
+
+    val photoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        uri?.let {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    it,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            photoUri = it
+        }
+    }
 
     // Animation trigger
     var startAnimation by remember { mutableStateOf(false) }
@@ -152,19 +179,71 @@ fun SetupScreen(
     ) {
 
         // Logo — spring scale punch-in with rotation
-        Image(
-            painter = painterResource(id = R.drawable.ic_inaho),
-            contentDescription = "Inaho Logo",
+        Box(
             modifier = Modifier
-                .size(80.dp)
-                .clip(CircleShape)
-                .background(Color.White)
+                .wrapContentSize()
                 .alpha(logoAlpha)
                 .graphicsLayer {
                     scaleX = logoScale
                     scaleY = logoScale
                     rotationZ = logoRotate
                 }
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(100.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF222222))
+                    .clickable {
+                        photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+            if (photoUri != null) {
+                AsyncImage(
+                    model = photoUri,
+                    contentDescription = "User Photo",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_inaho),
+                    contentDescription = "Inaho Logo",
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(CircleShape)
+                )
+            }
+        } // Close inner Box
+
+        // Add Edit / Camera Badge over the Box
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(accentColor)
+                    .clickable {
+                        photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = androidx.compose.material.icons.Icons.Rounded.Person,
+                    contentDescription = "Change Photo",
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        } // Close outer Box
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Tap to set photo",
+            color = Color(0xFF888888),
+            fontSize = 12.sp,
+            modifier = Modifier.alpha(logoAlpha)
         )
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -240,6 +319,7 @@ fun SetupScreen(
                 onDone = {
                     if (name.isNotBlank()) {
                         settingsManager.updateUserName(name.trim())
+                        settingsManager.updateUserPhotoUri(photoUri?.toString())
                         onComplete()
                     }
                 }
