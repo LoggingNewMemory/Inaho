@@ -273,9 +273,8 @@ fun LyricsOverlay(
                                     onClick = {
                                         scope.launch {
                                             isLoading = true
-                                            val result = fetchLrclibLyrics(song!!)
-                                            if (result.isSuccess) {
-                                                val fetched = result.getOrNull()
+                                            try {
+                                                val fetched = fetchLrclibLyrics(song!!)
                                                 if (fetched != null) {
                                                     lyrics = fetched
                                                     originalLyrics = fetched
@@ -288,7 +287,8 @@ fun LyricsOverlay(
                                                 } else {
                                                     saveStatus = "Lyrics not found on LRCLIB"
                                                 }
-                                            } else {
+                                            } catch (e: Exception) {
+                                                e.printStackTrace()
                                                 saveStatus = "Network error: Connection failed or timed out"
                                             }
                                             isLoading = false
@@ -444,94 +444,90 @@ suspend fun saveLyricsToDisk(context: android.content.Context, song: Song, lyric
     }
 }
 
-suspend fun fetchLrclibLyrics(song: Song): Result<String?> = withContext(Dispatchers.IO) {
+suspend fun fetchLrclibLyrics(song: Song): String? = withContext(Dispatchers.IO) {
+    val titleEnc = URLEncoder.encode(song.title, "UTF-8")
+    val artistEnc = URLEncoder.encode(song.artist, "UTF-8")
+    val durationSecs = song.durationMs / 1000
+
+    var albumEnc = ""
     try {
-        val titleEnc = URLEncoder.encode(song.title, "UTF-8")
-        val artistEnc = URLEncoder.encode(song.artist, "UTF-8")
-        val durationSecs = song.durationMs / 1000
-
-        var albumEnc = ""
-        try {
-            val f = File(song.path)
-            if (f.exists()) {
-                val audioFile = AudioFileIO.read(f)
-                val album = audioFile.tag?.getFirst(FieldKey.ALBUM)
-                if (!album.isNullOrBlank()) {
-                    albumEnc = URLEncoder.encode(album, "UTF-8")
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-
-        val getUrlString = buildString {
-            append("https://lrclib.net/api/get?track_name=$titleEnc&artist_name=$artistEnc&duration=$durationSecs")
-            if (albumEnc.isNotEmpty()) {
-                append("&album_name=$albumEnc")
+        val f = File(song.path)
+        if (f.exists()) {
+            val audioFile = AudioFileIO.read(f)
+            val album = audioFile.tag?.getFirst(FieldKey.ALBUM)
+            if (!album.isNullOrBlank()) {
+                albumEnc = URLEncoder.encode(album, "UTF-8")
             }
         }
-
-        // 1. Try /api/get
-        try {
-            val getUrl = URL(getUrlString)
-            val getConnection = getUrl.openConnection() as HttpURLConnection
-            getConnection.requestMethod = "GET"
-            getConnection.setRequestProperty("User-Agent", "Inaho Music Player (https://github.com/inaho)")
-            getConnection.connectTimeout = 5000
-            getConnection.readTimeout = 5000
-
-            if (getConnection.responseCode == 200) {
-                val response = getConnection.inputStream.bufferedReader().use { it.readText() }
-                val item = JSONObject(response)
-                if (!item.isNull("syncedLyrics") && item.getString("syncedLyrics").isNotBlank()) {
-                    return@withContext Result.success(item.getString("syncedLyrics"))
-                }
-                if (!item.isNull("plainLyrics") && item.getString("plainLyrics").isNotBlank()) {
-                    return@withContext Result.success(item.getString("plainLyrics"))
-                }
-            }
-        } catch (e: Exception) {
-            if (e is java.net.SocketTimeoutException || e is java.net.UnknownHostException || e is java.net.ConnectException) {
-                return@withContext Result.failure(e)
-            }
-            e.printStackTrace()
-        }
-
-        // 2. Fallback to /api/search
-        try {
-            val qEnc = URLEncoder.encode("${song.artist} ${song.title}", "UTF-8")
-            val searchUrl = URL("https://lrclib.net/api/search?q=$qEnc")
-            val searchConnection = searchUrl.openConnection() as HttpURLConnection
-            searchConnection.requestMethod = "GET"
-            searchConnection.setRequestProperty("User-Agent", "Inaho Music Player (https://github.com/inaho)")
-            searchConnection.connectTimeout = 5000
-            searchConnection.readTimeout = 5000
-
-            if (searchConnection.responseCode == 200) {
-                val response = searchConnection.inputStream.bufferedReader().use { it.readText() }
-                val jsonArray = JSONArray(response)
-                if (jsonArray.length() > 0) {
-                    for (i in 0 until jsonArray.length()) {
-                        val item = jsonArray.getJSONObject(i)
-                        if (!item.isNull("syncedLyrics") && item.getString("syncedLyrics").isNotBlank()) {
-                            return@withContext Result.success(item.getString("syncedLyrics"))
-                        }
-                    }
-                    val firstItem = jsonArray.getJSONObject(0)
-                    if (!firstItem.isNull("plainLyrics") && firstItem.getString("plainLyrics").isNotBlank()) {
-                        return@withContext Result.success(firstItem.getString("plainLyrics"))
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            if (e is java.net.SocketTimeoutException || e is java.net.UnknownHostException || e is java.net.ConnectException) {
-                return@withContext Result.failure(e)
-            }
-            e.printStackTrace()
-        }
-
-        return@withContext Result.success(null)
     } catch (e: Exception) {
-        return@withContext Result.failure(e)
+        e.printStackTrace()
     }
+
+    val getUrlString = buildString {
+        append("https://lrclib.net/api/get?track_name=$titleEnc&artist_name=$artistEnc&duration=$durationSecs")
+        if (albumEnc.isNotEmpty()) {
+            append("&album_name=$albumEnc")
+        }
+    }
+
+    // 1. Try /api/get
+    try {
+        val getUrl = URL(getUrlString)
+        val getConnection = getUrl.openConnection() as HttpURLConnection
+        getConnection.requestMethod = "GET"
+        getConnection.setRequestProperty("User-Agent", "InahoMusicPlayer/1.0 (https://github.com/inaho)")
+        getConnection.connectTimeout = 10000
+        getConnection.readTimeout = 10000
+
+        if (getConnection.responseCode == 200) {
+            val response = getConnection.inputStream.bufferedReader().use { it.readText() }
+            val item = JSONObject(response)
+            if (!item.isNull("syncedLyrics") && item.getString("syncedLyrics").isNotBlank()) {
+                return@withContext item.getString("syncedLyrics")
+            }
+            if (!item.isNull("plainLyrics") && item.getString("plainLyrics").isNotBlank()) {
+                return@withContext item.getString("plainLyrics")
+            }
+        }
+    } catch (e: Exception) {
+        if (e is java.net.SocketTimeoutException || e is java.net.UnknownHostException || e is java.net.ConnectException) {
+            throw e
+        }
+        e.printStackTrace()
+    }
+
+    // 2. Fallback to /api/search
+    try {
+        val qEnc = URLEncoder.encode("${song.artist} ${song.title}", "UTF-8")
+        val searchUrl = URL("https://lrclib.net/api/search?q=$qEnc")
+        val searchConnection = searchUrl.openConnection() as HttpURLConnection
+        searchConnection.requestMethod = "GET"
+        searchConnection.setRequestProperty("User-Agent", "InahoMusicPlayer/1.0 (https://github.com/inaho)")
+        searchConnection.connectTimeout = 10000
+        searchConnection.readTimeout = 10000
+
+        if (searchConnection.responseCode == 200) {
+            val response = searchConnection.inputStream.bufferedReader().use { it.readText() }
+            val jsonArray = JSONArray(response)
+            if (jsonArray.length() > 0) {
+                for (i in 0 until jsonArray.length()) {
+                    val item = jsonArray.getJSONObject(i)
+                    if (!item.isNull("syncedLyrics") && item.getString("syncedLyrics").isNotBlank()) {
+                        return@withContext item.getString("syncedLyrics")
+                    }
+                }
+                val firstItem = jsonArray.getJSONObject(0)
+                if (!firstItem.isNull("plainLyrics") && firstItem.getString("plainLyrics").isNotBlank()) {
+                    return@withContext firstItem.getString("plainLyrics")
+                }
+            }
+        }
+    } catch (e: Exception) {
+        if (e is java.net.SocketTimeoutException || e is java.net.UnknownHostException || e is java.net.ConnectException) {
+            throw e
+        }
+        e.printStackTrace()
+    }
+
+    return@withContext null
 }
