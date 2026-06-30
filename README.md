@@ -32,6 +32,12 @@ No accounts. No streaming. No cloud. Just your music, on your device.
 - **Sleep timer** — auto-pause after 5, 10, 15, 20, 30, or 60 minutes
 - **Background & lock screen playback** — full `MediaSessionCompat` integration for rich media notifications and hardware controls
 
+### 🎵 Lyrics Support
+
+- **Online Lyrics Fetching** — seamlessly fetch synced (`.lrc`) or plain lyrics from LRCLIB using smart metadata matching
+- **Offline Save** — save fetched lyrics locally to your device for offline viewing and playback
+- **Dynamic Display** — synced lyrics scroll automatically with the music, powered by smooth animations
+
 ### 📁 Library Management
 
 - **Smart sorting** — by title (A–Z / Z–A), artist, recently added, or duration
@@ -80,6 +86,8 @@ No accounts. No streaming. No cloud. Just your music, on your device.
 > *"Makasih buat covernya, aku suka."*
 
 This app was originally built and named in honor of [Ochinai Inaho](https://www.youtube.com/@%E8%90%BD%E4%B9%83%E3%81%84%E3%81%AA%E3%81%BB), a Japanese VTuber whose vocal cover inspired its creation. It started as a tribute — something made with the quiet hope of being noticed (But at the end not noticed) — and evolved into a passion project and a gift to anyone who loves their local music library.
+
+As of the 3.0 release, Inaho has transitioned into a purely technical, feature-driven app, remaining a robust daily driver for your local audio needs.
 
 ---
 
