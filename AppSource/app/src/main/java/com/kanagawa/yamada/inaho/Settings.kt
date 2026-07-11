@@ -26,6 +26,9 @@ import androidx.compose.material.icons.filled.Nightlight
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
@@ -71,6 +74,15 @@ enum class SortOption(val displayName: String) {
 
 enum class AppTheme { INAHO, YAMADA, SYSTEM, CUSTOM }
 
+enum class VisualizerType(val displayName: String) { 
+    NONE("None"), 
+    BARS("Bars"), 
+    WAVEFORM("Waveform"), 
+    LINE("Smooth Line"), 
+    CIRCLE("Circle Pulse"),
+    PEAKS("Peaks")
+}
+
 @Composable
 fun getAppAccentColor(settings: AppSettings): Color {
     val context = LocalContext.current
@@ -101,7 +113,8 @@ data class AppSettings(
     val theme: AppTheme = AppTheme.INAHO,
     val userPhotoUri: String? = null,
     val keepScreenOn: Boolean = false,
-    val customThemeColor: Int = 0xFFB8355B.toInt()
+    val customThemeColor: Int = 0xFFB8355B.toInt(),
+    val visualizerType: VisualizerType = VisualizerType.NONE
 )
 
 class SettingsManager(context: Context) {
@@ -123,7 +136,8 @@ class SettingsManager(context: Context) {
             theme = AppTheme.valueOf(prefs.getString("theme", AppTheme.INAHO.name) ?: AppTheme.INAHO.name),
             userPhotoUri = prefs.getString("user_photo_uri", null),
             keepScreenOn = prefs.getBoolean("keep_screen_on", false),
-            customThemeColor = prefs.getInt("custom_theme_color", 0xFFB8355B.toInt())
+            customThemeColor = prefs.getInt("custom_theme_color", 0xFFB8355B.toInt()),
+            visualizerType = VisualizerType.valueOf(prefs.getString("visualizer_type", VisualizerType.NONE.name) ?: VisualizerType.NONE.name)
         )
     )
     val settingsFlow = _settingsFlow.asStateFlow()
@@ -191,6 +205,11 @@ class SettingsManager(context: Context) {
     fun updateCustomThemeColor(color: Int) {
         prefs.edit().putInt("custom_theme_color", color).apply()
         _settingsFlow.value = _settingsFlow.value.copy(customThemeColor = color)
+    }
+
+    fun updateVisualizerType(type: VisualizerType) {
+        prefs.edit().putString("visualizer_type", type.name).apply()
+        _settingsFlow.value = _settingsFlow.value.copy(visualizerType = type)
     }
 }
 
@@ -311,6 +330,78 @@ fun SettingsScreen(
             accentColor = accentColor,
             onToggle = { settingsManager.updateKeepScreenOn(it) }
         )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "VISUALIZER",
+            color = Color(0xFF555555),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+        )
+
+        var showVisualizerDropdown by remember { mutableStateOf(false) }
+        
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFF222222))
+                .clickable { showVisualizerDropdown = !showVisualizerDropdown }
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.GraphicEq, contentDescription = null, tint = accentColor, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text("Style", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Text(settings.visualizerType.displayName, color = Color(0xFFAAAAAA), fontSize = 12.sp)
+                    }
+                }
+                Icon(
+                    imageVector = if (showVisualizerDropdown) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = Color.White
+                )
+            }
+            
+            androidx.compose.animation.AnimatedVisibility(visible = showVisualizerDropdown) {
+                Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                    VisualizerType.values().forEach { type ->
+                        val isSelected = settings.visualizerType == type
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    settingsManager.updateVisualizerType(type)
+                                    showVisualizerDropdown = false
+                                }
+                                .padding(horizontal = 24.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = type.displayName,
+                                color = if (isSelected) accentColor else Color.White,
+                                fontSize = 15.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
+                            if (isSelected) {
+                                Spacer(modifier = Modifier.weight(1f))
+                                Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -704,7 +795,7 @@ fun SettingsScreen(
             }
         )
 
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(200.dp))
     }
 }
 

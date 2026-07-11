@@ -48,7 +48,8 @@ data class PlayerState(
     val isShuffled: Boolean = false,
     val repeatMode: RepeatMode = RepeatMode.OFF,
     val videoWidth: Int = 0,
-    val videoHeight: Int = 0
+    val videoHeight: Int = 0,
+    val audioSessionId: Int? = null
 ) {
     val nextSong: Song?
         get() = if (currentIndex + 1 < activeQueue.size) activeQueue[currentIndex + 1]
@@ -528,6 +529,7 @@ class PlayerService : Service() {
                 setOnPreparedListener { mp ->
                     if (generation != playGeneration) return@setOnPreparedListener
                     eqManager.attach(mp.audioSessionId)
+                    _playerState.value = _playerState.value.copy(audioSessionId = mp.audioSessionId)
 
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && (currentPlaybackSpeed != 1.0f || currentPlaybackPitch != 1.0f)) {
                         try { mp.playbackParams = mp.playbackParams.setSpeed(currentPlaybackSpeed).setPitch(currentPlaybackPitch) } catch (_: Exception) {}

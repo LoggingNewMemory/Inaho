@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 data class MediaDetails(
@@ -195,6 +196,27 @@ fun PlayerScreen(
         }
     }
 
+    var visualizerColor by remember { mutableStateOf<Color?>(null) }
+    LaunchedEffect(coverBitmap) {
+        if (coverBitmap != null) {
+            withContext(Dispatchers.Default) {
+                try {
+                    val palette = androidx.palette.graphics.Palette.from(coverBitmap!!).generate()
+                    val colorInt = palette.getVibrantColor(
+                        palette.getLightVibrantColor(
+                            palette.getDominantColor(0xFF888888.toInt())
+                        )
+                    )
+                    visualizerColor = Color(colorInt)
+                } catch (e: Exception) {
+                    visualizerColor = null
+                }
+            }
+        } else {
+            visualizerColor = null
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize().background(bgColor)) {
 
         val isVideoFormat = song?.isVideo == true
@@ -242,6 +264,19 @@ fun PlayerScreen(
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = settings.amvDimAmount))
             )
+        }
+
+        // 2.5 Live Visualizer Background Layer (Constrained to lower half behind UI)
+        if (settings.visualizerType != VisualizerType.NONE) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+                LiveVisualizer(
+                    type = settings.visualizerType,
+                    isPlaying = playerState.isPlaying,
+                    audioSessionId = playerState.audioSessionId,
+                    accentColor = (visualizerColor ?: accentColor).copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth().fillMaxHeight(0.45f)
+                )
+            }
         }
 
         // 3. Main Player UI Layer
@@ -1089,5 +1124,204 @@ private fun extractMediaDetails(context: Context, uri: Uri): MediaDetails? {
     } catch (e: Exception) {
         e.printStackTrace()
         null
+    }
+}
+@Composable
+fun LiveVisualizer(
+    type: VisualizerType,
+    isPlaying: Boolean,
+    audioSessionId: Int?,
+    accentColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val barCount = 32
+    val barHeights = remember(type) { List(barCount) { androidx.compose.animation.core.Animatable(0.01f) } }
+    
+    LaunchedEffect(type) {
+        if (type != VisualizerType.NONE) {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                (context as? android.app.Activity)?.let { activity ->
+                    androidx.core.app.ActivityCompat.requestPermissions(activity, arrayOf(android.Manifest.permission.RECORD_AUDIO), 1001)
+                }
+            }
+        }
+    }
+    
+    LaunchedEffect(isPlaying, type, audioSessionId) {
+        val coroutineScope = this
+        if (isPlaying) {
+            var visualizer: android.media.audiofx.Visualizer? = null
+            var useFake = true
+            
+            if (audioSessionId != null && audioSessionId != 0 &&
+                androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                try {
+                    visualizer = android.media.audiofx.Visualizer(audioSessionId)
+                    visualizer.captureSize = android.media.audiofx.Visualizer.getCaptureSizeRange()[1]
+                    visualizer.setDataCaptureListener(
+                        object : android.media.audiofx.Visualizer.OnDataCaptureListener {
+                            override fun onWaveFormDataCapture(v: android.media.audiofx.Visualizer?, waveform: ByteArray?, samplingRate: Int) {}
+                            override fun onFftDataCapture(v: android.media.audiofx.Visualizer?, fft: ByteArray?, samplingRate: Int) {
+                                if (fft != null && fft.size >= barCount * 2) {
+                                    for (i in 0 until barCount) {
+                                        val rfk = fft[i * 2]
+                                        val ifk = fft[i * 2 + 1]
+                                        val magnitude = (kotlin.math.abs(rfk.toInt()) + kotlin.math.abs(ifk.toInt())).toFloat()
+                                        var fraction = (magnitude / 128f).coerceIn(0.01f, 1f)
+                                        
+                                        coroutineScope.launch {
+                                            barHeights[i].animateTo(
+                                                targetValue = fraction * 0.5f,
+                                                animationSpec = androidx.compose.animation.core.tween(100, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        android.media.audiofx.Visualizer.getMaxCaptureRate() / 2,
+                        false,
+                        true
+                    )
+                    visualizer.enabled = true
+                    useFake = false
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    useFake = true
+                }
+            }
+            
+            if (useFake) {
+                while(true) {
+                    barHeights.forEach { animatable ->
+                        coroutineScope.launch {
+                            animatable.animateTo(
+                                targetValue = 0.05f + Math.random().toFloat() * 0.4f,
+                                animationSpec = androidx.compose.animation.core.tween(
+                                    durationMillis = 250 + (Math.random() * 200).toInt(), 
+                                    easing = androidx.compose.animation.core.FastOutSlowInEasing
+                                )
+                            )
+                        }
+                    }
+                    delay(350)
+                }
+            } else {
+                try {
+                    kotlinx.coroutines.awaitCancellation()
+                } finally {
+                    try {
+                        visualizer?.enabled = false
+                        visualizer?.release()
+                    } catch (e: Exception) {}
+                    barHeights.forEach { animatable ->
+                        coroutineScope.launch { animatable.animateTo(0.01f, androidx.compose.animation.core.tween(500)) }
+                    }
+                }
+            }
+        } else {
+            barHeights.forEach { animatable ->
+                coroutineScope.launch { animatable.animateTo(0.01f, androidx.compose.animation.core.tween(500)) }
+            }
+        }
+    }
+    
+    androidx.compose.foundation.Canvas(modifier = modifier) {
+        val barWidth = size.width / (barCount * 2f)
+        val spacing = if (barCount > 1) (size.width - (barWidth * barCount)) / (barCount - 1).toFloat() else 0f
+        var startX = 0f
+        
+        if (type == VisualizerType.BARS) {
+            for (i in 0 until barCount) {
+                val height = size.height * barHeights[i].value
+                drawRoundRect(
+                    color = accentColor,
+                    topLeft = androidx.compose.ui.geometry.Offset(startX, size.height - height),
+                    size = androidx.compose.ui.geometry.Size(barWidth, height),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(barWidth / 2f)
+                )
+                startX += barWidth + spacing
+            }
+        } else if (type == VisualizerType.WAVEFORM) {
+            for (i in 0 until barCount) {
+                val height = size.height * barHeights[i].value
+                drawRoundRect(
+                    color = accentColor,
+                    topLeft = androidx.compose.ui.geometry.Offset(startX, (size.height - height) / 2f),
+                    size = androidx.compose.ui.geometry.Size(barWidth, height),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(barWidth / 2f)
+                )
+                startX += barWidth + spacing
+            }
+        } else if (type == VisualizerType.LINE || type == VisualizerType.PEAKS) {
+            val path = androidx.compose.ui.graphics.Path()
+            val centerY = size.height / 2f
+            
+            val points = mutableListOf<androidx.compose.ui.geometry.Offset>()
+            val overfill = 20f
+            for (i in 0 until barCount) {
+                val height = size.height * barHeights[i].value
+                val y = centerY - height / 2f
+                val x = -overfill + i * ((size.width + 2f * overfill) / (barCount - 1).toFloat())
+                points.add(androidx.compose.ui.geometry.Offset(x, y))
+            }
+            
+            if (points.isNotEmpty()) {
+                path.moveTo(points.first().x, points.first().y)
+                for (i in 0 until points.size - 1) {
+                    val p1 = points[i]
+                    val p2 = points[i + 1]
+                    val midPoint = androidx.compose.ui.geometry.Offset((p1.x + p2.x) / 2, (p1.y + p2.y) / 2)
+                    if (i == 0) {
+                        path.lineTo(midPoint.x, midPoint.y)
+                    } else {
+                        path.quadraticTo(p1.x, p1.y, midPoint.x, midPoint.y)
+                    }
+                }
+                path.lineTo(points.last().x, points.last().y)
+                
+                if (type == VisualizerType.PEAKS) {
+                    val fillPath = androidx.compose.ui.graphics.Path().apply {
+                        addPath(path)
+                        lineTo(points.last().x, size.height)
+                        lineTo(points.first().x, size.height)
+                        close()
+                    }
+                    drawPath(
+                        path = fillPath,
+                        color = accentColor.copy(alpha = 0.5f)
+                    )
+                }
+                
+                drawPath(
+                    path = path,
+                    color = accentColor,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 8f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                )
+            }
+        } else if (type == VisualizerType.CIRCLE) {
+            val radius = minOf(size.width, size.height) / 4f
+            val center = androidx.compose.ui.geometry.Offset(size.width / 2f, size.height / 2f)
+            
+            for (i in 0 until barCount) {
+                val angle = (i.toFloat() / barCount) * 2 * Math.PI
+                val height = size.height * barHeights[i].value * 0.5f
+                
+                val innerX = center.x + kotlin.math.cos(angle).toFloat() * radius
+                val innerY = center.y + kotlin.math.sin(angle).toFloat() * radius
+                
+                val outerX = center.x + kotlin.math.cos(angle).toFloat() * (radius + height)
+                val outerY = center.y + kotlin.math.sin(angle).toFloat() * (radius + height)
+                
+                drawLine(
+                    color = accentColor,
+                    start = androidx.compose.ui.geometry.Offset(innerX, innerY),
+                    end = androidx.compose.ui.geometry.Offset(outerX, outerY),
+                    strokeWidth = barWidth,
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round
+                )
+            }
+        }
     }
 }
