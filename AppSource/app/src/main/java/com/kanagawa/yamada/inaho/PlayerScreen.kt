@@ -139,6 +139,19 @@ fun PlayerScreen(
     val surfaceColor = if (settings.amoledBlack) Color(0xFF0A0A0A) else Color(0xFF1E1414).copy(alpha = 0.85f)
     val accentColor = getAppAccentColor(settings.theme)
 
+    val view = androidx.compose.ui.platform.LocalView.current
+    val keepScreenOn = settings.keepScreenOn
+    DisposableEffect(isVisible, keepScreenOn) {
+        if (isVisible && keepScreenOn) {
+            view.keepScreenOn = true
+        } else {
+            view.keepScreenOn = false
+        }
+        onDispose {
+            view.keepScreenOn = false
+        }
+    }
+
     // Only intercept back presses if the PlayerScreen is actually visible
     BackHandler(enabled = isVisible) { onNavigateBack() }
 

@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Nightlight
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -89,7 +90,8 @@ data class AppSettings(
     val showCoverBackground: Boolean = true,
     val enableBackgroundBlur: Boolean = true,
     val theme: AppTheme = AppTheme.INAHO,
-    val userPhotoUri: String? = null
+    val userPhotoUri: String? = null,
+    val keepScreenOn: Boolean = false
 )
 
 class SettingsManager(context: Context) {
@@ -109,7 +111,8 @@ class SettingsManager(context: Context) {
             showCoverBackground = prefs.getBoolean("show_cover_background", true),
             enableBackgroundBlur = prefs.getBoolean("enable_background_blur", true),
             theme = AppTheme.valueOf(prefs.getString("theme", AppTheme.INAHO.name) ?: AppTheme.INAHO.name),
-            userPhotoUri = prefs.getString("user_photo_uri", null)
+            userPhotoUri = prefs.getString("user_photo_uri", null),
+            keepScreenOn = prefs.getBoolean("keep_screen_on", false)
         )
     )
     val settingsFlow = _settingsFlow.asStateFlow()
@@ -167,6 +170,11 @@ class SettingsManager(context: Context) {
     fun updateUserPhotoUri(uri: String?) {
         prefs.edit().putString("user_photo_uri", uri).apply()
         _settingsFlow.value = _settingsFlow.value.copy(userPhotoUri = uri)
+    }
+
+    fun updateKeepScreenOn(enabled: Boolean) {
+        prefs.edit().putBoolean("keep_screen_on", enabled).apply()
+        _settingsFlow.value = _settingsFlow.value.copy(keepScreenOn = enabled)
     }
 }
 
@@ -275,6 +283,17 @@ fun SettingsScreen(
             checked = settings.showCoverBackground,
             accentColor = accentColor,
             onToggle = { settingsManager.updateShowCoverBackground(it) }
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        SettingsToggleRow(
+            icon = Icons.Default.Lightbulb,
+            title = "Always On Display",
+            subtitle = "Keep screen awake while in Player Screen",
+            checked = settings.keepScreenOn,
+            accentColor = accentColor,
+            onToggle = { settingsManager.updateKeepScreenOn(it) }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
