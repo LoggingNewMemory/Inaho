@@ -201,7 +201,7 @@ fun MusicListScreen(
 
     val bgColor = if (settings.amoledBlack) Color.Black else Color(0xFF120E0E)
     val surfaceColor = if (settings.amoledBlack) Color(0xFF0A0A0A) else Color(0xFF1E1414)
-    val accentColor = getAppAccentColor(settings.theme)
+    val accentColor = getAppAccentColor(settings)
 
     var showOverflowMenu by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }

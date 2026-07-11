@@ -60,7 +60,7 @@ class MainActivity : ComponentActivity() {
                 val musicViewModel: MusicViewModel = viewModel()
                 val settings by musicViewModel.settingsManager.settingsFlow.collectAsState()
 
-                val accentColor = getAppAccentColor(settings.theme)
+                val accentColor = getAppAccentColor(settings)
 
                 // Route to SETUP if name is blank, otherwise go to HOME
                 var currentScreen by rememberSaveable {

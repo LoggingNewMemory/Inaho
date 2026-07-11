@@ -25,6 +25,14 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Nightlight
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.OndemandVideo
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.animation.core.animateFloatAsState
@@ -61,12 +69,12 @@ enum class SortOption(val displayName: String) {
     DURATION_DESC("Longest First")
 }
 
-enum class AppTheme { INAHO, YAMADA, SYSTEM }
+enum class AppTheme { INAHO, YAMADA, SYSTEM, CUSTOM }
 
 @Composable
-fun getAppAccentColor(theme: AppTheme): Color {
+fun getAppAccentColor(settings: AppSettings): Color {
     val context = LocalContext.current
-    return when (theme) {
+    return when (settings.theme) {
         AppTheme.YAMADA -> Color(0xFF9E9EDB)
         AppTheme.INAHO -> Color(0xFFB8355B)
         AppTheme.SYSTEM -> {
@@ -76,6 +84,7 @@ fun getAppAccentColor(theme: AppTheme): Color {
                 Color(0xFFB8355B)
             }
         }
+        AppTheme.CUSTOM -> Color(settings.customThemeColor)
     }
 }
 
@@ -91,7 +100,8 @@ data class AppSettings(
     val enableBackgroundBlur: Boolean = true,
     val theme: AppTheme = AppTheme.INAHO,
     val userPhotoUri: String? = null,
-    val keepScreenOn: Boolean = false
+    val keepScreenOn: Boolean = false,
+    val customThemeColor: Int = 0xFFB8355B.toInt()
 )
 
 class SettingsManager(context: Context) {
@@ -112,7 +122,8 @@ class SettingsManager(context: Context) {
             enableBackgroundBlur = prefs.getBoolean("enable_background_blur", true),
             theme = AppTheme.valueOf(prefs.getString("theme", AppTheme.INAHO.name) ?: AppTheme.INAHO.name),
             userPhotoUri = prefs.getString("user_photo_uri", null),
-            keepScreenOn = prefs.getBoolean("keep_screen_on", false)
+            keepScreenOn = prefs.getBoolean("keep_screen_on", false),
+            customThemeColor = prefs.getInt("custom_theme_color", 0xFFB8355B.toInt())
         )
     )
     val settingsFlow = _settingsFlow.asStateFlow()
@@ -176,6 +187,11 @@ class SettingsManager(context: Context) {
         prefs.edit().putBoolean("keep_screen_on", enabled).apply()
         _settingsFlow.value = _settingsFlow.value.copy(keepScreenOn = enabled)
     }
+
+    fun updateCustomThemeColor(color: Int) {
+        prefs.edit().putInt("custom_theme_color", color).apply()
+        _settingsFlow.value = _settingsFlow.value.copy(customThemeColor = color)
+    }
 }
 
 // ==========================================
@@ -190,7 +206,7 @@ fun SettingsScreen(
     val settings by settingsManager.settingsFlow.collectAsState()
     val context = LocalContext.current
 
-    val accentColor = getAppAccentColor(settings.theme)
+    val accentColor = getAppAccentColor(settings)
 
     // Entrance fade-in animation
     var startAnimation by remember { mutableStateOf(ScreenAnimationState.settingsAnimated) }
@@ -306,33 +322,196 @@ fun SettingsScreen(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
         )
 
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            ThemeSelectorChip(
-                title = "Inaho",
-                color = Color(0xFFB8355B),
-                isSelected = settings.theme == AppTheme.INAHO,
-                onClick = { settingsManager.updateTheme(AppTheme.INAHO) },
-                modifier = Modifier.weight(1f)
-            )
-            ThemeSelectorChip(
-                title = "Yamada",
-                color = Color(0xFF9E9EDB),
-                isSelected = settings.theme == AppTheme.YAMADA,
-                onClick = { settingsManager.updateTheme(AppTheme.YAMADA) },
-                modifier = Modifier.weight(1f)
-            )
-            ThemeSelectorChip(
-                title = "System",
-                color = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) androidx.compose.material3.dynamicDarkColorScheme(context).primary else Color(0xFF555555),
-                isSelected = settings.theme == AppTheme.SYSTEM,
-                onClick = { settingsManager.updateTheme(AppTheme.SYSTEM) },
-                modifier = Modifier.weight(1f)
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                ThemeSelectorChip(
+                    title = "Inaho",
+                    color = Color(0xFFB8355B),
+                    isSelected = settings.theme == AppTheme.INAHO,
+                    onClick = { settingsManager.updateTheme(AppTheme.INAHO) },
+                    modifier = Modifier.weight(1f)
+                )
+                ThemeSelectorChip(
+                    title = "Yamada",
+                    color = Color(0xFF9E9EDB),
+                    isSelected = settings.theme == AppTheme.YAMADA,
+                    onClick = { settingsManager.updateTheme(AppTheme.YAMADA) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                ThemeSelectorChip(
+                    title = "System",
+                    color = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) androidx.compose.material3.dynamicDarkColorScheme(context).primary else Color(0xFF555555),
+                    isSelected = settings.theme == AppTheme.SYSTEM,
+                    onClick = { settingsManager.updateTheme(AppTheme.SYSTEM) },
+                    modifier = Modifier.weight(1f)
+                )
+                ThemeSelectorChip(
+                    title = "Custom",
+                    color = Color(settings.customThemeColor),
+                    isSelected = settings.theme == AppTheme.CUSTOM,
+                    onClick = { settingsManager.updateTheme(AppTheme.CUSTOM) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        androidx.compose.animation.AnimatedVisibility(visible = settings.theme == AppTheme.CUSTOM) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFF222222))
+                    .padding(vertical = 24.dp, horizontal = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                val initialHsv = remember { FloatArray(3).apply { android.graphics.Color.colorToHSV(settings.customThemeColor, this) } }
+                var hue by remember { mutableFloatStateOf(initialHsv[0]) }
+                var sat by remember { mutableFloatStateOf(initialHsv[1]) }
+                var value by remember { mutableFloatStateOf(initialHsv[2]) }
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(200.dp)
+                            .clip(CircleShape)
+                            .pointerInput("drag") {
+                                detectDragGestures { change, _ ->
+                                    val center = Offset(size.width / 2f, size.height / 2f)
+                                    val offset = change.position
+                                    val dx = offset.x - center.x
+                                    val dy = offset.y - center.y
+                                    
+                                    var degree = Math.toDegrees(kotlin.math.atan2(dy.toDouble(), dx.toDouble())).toFloat()
+                                    if (degree < 0) degree += 360f
+                                    
+                                    val radius = size.width / 2f
+                                    val distance = (kotlin.math.hypot(dx.toDouble(), dy.toDouble()).toFloat() / radius).coerceIn(0f, 1f)
+                                    
+                                    hue = degree
+                                    sat = distance
+                                    settingsManager.updateCustomThemeColor(android.graphics.Color.HSVToColor(floatArrayOf(hue, sat, value)))
+                                }
+                            }
+                            .pointerInput("tap") {
+                                detectTapGestures { offset ->
+                                    val center = Offset(size.width / 2f, size.height / 2f)
+                                    val dx = offset.x - center.x
+                                    val dy = offset.y - center.y
+                                    
+                                    var degree = Math.toDegrees(kotlin.math.atan2(dy.toDouble(), dx.toDouble())).toFloat()
+                                    if (degree < 0) degree += 360f
+                                    
+                                    val radius = size.width / 2f
+                                    val distance = (kotlin.math.hypot(dx.toDouble(), dy.toDouble()).toFloat() / radius).coerceIn(0f, 1f)
+                                    
+                                    hue = degree
+                                    sat = distance
+                                    settingsManager.updateCustomThemeColor(android.graphics.Color.HSVToColor(floatArrayOf(hue, sat, value)))
+                                }
+                            }
+                    ) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val radius = size.width / 2f
+                            val center = Offset(size.width / 2f, size.height / 2f)
+    
+                            drawCircle(
+                                brush = Brush.sweepGradient(
+                                    colors = listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red)
+                                )
+                            )
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(Color.White, Color.Transparent),
+                                    center = center,
+                                    radius = radius
+                                )
+                            )
+                            if (value < 1f) {
+                                drawCircle(
+                                    color = Color.Black.copy(alpha = 1f - value)
+                                )
+                            }
+                            
+                            val angleRad = Math.toRadians(hue.toDouble())
+                            val thumbDistance = sat * radius
+                            val thumbX = center.x + thumbDistance * kotlin.math.cos(angleRad).toFloat()
+                            val thumbY = center.y + thumbDistance * kotlin.math.sin(angleRad).toFloat()
+                            
+                            drawCircle(
+                                color = Color.White,
+                                radius = 12.dp.toPx(),
+                                center = Offset(thumbX, thumbY),
+                                style = Stroke(width = 2.dp.toPx())
+                            )
+                            drawCircle(
+                                color = Color.Black,
+                                radius = 12.dp.toPx(),
+                                center = Offset(thumbX, thumbY),
+                                style = Stroke(width = 1.dp.toPx())
+                            )
+                        }
+                    }
+                    
+                    Spacer(Modifier.width(32.dp))
+                    
+                    Box(
+                        modifier = Modifier
+                            .width(24.dp)
+                            .height(200.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .pointerInput("drag") {
+                                detectDragGestures { change, _ ->
+                                    val y = change.position.y
+                                    value = 1f - (y / size.height).coerceIn(0f, 1f)
+                                    settingsManager.updateCustomThemeColor(android.graphics.Color.HSVToColor(floatArrayOf(hue, sat, value)))
+                                }
+                            }
+                            .pointerInput("tap") {
+                                detectTapGestures { offset ->
+                                    val y = offset.y
+                                    value = 1f - (y / size.height).coerceIn(0f, 1f)
+                                    settingsManager.updateCustomThemeColor(android.graphics.Color.HSVToColor(floatArrayOf(hue, sat, value)))
+                                }
+                            }
+                    ) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            drawRoundRect(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, sat, 1f))), Color.Black)
+                                ),
+                                size = size,
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(12.dp.toPx())
+                            )
+                            
+                            val thumbY = (1f - value) * size.height
+                            drawCircle(
+                                color = Color.White,
+                                radius = 10.dp.toPx(),
+                                center = Offset(size.width / 2f, thumbY.coerceIn(10.dp.toPx(), size.height - 10.dp.toPx())),
+                                style = Stroke(width = 2.dp.toPx())
+                            )
+                            drawCircle(
+                                color = Color.Black,
+                                radius = 10.dp.toPx(),
+                                center = Offset(size.width / 2f, thumbY.coerceIn(10.dp.toPx(), size.height - 10.dp.toPx())),
+                                style = Stroke(width = 1.dp.toPx())
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
