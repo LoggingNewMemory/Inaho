@@ -202,11 +202,19 @@ fun PlayerScreen(
             withContext(Dispatchers.Default) {
                 try {
                     val palette = androidx.palette.graphics.Palette.from(coverBitmap!!).generate()
-                    val colorInt = palette.getVibrantColor(
-                        palette.getLightVibrantColor(
+                    var colorInt = palette.getLightVibrantColor(
+                        palette.getVibrantColor(
                             palette.getDominantColor(0xFF888888.toInt())
                         )
                     )
+                    
+                    // Ensure the color is visible on the dark background
+                    val hsl = FloatArray(3)
+                    androidx.core.graphics.ColorUtils.colorToHSL(colorInt, hsl)
+                    if (hsl[2] < 0.6f) {
+                        hsl[2] = 0.6f
+                        colorInt = androidx.core.graphics.ColorUtils.HSLToColor(hsl)
+                    }
                     visualizerColor = Color(colorInt)
                 } catch (e: Exception) {
                     visualizerColor = null
