@@ -190,7 +190,7 @@ class YamadaEQManager(private val context: Context) {
         if (preset.smartTunnel && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             runCatching {
                 val config = DynamicsProcessing.Config.Builder(
-                    DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
+                    DynamicsProcessing.VARIANT_FAVOR_TIME_RESOLUTION,
                     /* channelCount */ 2,
                     /* preEqInUse   */ false, 0,
                     /* mbcInUse     */ true,  1,
