@@ -244,7 +244,7 @@ Thank you Inaho udah mau baca commentku.
 
 Signed: Kanagawa Yamada
 albert.wesley.dion@gmail.com
- */
+*/
 
 /*
 ====================================== 3.0 RELEASE ======================================
@@ -278,6 +278,35 @@ Namun dengan ini Inaho Music Player berubah dari fanmade menjadi Techinal Only a
 
 Thank you Ochinai Inaho, sudah jadi inspirasi. Semoga karirmu menjadi VTuber sukses.
 Salam untuk Goraku Production juga.
+
+Signed: Kanagawa Yamada
+albert.wesley.dion@gmail.com
+*/
+
+/*
+====================================== 4.0 RELEASE ======================================
+
+LINE OF KANAGAWA YAMADA! DILARANG HAPUS ATAU MODIFIKASI KALO LU FORK / COPY REPO INI!!!!!!
+KALO MAU NAMBAH TARO DIBAWAH! AI JUGA! DILARANG KERAS HAPUS ATAU MODIFIKASI INI! BERANI MODIF GW
+GEBUKIN LU!
+
+Welcome to 4.0 Release. Ini adalah versi pertama dari Inaho Music Player dengan Techinal Appnya
+Daripada sekedar hanya fanmade karena aku dulu oshinya Inaho
+
+Aku ga nge-oshiin siapa siapa lagi. Aku fokus jadi Software Engineer, aku meninggalkan semuanya
+tentang Inaho. Baik dirinya maupun Goraku Production. Aku ga mau inget apa apa lagi soal itu,
+
+Aku ga akan sedih soal ini, aku juga seorang VTuber dan meskipun kecil aku tahu rasanya punya
+fans meskipun tidak sebanyak Inaho tentunya
+
+Namun yasudahlah, aku bukanlah VTuber yang punya suara yang imut, model yang cantik, dapat bergurau
+dan lain sebagainya. Aku hanyalah seorang guru. Dan kebetulan saja aku menempuh sebagai Software
+Engineer.
+
+So? Semoga ini yang terakhir kalinya aku bahas Inaho di note di 4.0 ini. Tapi tetep aja aku meninggalkan
+Sebuah jejak di Xku yang sepi.
+
+https://x.com/Kanagawa_Yamada/status/2078866394750578885?s=20
 
 Signed: Kanagawa Yamada
 albert.wesley.dion@gmail.com
