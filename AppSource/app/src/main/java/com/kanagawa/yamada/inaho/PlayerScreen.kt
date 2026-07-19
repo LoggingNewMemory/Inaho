@@ -1146,7 +1146,8 @@ fun LiveVisualizer(
 ) {
     val context = LocalContext.current
     val barCount = 32
-    val barHeights = remember(type) { List(barCount) { androidx.compose.animation.core.Animatable(0.01f) } }
+    val barHeights = remember { List(barCount) { androidx.compose.animation.core.Animatable(0.01f) } }
+    val isVisualizerActive = type != VisualizerType.NONE
     
     LaunchedEffect(type) {
         if (type != VisualizerType.NONE) {
@@ -1158,11 +1159,14 @@ fun LiveVisualizer(
         }
     }
     
-    LaunchedEffect(isPlaying, type, audioSessionId) {
+    LaunchedEffect(isPlaying, isVisualizerActive, audioSessionId) {
         val coroutineScope = this
-        if (isPlaying) {
+        if (isPlaying && isVisualizerActive) {
             var visualizer: android.media.audiofx.Visualizer? = null
             var useFake = true
+            
+            // Wait for AudioTrack to fully spin up before attaching visualizer to prevent flatline zeros
+            delay(300)
             
             if (audioSessionId != null && audioSessionId != 0 &&
                 androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
