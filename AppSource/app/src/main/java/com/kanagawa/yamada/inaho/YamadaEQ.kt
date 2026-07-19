@@ -186,41 +186,56 @@ class YamadaEQManager(private val context: Context) {
             }
         }
 
-        // 2. Smart Audio Tunnel  — DynamicsProcessing (API 28+) or LoudnessEnhancer fallback
-        if (preset.smartTunnel && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        // 2. Dynamics Processing (API 28+) — Smart Tunnel & Universal Safety Limiter
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             runCatching {
                 val config = DynamicsProcessing.Config.Builder(
                     DynamicsProcessing.VARIANT_FAVOR_TIME_RESOLUTION,
                     /* channelCount */ 2,
                     /* preEqInUse   */ false, 0,
-                    /* mbcInUse     */ true,  1,
+                    /* mbcInUse     */ true, 1,
                     /* postEqInUse  */ false, 0,
                     /* limiterInUse */ true
                 ).build()
 
                 val dp = DynamicsProcessing(0, sessionId, config).apply {
+                    val gainDb = preset.loudnessGainMb / 100f
                     for (ch in 0..1) {
-                        val channel = getMbcBandByChannelIndex(ch, 0)
-                        val tunedBand = DynamicsProcessing.MbcBand(channel).apply {
-                            attackTime    = 2f
-                            releaseTime   = 60f
-                            ratio         = 2.5f
-                            threshold     = -20f
-                            kneeWidth     = 6f
-                            noiseGateThreshold = -80f
-                            expanderRatio = 1.0f
-                            preGain       = 5f    // BOOSTED: Drive more signal into the compressor
-                            postGain      = 8.5f    // BOOSTED: Makeup gain for what the compressor eats
+                        val mbcBand = getMbcBandByChannelIndex(ch, 0)
+                        val tunedBand = DynamicsProcessing.MbcBand(mbcBand).apply {
+                            if (preset.smartTunnel) {
+                                attackTime    = 2f
+                                releaseTime   = 60f
+                                ratio         = 2.5f
+                                threshold     = -20f
+                                kneeWidth     = 6f
+                                noiseGateThreshold = -80f
+                                expanderRatio = 1.0f
+                                preGain       = 5f
+                                postGain      = 8.5f
+                            } else {
+                                // Transparent volume boost for non-smart presets
+                                attackTime    = 50f
+                                releaseTime   = 100f
+                                ratio         = 1.0f
+                                threshold     = 0f
+                                kneeWidth     = 0f
+                                noiseGateThreshold = -90f
+                                expanderRatio = 1.0f
+                                preGain       = gainDb
+                                postGain      = 0f
+                            }
                         }
                         setMbcBandByChannelIndex(ch, 0, tunedBand)
 
+                        // Universal Safety Limiter to prevent clipping from EQ and volume boosts
                         val lim = getLimiterByChannelIndex(ch)
                         val tunedLim = DynamicsProcessing.Limiter(lim).apply {
                             attackTime  = 2f
                             releaseTime = 50f
                             ratio       = 10f
-                            threshold   = -0.5f  // Slightly higher ceiling before brickwalling
-                            postGain    = 2f   // REDUCED to 2dB to avoid pushing the limiter too hard
+                            threshold   = -0.5f  // Ceiling before brickwalling
+                            postGain    = if (preset.smartTunnel) 2f else 0f
                         }
                         setLimiterByChannelIndex(ch, tunedLim)
                     }
@@ -229,16 +244,7 @@ class YamadaEQManager(private val context: Context) {
                 dynamicsProcessor = dp
             }
         } else if (preset.loudnessGainMb > 0) {
-            runCatching {
-                loudnessEnhancer = LoudnessEnhancer(sessionId).apply {
-                    setTargetGain(preset.loudnessGainMb)
-                    enabled = true
-                }
-            }
-        }
-
-        // 3. For Smart on API < 28, apply fallback
-        if (preset.smartTunnel && Build.VERSION.SDK_INT < Build.VERSION_CODES.P && preset.loudnessGainMb > 0) {
+            // 3. Fallback for all presets on API < 28
             runCatching {
                 loudnessEnhancer = LoudnessEnhancer(sessionId).apply {
                     setTargetGain(preset.loudnessGainMb)
