@@ -227,6 +227,8 @@ fun SettingsScreen(
 
     val accentColor = getAppAccentColor(settings)
 
+    var showColorPicker by remember { mutableStateOf(settings.theme == AppTheme.CUSTOM) }
+
     // Entrance fade-in animation
     var startAnimation by remember { mutableStateOf(ScreenAnimationState.settingsAnimated) }
     LaunchedEffect(Unit) {
@@ -447,13 +449,20 @@ fun SettingsScreen(
                     title = "Custom",
                     color = Color(settings.customThemeColor),
                     isSelected = settings.theme == AppTheme.CUSTOM,
-                    onClick = { settingsManager.updateTheme(AppTheme.CUSTOM) },
+                    onClick = { 
+                        if (settings.theme == AppTheme.CUSTOM) {
+                            showColorPicker = !showColorPicker
+                        } else {
+                            settingsManager.updateTheme(AppTheme.CUSTOM)
+                            showColorPicker = true
+                        }
+                    },
                     modifier = Modifier.weight(1f)
                 )
             }
         }
 
-        androidx.compose.animation.AnimatedVisibility(visible = settings.theme == AppTheme.CUSTOM) {
+        androidx.compose.animation.AnimatedVisibility(visible = settings.theme == AppTheme.CUSTOM && showColorPicker) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

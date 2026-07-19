@@ -138,7 +138,7 @@ fun PlayerScreen(
 
     val bgColor      = if (settings.amoledBlack) Color.Black else Color(0xFF0D0A0A)
     val surfaceColor = if (settings.amoledBlack) Color(0xFF0A0A0A) else Color(0xFF1E1414).copy(alpha = 0.85f)
-    val accentColor = getAppAccentColor(settings)
+    val baseAccentColor = getAppAccentColor(settings)
 
     val view = androidx.compose.ui.platform.LocalView.current
     val keepScreenOn = settings.keepScreenOn
@@ -217,6 +217,8 @@ fun PlayerScreen(
         }
     }
 
+    val accentColor = visualizerColor ?: baseAccentColor
+
     Box(modifier = Modifier.fillMaxSize().background(bgColor)) {
 
         val isVideoFormat = song?.isVideo == true
@@ -273,7 +275,7 @@ fun PlayerScreen(
                     type = settings.visualizerType,
                     isPlaying = playerState.isPlaying,
                     audioSessionId = playerState.audioSessionId,
-                    accentColor = (visualizerColor ?: accentColor).copy(alpha = 0.5f),
+                    accentColor = accentColor.copy(alpha = 0.5f),
                     modifier = Modifier.fillMaxWidth().fillMaxHeight(0.45f)
                 )
             }

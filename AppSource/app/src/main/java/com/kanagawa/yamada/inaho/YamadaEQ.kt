@@ -202,9 +202,9 @@ class YamadaEQManager(private val context: Context) {
                     for (ch in 0..1) {
                         val channel = getMbcBandByChannelIndex(ch, 0)
                         val tunedBand = DynamicsProcessing.MbcBand(channel).apply {
-                            attackTime    = 5f
-                            releaseTime   = 200f
-                            ratio         = 2.2f
+                            attackTime    = 2f
+                            releaseTime   = 60f
+                            ratio         = 2.5f
                             threshold     = -20f
                             kneeWidth     = 6f
                             noiseGateThreshold = -80f
@@ -216,11 +216,11 @@ class YamadaEQManager(private val context: Context) {
 
                         val lim = getLimiterByChannelIndex(ch)
                         val tunedLim = DynamicsProcessing.Limiter(lim).apply {
-                            attackTime  = 1f
+                            attackTime  = 2f
                             releaseTime = 50f
                             ratio       = 10f
                             threshold   = -0.5f  // Slightly higher ceiling before brickwalling
-                            postGain    = 5f   // BOOSTED: Extra master lift to stand shoulder-to-shoulder with Classic
+                            postGain    = 2f   // REDUCED to 2dB to avoid pushing the limiter too hard
                         }
                         setLimiterByChannelIndex(ch, tunedLim)
                     }
