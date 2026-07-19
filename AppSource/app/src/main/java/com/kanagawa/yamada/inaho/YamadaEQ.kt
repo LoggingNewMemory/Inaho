@@ -235,7 +235,7 @@ class YamadaEQManager(private val context: Context) {
                             releaseTime = 50f
                             ratio       = 10f
                             threshold   = -0.5f  // Ceiling before brickwalling
-                            postGain    = if (preset.smartTunnel) 2f else 0f
+                            postGain    = if (preset.smartTunnel) 5f else 0f
                         }
                         setLimiterByChannelIndex(ch, tunedLim)
                     }
