@@ -269,6 +269,7 @@ fun LyricsOverlay(
                                     textAlign = TextAlign.Center
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
+                                val animatedAccent by animateColorAsState(targetValue = accentColor, animationSpec = tween(600))
                                 Button(
                                     onClick = {
                                         scope.launch {
@@ -294,11 +295,11 @@ fun LyricsOverlay(
                                             isLoading = false
                                         }
                                     },
-                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = accentColor)
+                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = animatedAccent)
                                 ) {
-                                    Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color(0xFF1E1414))
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Fetch from LRCLIB", color = Color.White)
+                                    Text("Fetch from LRCLIB", color = Color(0xFF1E1414), fontWeight = FontWeight.Bold)
                                 }
                                 Spacer(modifier = Modifier.height(16.dp))
                                 androidx.compose.material3.TextButton(onClick = { isEditing = true }) {
