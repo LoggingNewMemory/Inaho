@@ -84,7 +84,7 @@ No accounts. No streaming. No cloud. Just your music, on your device.
 ## Notice
 
 ====================
-NOTICE OF SWITCHING
+NOTICE OF SWITCHING <br>
 ====================
 
 Starting from version 5.0 Inaho Music Player will be switched to Technical App instead of Fan App of Ochinai Inaho
