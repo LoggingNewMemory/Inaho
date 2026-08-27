@@ -81,6 +81,29 @@ No accounts. No streaming. No cloud. Just your music, on your device.
 
 ---
 
+## Notice
+
+====================<br>
+NOTICE OF SWITCHING<br>
+====================
+
+Starting from version 5.0 Inaho Music Player will be switched to Technical App instead of Fan App of Ochinai Inaho
+
+[Commit b07a4b8](https://github.com/LoggingNewMemory/Inaho/commit/b07a4b8a09a740becc9450f239916076ad4777dc)
+
+=
+
+Desserved well because even Inaho didn't notice it. However the app name will still "Inaho" but all Ochinai Inaho stuffs will be discarded completely. When? Next update
+
+=
+
+I just can't bring myself to see her again, I decide to trash it completely and I will (supposed) NEVER make any fan app based on VTuber
+
+-- Kanagawa Yamada<br>
+Developer of Inaho Music Player
+
+---
+
 ## Developer
 
 Developed by **Kanagawa Yamada**
