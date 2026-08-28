@@ -308,7 +308,7 @@ fun EqDialog(
                     modifier = Modifier.weight(1f)
                 )
                 FeatureTile(
-                    emoji = "🎧",
+                    emoji = "⊚", // Spatial/Surround symbol
                     displayName = "Spatial",
                     isSelected = spatialEnabled,
                     onClick = { eqEngine.toggleSpatial() },
