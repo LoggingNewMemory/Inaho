@@ -423,7 +423,8 @@ fun SettingsScreen(
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 ThemeSelectorChip(
-                    title = "Sweet",
+                    title = "h",
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                     color = Color(0xFFB8355B),
                     isSelected = settings.theme == AppTheme.INAHO,
                     onClick = { settingsManager.updateTheme(AppTheme.INAHO) },
@@ -792,7 +793,8 @@ private fun ThemeSelectorChip(
     color: Color,
     isSelected: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    fontStyle: androidx.compose.ui.text.font.FontStyle = androidx.compose.ui.text.font.FontStyle.Normal
 ) {
     val bgColor = if (isSelected) color else Color(0xFF1E1414)
     val contentColor = if (isSelected) Color.White else color
@@ -809,7 +811,8 @@ private fun ThemeSelectorChip(
             text = title,
             color = contentColor,
             fontSize = 15.sp,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            fontStyle = fontStyle
         )
     }
 }
