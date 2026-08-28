@@ -107,14 +107,11 @@ class YamadaAudioEngine(private val context: Context) {
     private val _currentPreset = MutableStateFlow(EqPreset.OFF)
     val currentPreset = _currentPreset.asStateFlow()
 
-    private val _spatialEnabled = MutableStateFlow(false)
-    val spatialEnabled = _spatialEnabled.asStateFlow()
 
     private var audioSessionId: Int = 0
 
     private var equalizer: Equalizer? = null
     private var customDynamicsProcessor: YamadaCustomDynamics? = null
-    private var virtualizer: android.media.audiofx.Virtualizer? = null
 
     private var environmentalReverb: android.media.audiofx.EnvironmentalReverb? = null
 
@@ -125,13 +122,12 @@ class YamadaAudioEngine(private val context: Context) {
     init {
         val savedName = prefs.getString("preset", EqPreset.OFF.name) ?: EqPreset.OFF.name
         _currentPreset.value = runCatching { EqPreset.valueOf(savedName) }.getOrDefault(EqPreset.OFF)
-        _spatialEnabled.value = prefs.getBoolean("spatial", false)
     }
 
     fun attach(mp: android.media.MediaPlayer) {
         mediaPlayer = mp
         audioSessionId = mp.audioSessionId
-        applyEffects(_currentPreset.value, _spatialEnabled.value, audioSessionId)
+        applyEffects(_currentPreset.value, audioSessionId)
     }
 
     fun release() {
@@ -143,52 +139,29 @@ class YamadaAudioEngine(private val context: Context) {
     fun setPreset(preset: EqPreset) {
         prefs.edit().putString("preset", preset.name).apply()
         _currentPreset.value = preset
-        if (audioSessionId != 0) applyEffects(preset, _spatialEnabled.value, audioSessionId)
+        if (audioSessionId != 0) applyEffects(preset, audioSessionId)
     }
 
-    fun toggleSpatial() {
-        val newState = !_spatialEnabled.value
-        prefs.edit().putBoolean("spatial", newState).apply()
-        _spatialEnabled.value = newState
-        if (audioSessionId != 0) applyEffects(_currentPreset.value, newState, audioSessionId)
-    }
 
     private fun tearDown() {
         runCatching { equalizer?.release() }
         runCatching { customDynamicsProcessor?.release() }
-        runCatching { virtualizer?.release() }
         runCatching { environmentalReverb?.release() }
         runCatching { mediaPlayer?.setAuxEffectSendLevel(0f) }
         
         equalizer = null
         customDynamicsProcessor = null
-        virtualizer = null
         environmentalReverb = null
     }
 
-    private fun applyEffects(preset: EqPreset, spatial: Boolean, sessionId: Int) {
+    private fun applyEffects(preset: EqPreset, sessionId: Int) {
         tearDown()
 
-        // 1. HRTF Spatializer (Insert Effect - safe from deadlocks)
-        if (spatial) {
-            runCatching {
-                // Using Android's native Binaural Virtualizer which executes true HRTF (Head-Related Transfer Function)
-                // without requiring the deadlock-prone attachAuxEffect() required by Reverb.
-                // Kept at a subtle strength to work cleanly across all Android devices.
-                virtualizer = android.media.audiofx.Virtualizer(0, sessionId).apply {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                        runCatching { forceVirtualizationMode(android.media.audiofx.Virtualizer.VIRTUALIZATION_MODE_BINAURAL) }
-                    }
-                    enabled = true
-                    runCatching { setStrength(400.toShort()) } // 40% HRTF width - subtle & device-friendly
-                }
-            }
-        }
 
-        // We process EQ and Dynamics even if preset is OFF, because Spatial acts as an independent layer
+        // We process EQ and Dynamics even if preset is OFF
         val actualPreset = preset
 
-        // 2. Equalizer bands — no extra spatial EQ bumps to keep the sound natural on all devices
+        // 1. Equalizer bands
         runCatching {
             equalizer = Equalizer(0, sessionId).apply {
                 enabled = true
@@ -203,7 +176,7 @@ class YamadaAudioEngine(private val context: Context) {
 
         runCatching {
             customDynamicsProcessor = YamadaCustomDynamics(sessionId).apply {
-                applyDynamics(actualPreset, spatial)
+                applyDynamics(actualPreset)
             }
         }
     }
@@ -227,7 +200,7 @@ class YamadaCustomDynamics(sessionId: Int) {
         }
     }
 
-    fun applyDynamics(preset: EqPreset, spatial: Boolean) {
+    fun applyDynamics(preset: EqPreset) {
         runCatching {
             loudnessEnhancer?.apply {
                 // Emulate the dynamic gain via LoudnessEnhancer
@@ -238,7 +211,6 @@ class YamadaCustomDynamics(sessionId: Int) {
                     baseGain += 100
                 }
 
-                // No extra loudness boost for spatial — the Virtualizer handles widening at a subtle level
                 setTargetGain(baseGain)
                 enabled = true
             }
@@ -263,7 +235,6 @@ fun EqDialog(
     onDismiss: () -> Unit
 ) {
     val currentPreset by eqEngine.currentPreset.collectAsState()
-    val spatialEnabled by eqEngine.spatialEnabled.collectAsState()
 
     Dialog(onDismissRequest = onDismiss) {
         Column(
@@ -290,22 +261,39 @@ fun EqDialog(
             val offPreset = presets.first { it == EqPreset.OFF }
             val otherPresets = presets.filter { it != EqPreset.OFF }
 
+            val offIsSelected = offPreset == currentPreset
+            val offBgColor by animateColorAsState(
+                targetValue = if (offIsSelected) Color(0xFFB8355B) else Color(0xFF251818),
+                animationSpec = tween(200),
+                label = "off_bg"
+            )
+            val offBorderColor by animateColorAsState(
+                targetValue = if (offIsSelected) Color(0xFFD4577A) else Color(0xFF3A2020),
+                animationSpec = tween(200),
+                label = "off_border"
+            )
+
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(offBgColor)
+                    .border(1.dp, offBorderColor, RoundedCornerShape(12.dp))
+                    .clickable { eqEngine.setPreset(offPreset) }
+                    .padding(vertical = 14.dp, horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                EqPresetTile(
-                    preset = offPreset,
-                    isSelected = offPreset == currentPreset,
-                    onClick = { eqEngine.setPreset(offPreset) },
-                    modifier = Modifier.weight(1f)
+                Text(
+                    text = offPreset.displayName,
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = if (offIsSelected) FontWeight.Bold else FontWeight.Normal
                 )
-                FeatureTile(
-                    emoji = "⊚", // Spatial/Surround symbol
-                    displayName = "Spatial",
-                    isSelected = spatialEnabled,
-                    onClick = { eqEngine.toggleSpatial() },
-                    modifier = Modifier.weight(1f)
+                Text(
+                    text = offPreset.emoji,
+                    color = Color.White,
+                    fontSize = 20.sp
                 )
             }
 
