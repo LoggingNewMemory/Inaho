@@ -327,7 +327,13 @@ fun PlayerScreen(
                             else Box(modifier = Modifier.fillMaxSize().alpha(coverAlpha).background(surfaceColor), contentAlignment = Alignment.Center) { Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = Color(0xFF3D2020), modifier = Modifier.size(80.dp)) }
                         }
                         androidx.compose.animation.AnimatedVisibility(visible = showQueueSheet, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-                            QueuePanel(playerState = playerState, artCache = artCache, accentColor = accentColor, onSongClick = { _, index -> playerService?.jumpToQueueIndex(index); showQueueSheet = false })
+                            QueuePanel(
+                                playerState = playerState, 
+                                artCache = artCache, 
+                                accentColor = accentColor, 
+                                onSongClick = { _, index -> playerService?.jumpToQueueIndex(index); showQueueSheet = false },
+                                loadArt = { musicViewModel.loadArtIfNeeded(it) }
+                            )
                         }
                     }
                 }
@@ -497,7 +503,8 @@ fun PlayerScreen(
                         onSongClick = { _, index ->
                             playerService?.jumpToQueueIndex(index)
                             showQueueSheet = false
-                        }
+                        },
+                        loadArt = { musicViewModel.loadArtIfNeeded(it) }
                     )
                 }
             }
@@ -759,7 +766,8 @@ fun QueuePanel(
     playerState: PlayerState,
     artCache: Map<Long, Bitmap?>,
     accentColor: Color,
-    onSongClick: (Song, Int) -> Unit
+    onSongClick: (Song, Int) -> Unit,
+    loadArt: (Song) -> Unit = {}
 ) {
     val listState = rememberLazyListState()
     val queue     = playerState.activeQueue
@@ -789,6 +797,11 @@ fun QueuePanel(
         LazyColumn(state = listState) {
             itemsIndexed(queue) { index, qSong ->
                 val isCurrentSong = index == playerState.currentIndex
+                val isCached = artCache.containsKey(qSong.id)
+                LaunchedEffect(qSong.id, isCached) {
+                    if (!isCached) loadArt(qSong)
+                }
+                
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

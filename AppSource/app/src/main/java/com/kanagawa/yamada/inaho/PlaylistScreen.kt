@@ -277,7 +277,10 @@ fun PlaylistScreen(
                     // 1. Favorites Playlist Card
                     item {
                         val firstFavSong = remember(favorites, loadedSongs) { loadedSongs.find { it.id == favorites.firstOrNull() } }
-                        LaunchedEffect(firstFavSong?.id) { firstFavSong?.let { musicViewModel.loadArtIfNeeded(it) } }
+                        val isFavCached = firstFavSong?.let { artCache.containsKey(it.id) } ?: true
+                        LaunchedEffect(firstFavSong?.id, isFavCached) {
+                            if (!isFavCached) musicViewModel.loadArtIfNeeded(firstFavSong!!)
+                        }
                         val favCover = firstFavSong?.let { artCache[it.id] }
 
                         Row(
@@ -323,7 +326,10 @@ fun PlaylistScreen(
                     // 2. Custom Playlists
                     items(customPlaylists, key = { it.id }) { playlist ->
                         val firstSong = remember(playlist.songIds, loadedSongs) { loadedSongs.find { it.id == playlist.songIds.firstOrNull() } }
-                        LaunchedEffect(firstSong?.id) { firstSong?.let { musicViewModel.loadArtIfNeeded(it) } }
+                        val isCached = firstSong?.let { artCache.containsKey(it.id) } ?: true
+                        LaunchedEffect(firstSong?.id, isCached) {
+                            if (!isCached) musicViewModel.loadArtIfNeeded(firstSong!!)
+                        }
                         val cover = firstSong?.let { artCache[it.id] }
 
                         Row(
@@ -378,7 +384,10 @@ fun PlaylistScreen(
                     // 1. Favorites Playlist Card
                     item {
                         val firstFavSong = remember(favorites, loadedSongs) { loadedSongs.find { it.id == favorites.firstOrNull() } }
-                        LaunchedEffect(firstFavSong?.id) { firstFavSong?.let { musicViewModel.loadArtIfNeeded(it) } }
+                        val isFavCached = firstFavSong?.let { artCache.containsKey(it.id) } ?: true
+                        LaunchedEffect(firstFavSong?.id, isFavCached) {
+                            if (!isFavCached) musicViewModel.loadArtIfNeeded(firstFavSong!!)
+                        }
                         val favCover = firstFavSong?.let { artCache[it.id] }
 
                         Row(
@@ -424,7 +433,10 @@ fun PlaylistScreen(
                     // 2. Custom Playlists
                     items(customPlaylists, key = { it.id }) { playlist ->
                         val firstSong = remember(playlist.songIds, loadedSongs) { loadedSongs.find { it.id == playlist.songIds.firstOrNull() } }
-                        LaunchedEffect(firstSong?.id) { firstSong?.let { musicViewModel.loadArtIfNeeded(it) } }
+                        val isCached = firstSong?.let { artCache.containsKey(it.id) } ?: true
+                        LaunchedEffect(firstSong?.id, isCached) {
+                            if (!isCached) musicViewModel.loadArtIfNeeded(firstSong!!)
+                        }
                         val cover = firstSong?.let { artCache[it.id] }
 
                         Row(
@@ -689,7 +701,10 @@ fun PlaylistScreen(
                         contentPadding = PaddingValues(bottom = if (playerState.currentSong != null) 100.dp else 24.dp, top = 8.dp)
                     ) {
                         itemsIndexed(songsToDisplay, key = { _, s -> s.id }) { index, song ->
-                            LaunchedEffect(song.id) { musicViewModel.loadArtIfNeeded(song) }
+                            val isCached = artCache.containsKey(song.id)
+                            LaunchedEffect(song.id, isCached) {
+                                if (!isCached) musicViewModel.loadArtIfNeeded(song)
+                            }
 
                             // We only allow dragging if isEditMode is true
                             ReorderableItem(reorderableState, key = song.id, enabled = isEditMode) { isDragging ->

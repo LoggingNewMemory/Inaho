@@ -180,27 +180,20 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun recordLoadedSongs(songs: List<Song>) {
         _loadedSongs.value = songs
-        
-        // Background mass-preloader: immediately start loading everything
-        viewModelScope.launch(Dispatchers.Default) {
-            for (song in songs) {
-                var skip = false
-                artCacheMutex.withLock {
-                    if (lruStore.containsKey(song.id) || inFlightIds.contains(song.id)) skip = true
-                }
-                if (!skip) {
-                    enqueueLoad(song)
-                    // Tiny delay so that if the user scrolls, the UI's enqueueLoad
-                    // can jump ahead of this loop's future iterations
-                    kotlinx.coroutines.delay(2)
-                }
-            }
-        }
     }
 
     fun loadArtIfNeeded(song: Song) {
-        if (lruStore.containsKey(song.id)) return
-        enqueueLoad(song)
+        val exists = _artCache.value.containsKey(song.id)
+        if (exists) {
+            // Update LRU asynchronously to avoid blocking the main thread
+            viewModelScope.launch(Dispatchers.Default) {
+                artCacheMutex.withLock {
+                    lruStore.get(song.id)
+                }
+            }
+            return
+        }
+        enqueueLoad(song, putInCache = true)
     }
 
     fun preloadQueueWindow(queue: List<Song>, currentIndex: Int) {
@@ -209,16 +202,19 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val end   = (currentIndex + PRE_LOAD_RADIUS).coerceAtMost(queue.size - 1)
         for (i in start..end) {
             val song = queue[i]
-            if (!lruStore.containsKey(song.id)) {
-                enqueueLoad(song)
+            if (!_artCache.value.containsKey(song.id)) {
+                enqueueLoad(song, putInCache = true)
             }
         }
     }
 
-    private fun enqueueLoad(song: Song) {
+    private fun enqueueLoad(song: Song, putInCache: Boolean = true) {
         viewModelScope.launch(artExtractionDispatcher) {
             artCacheMutex.withLock {
-                if (lruStore.containsKey(song.id)) return@launch
+                if (putInCache && lruStore.containsKey(song.id)) {
+                    lruStore.get(song.id) // Update LRU access order
+                    return@launch
+                }
                 if (inFlightIds.contains(song.id)) return@launch
                 inFlightIds.add(song.id)
             }
@@ -226,9 +222,13 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             val context: Context = getApplication()
             try {
                 val bitmap: Bitmap? = if (isArtResolved(context, song.id)) {
+                    // If we're just preloading to disk, and it's already on disk, we can skip loading into RAM
+                    if (!putInCache) {
+                        artCacheMutex.withLock { inFlightIds.remove(song.id) }
+                        return@launch
+                    }
                     loadBitmapFromDisk(context, song.id)
                 } else {
-                    // Separate the logic cleanly based on the new flag
                     val extracted = if (song.isVideo) {
                         loadVideoThumbnailNative(context, song.trackUri, 800)
                     } else {
@@ -239,8 +239,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 artCacheMutex.withLock {
-                    lruStore[song.id] = bitmap
-                    _artCache.value = lruStore.toMap()
+                    if (putInCache) {
+                        lruStore[song.id] = bitmap
+                        _artCache.value = lruStore.toMap()
+                    }
                     inFlightIds.remove(song.id)
                 }
             } catch (e: Exception) {

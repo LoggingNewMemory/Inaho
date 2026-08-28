@@ -359,7 +359,10 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     val mainSong = dailySongs[0]
-                    LaunchedEffect(mainSong.id) { musicViewModel.loadArtIfNeeded(mainSong) }
+                    val isCached = artCache.containsKey(mainSong.id)
+                    LaunchedEffect(mainSong.id, isCached) {
+                        if (!isCached) musicViewModel.loadArtIfNeeded(mainSong)
+                    }
                     
                     val mainBoxModifier = if (isTablet) Modifier.fillMaxHeight().aspectRatio(1f) else Modifier.weight(1f).aspectRatio(1f)
                     
@@ -398,7 +401,10 @@ fun HomeScreen(
                                             onNavigateToPlayer()
                                         }
                                 ) {
-                                    LaunchedEffect(song.id) { musicViewModel.loadArtIfNeeded(song) }
+                                    val isCached = artCache.containsKey(song.id)
+                                    LaunchedEffect(song.id, isCached) {
+                                        if (!isCached) musicViewModel.loadArtIfNeeded(song)
+                                    }
                                     val cover = artCache[song.id]
                                     if (cover != null) {
                                         Image(bitmap = cover.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
@@ -489,7 +495,10 @@ fun HomeScreen(
                         contentPadding = PaddingValues(bottom = if (playerState.currentSong != null) 100.dp else 16.dp)
                     ) {
                         itemsIndexed(quickList) { index, song ->
-                            LaunchedEffect(song.id) { musicViewModel.loadArtIfNeeded(song) }
+                            val isCached = artCache.containsKey(song.id)
+                            LaunchedEffect(song.id, isCached) {
+                                if (!isCached) musicViewModel.loadArtIfNeeded(song)
+                            }
                             SongListItem(
                                 song = song,
                                 coverBitmap = artCache[song.id],
@@ -511,7 +520,10 @@ fun HomeScreen(
                         contentPadding = PaddingValues(bottom = if (playerState.currentSong != null) 100.dp else 16.dp)
                     ) {
                         itemsIndexed(quickList) { index, song ->
-                            LaunchedEffect(song.id) { musicViewModel.loadArtIfNeeded(song) }
+                            val isCached = artCache.containsKey(song.id)
+                            LaunchedEffect(song.id, isCached) {
+                                if (!isCached) musicViewModel.loadArtIfNeeded(song)
+                            }
                             SongListItem(
                                 song = song,
                                 coverBitmap = artCache[song.id],
@@ -612,7 +624,10 @@ private fun RowScope.GridSmallItem(
                     nav()
                 }
         ) {
-            LaunchedEffect(song.id) { vm.loadArtIfNeeded(song) }
+            val isCached = artCache.containsKey(song.id)
+            LaunchedEffect(song.id, isCached) { 
+                if (!isCached) vm.loadArtIfNeeded(song) 
+            }
             val cover = artCache[song.id]
             if (cover != null) {
                 Image(bitmap = cover.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())

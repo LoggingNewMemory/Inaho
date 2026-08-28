@@ -341,7 +341,10 @@ fun MusicListScreen(
                             ) {
                                 items(filteredSongs.size, key = { filteredSongs[it].id }) { index ->
                                     val song = filteredSongs[index]
-                                    LaunchedEffect(song.id) { musicViewModel.loadArtIfNeeded(song) }
+                                    val isCached = artCache.containsKey(song.id)
+                                    LaunchedEffect(song.id, isCached) {
+                                        if (!isCached) musicViewModel.loadArtIfNeeded(song)
+                                    }
                                     SongListItem(
                                         song = song, coverBitmap = artCache[song.id],
                                         isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
@@ -358,7 +361,10 @@ fun MusicListScreen(
                             LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = if (playerState.currentSong != null) 88.dp else 16.dp)) {
                                 items(filteredSongs.size, key = { filteredSongs[it].id }) { index ->
                                     val song = filteredSongs[index]
-                                    LaunchedEffect(song.id) { musicViewModel.loadArtIfNeeded(song) }
+                                    val isCached = artCache.containsKey(song.id)
+                                    LaunchedEffect(song.id, isCached) {
+                                        if (!isCached) musicViewModel.loadArtIfNeeded(song)
+                                    }
                                     SongListItem(
                                         song = song, coverBitmap = artCache[song.id],
                                         isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
@@ -385,7 +391,10 @@ fun MusicListScreen(
                             items(count = songs.itemCount, key = songs.itemKey { it.id }) { index ->
                                 val song = songs[index]
                                 if (song != null) {
-                                    LaunchedEffect(song.id) { musicViewModel.loadArtIfNeeded(song) }
+                                    val isCached = artCache.containsKey(song.id)
+                                    LaunchedEffect(song.id, isCached) {
+                                        if (!isCached) musicViewModel.loadArtIfNeeded(song)
+                                    }
                                     SongListItem(
                                         song = song, coverBitmap = artCache[song.id],
                                         isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
@@ -406,7 +415,10 @@ fun MusicListScreen(
                             items(count = songs.itemCount, key = songs.itemKey { it.id }) { index ->
                                 val song = songs[index]
                                 if (song != null) {
-                                    LaunchedEffect(song.id) { musicViewModel.loadArtIfNeeded(song) }
+                                    val isCached = artCache.containsKey(song.id)
+                                    LaunchedEffect(song.id, isCached) {
+                                        if (!isCached) musicViewModel.loadArtIfNeeded(song)
+                                    }
                                     SongListItem(
                                         song = song, coverBitmap = artCache[song.id],
                                         isPlaying = playerState.currentSong?.id == song.id && playerState.isPlaying,
