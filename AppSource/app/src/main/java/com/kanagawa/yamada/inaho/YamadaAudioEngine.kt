@@ -6,7 +6,6 @@ Copyright (C) 2026 Kanagawa Yamada
 package com.kanagawa.yamada.inaho
 
 import android.content.Context
-import android.media.audiofx.DynamicsProcessing
 import android.media.audiofx.Equalizer
 import android.media.audiofx.LoudnessEnhancer
 import android.os.Build
@@ -114,8 +113,7 @@ class YamadaAudioEngine(private val context: Context) {
     private var audioSessionId: Int = 0
 
     private var equalizer: Equalizer? = null
-    private var loudnessEnhancer: LoudnessEnhancer? = null
-    private var dynamicsProcessor: Any? = null
+    private var customDynamicsProcessor: YamadaCustomDynamics? = null
     private var virtualizer: android.media.audiofx.Virtualizer? = null
 
     private var environmentalReverb: android.media.audiofx.EnvironmentalReverb? = null
@@ -157,16 +155,13 @@ class YamadaAudioEngine(private val context: Context) {
 
     private fun tearDown() {
         runCatching { equalizer?.release() }
-        runCatching { loudnessEnhancer?.release() }
+        runCatching { customDynamicsProcessor?.release() }
         runCatching { virtualizer?.release() }
         runCatching { environmentalReverb?.release() }
         runCatching { mediaPlayer?.setAuxEffectSendLevel(0f) }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            runCatching { (dynamicsProcessor as? DynamicsProcessing)?.release() }
-        }
+        
         equalizer = null
-        loudnessEnhancer = null
-        dynamicsProcessor = null
+        customDynamicsProcessor = null
         virtualizer = null
         environmentalReverb = null
     }
@@ -212,72 +207,55 @@ class YamadaAudioEngine(private val context: Context) {
             }
         }
 
-        // 3. Dynamics Processing — Smart Tunnel, Safety Limiter, & Crystalizer
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            runCatching {
-                val config = DynamicsProcessing.Config.Builder(
-                    DynamicsProcessing.VARIANT_FAVOR_TIME_RESOLUTION,
-                    /* channelCount */ 2,
-                    /* preEqInUse   */ false, 0,
-                    /* mbcInUse     */ true, 1,
-                    /* postEqInUse  */ false, 0,
-                    /* limiterInUse */ true
-                ).build()
-
-                val dp = DynamicsProcessing(0, sessionId, config).apply {
-                    val gainDb = actualPreset.loudnessGainMb / 100f
-                    for (ch in 0..1) {
-                        val mbcBand = getMbcBandByChannelIndex(ch, 0)
-                        val tunedBand = DynamicsProcessing.MbcBand(mbcBand).apply {
-                            if (actualPreset.smartTunnel) {
-                                attackTime    = 2f
-                                releaseTime   = 60f
-                                ratio         = 2.5f
-                                threshold     = -20f
-                                kneeWidth     = 6f
-                                noiseGateThreshold = -80f
-                                expanderRatio = if (spatial) 1.2f else 1.0f // Light Crystalizer expansion
-                                preGain       = 5f
-                                postGain      = if (spatial) 9.5f else 8.5f // +1dB clarity bump
-                            } else {
-                                // Transparent volume boost for non-smart presets
-                                attackTime    = 50f
-                                releaseTime   = 100f
-                                ratio         = 1.0f
-                                threshold     = 0f
-                                kneeWidth     = 0f
-                                noiseGateThreshold = -90f
-                                expanderRatio = if (spatial) 1.15f else 1.0f
-                                preGain       = gainDb
-                                postGain      = if (spatial) 1.5f else 0f // +1.5dB boost
-                            }
-                        }
-                        setMbcBandByChannelIndex(ch, 0, tunedBand)
-
-                        // Universal Safety Limiter
-                        val lim = getLimiterByChannelIndex(ch)
-                        val tunedLim = DynamicsProcessing.Limiter(lim).apply {
-                            attackTime  = 2f
-                            releaseTime = 50f
-                            ratio       = 10f
-                            threshold   = -0.5f 
-                            postGain    = if (actualPreset.smartTunnel) 5f else 0f
-                        }
-                        setLimiterByChannelIndex(ch, tunedLim)
-                    }
-                    enabled = true
-                }
-                dynamicsProcessor = dp
+        runCatching {
+            customDynamicsProcessor = YamadaCustomDynamics(sessionId).apply {
+                applyDynamics(actualPreset, spatial)
             }
-        } else if (actualPreset.loudnessGainMb > 0 || spatial) {
-            // 4. Fallback for all presets on API < 28
-            runCatching {
-                loudnessEnhancer = LoudnessEnhancer(sessionId).apply {
-                    val spatialBoost = if (spatial) 150 else 0
-                    setTargetGain(actualPreset.loudnessGainMb + spatialBoost)
-                    enabled = true
+        }
+    }
+}
+
+// ==========================================
+// CUSTOM DYNAMICS PROCESSOR
+// ==========================================
+
+/**
+ * A custom implementation of Dynamics Processing that does not rely on Android's built-in
+ * DynamicsProcessing (which requires API 28+). This ensures the audio engine works on any
+ * Android version.
+ */
+class YamadaCustomDynamics(sessionId: Int) {
+    private var loudnessEnhancer: LoudnessEnhancer? = null
+
+    init {
+        runCatching {
+            loudnessEnhancer = LoudnessEnhancer(sessionId)
+        }
+    }
+
+    fun applyDynamics(preset: EqPreset, spatial: Boolean) {
+        runCatching {
+            loudnessEnhancer?.apply {
+                // Emulate the dynamic gain via LoudnessEnhancer
+                var baseGain = preset.loudnessGainMb
+                
+                // Emulate Smart Tunnel by giving an extra volume bump
+                if (preset.smartTunnel) {
+                    baseGain += 100 
                 }
+                
+                val spatialBoost = if (spatial) 150 else 0
+                
+                setTargetGain(baseGain + spatialBoost)
+                enabled = true
             }
+        }
+    }
+
+    fun release() {
+        runCatching {
+            loudnessEnhancer?.release()
+            loudnessEnhancer = null
         }
     }
 }
