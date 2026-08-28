@@ -174,12 +174,13 @@ class YamadaAudioEngine(private val context: Context) {
             runCatching {
                 // Using Android's native Binaural Virtualizer which executes true HRTF (Head-Related Transfer Function)
                 // without requiring the deadlock-prone attachAuxEffect() required by Reverb.
+                // Kept at a subtle strength to work cleanly across all Android devices.
                 virtualizer = android.media.audiofx.Virtualizer(0, sessionId).apply {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                         runCatching { forceVirtualizationMode(android.media.audiofx.Virtualizer.VIRTUALIZATION_MODE_BINAURAL) }
                     }
                     enabled = true
-                    runCatching { setStrength(750.toShort()) } // 75% HRTF width - the perfect sweet spot!
+                    runCatching { setStrength(400.toShort()) } // 40% HRTF width - subtle & device-friendly
                 }
             }
         }
@@ -187,7 +188,7 @@ class YamadaAudioEngine(private val context: Context) {
         // We process EQ and Dynamics even if preset is OFF, because Spatial acts as an independent layer
         val actualPreset = preset
 
-        // 2. Equalizer bands (Emulate Kei-Audio's cinematic low/high bumps)
+        // 2. Equalizer bands — no extra spatial EQ bumps to keep the sound natural on all devices
         runCatching {
             equalizer = Equalizer(0, sessionId).apply {
                 enabled = true
@@ -195,14 +196,7 @@ class YamadaAudioEngine(private val context: Context) {
                 actualPreset.bands.take(bandCount).forEachIndexed { i, gainMb ->
                     val min = bandLevelRange[0].toInt()
                     val max = bandLevelRange[1].toInt()
-                    
-                    var finalGain = gainMb
-                    if (spatial) {
-                        if (i == 0) finalGain += 300 // +3dB Sub-bass bump
-                        if (i == bandCount - 1) finalGain += 150 // +1.5dB air bump
-                    }
-                    
-                    setBandLevel(i.toShort(), finalGain.coerceIn(min, max).toShort())
+                    setBandLevel(i.toShort(), gainMb.coerceIn(min, max).toShort())
                 }
             }
         }
@@ -238,15 +232,14 @@ class YamadaCustomDynamics(sessionId: Int) {
             loudnessEnhancer?.apply {
                 // Emulate the dynamic gain via LoudnessEnhancer
                 var baseGain = preset.loudnessGainMb
-                
+
                 // Emulate Smart Tunnel by giving an extra volume bump
                 if (preset.smartTunnel) {
-                    baseGain += 100 
+                    baseGain += 100
                 }
-                
-                val spatialBoost = if (spatial) 150 else 0
-                
-                setTargetGain(baseGain + spatialBoost)
+
+                // No extra loudness boost for spatial — the Virtualizer handles widening at a subtle level
+                setTargetGain(baseGain)
                 enabled = true
             }
         }
