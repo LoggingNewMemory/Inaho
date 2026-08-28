@@ -1,5 +1,5 @@
 /*
-Inaho Music Player - Yamada EQ Section
+Inaho Music Player - Yamada Audio Engine
 Copyright (C) 2026 Kanagawa Yamada
 */
 
@@ -35,26 +35,6 @@ import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-// ==========================================
-// EQ PRESET MODELS
-// ==========================================
-
-/**
- * Yamada EQ Presets
- *
- * Each preset carries:
- * - [bands]  : gain in millibels for the 5 standard Android EQ bands
- * (60 Hz | 230 Hz | 910 Hz | 3.6 kHz | 14 kHz)
- * - [loudnessGainMb] : extra loudness-enhancer boost in millibels (0 = off)
- * - [smartTunnel]    : enables the "Audio Tunnel" dynamic-gain logic (Smart only)
- *
- * Band indices (Android standard):
- * 0 → ~60 Hz   (Sub-bass)
- * 1 → ~230 Hz  (Bass)
- * 2 → ~910 Hz  (Low-mid)
- * 3 → ~3600 Hz (Presence)
- * 4 → ~14000 Hz(Air / Brilliance)
- */
 enum class EqPreset(
     val displayName: String,
     val emoji: String,
