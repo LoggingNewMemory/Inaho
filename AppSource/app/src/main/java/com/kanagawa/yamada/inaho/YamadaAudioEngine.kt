@@ -123,70 +123,116 @@ enum class EqPreset(
 // EQ MANAGER  (attach to MediaPlayer audio session)
 // ==========================================
 
-class YamadaEQManager(private val context: Context) {
+class YamadaAudioEngine(private val context: Context) {
 
     private val _currentPreset = MutableStateFlow(EqPreset.OFF)
     val currentPreset = _currentPreset.asStateFlow()
+
+    private val _spatialEnabled = MutableStateFlow(false)
+    val spatialEnabled = _spatialEnabled.asStateFlow()
 
     private var audioSessionId: Int = 0
 
     private var equalizer: Equalizer? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
     private var dynamicsProcessor: Any? = null
+    private var virtualizer: android.media.audiofx.Virtualizer? = null
+
+    private var environmentalReverb: android.media.audiofx.EnvironmentalReverb? = null
 
     private val prefs = context.getSharedPreferences("inaho_eq", Context.MODE_PRIVATE)
+
+    private var mediaPlayer: android.media.MediaPlayer? = null
 
     init {
         val savedName = prefs.getString("preset", EqPreset.OFF.name) ?: EqPreset.OFF.name
         _currentPreset.value = runCatching { EqPreset.valueOf(savedName) }.getOrDefault(EqPreset.OFF)
+        _spatialEnabled.value = prefs.getBoolean("spatial", false)
     }
 
-    fun attach(sessionId: Int) {
-        audioSessionId = sessionId
-        applyPreset(_currentPreset.value, sessionId)
+    fun attach(mp: android.media.MediaPlayer) {
+        mediaPlayer = mp
+        audioSessionId = mp.audioSessionId
+        applyEffects(_currentPreset.value, _spatialEnabled.value, audioSessionId)
     }
 
     fun release() {
         tearDown()
         audioSessionId = 0
+        mediaPlayer = null
     }
 
     fun setPreset(preset: EqPreset) {
         prefs.edit().putString("preset", preset.name).apply()
         _currentPreset.value = preset
-        if (audioSessionId != 0) applyPreset(preset, audioSessionId)
+        if (audioSessionId != 0) applyEffects(preset, _spatialEnabled.value, audioSessionId)
+    }
+
+    fun toggleSpatial() {
+        val newState = !_spatialEnabled.value
+        prefs.edit().putBoolean("spatial", newState).apply()
+        _spatialEnabled.value = newState
+        if (audioSessionId != 0) applyEffects(_currentPreset.value, newState, audioSessionId)
     }
 
     private fun tearDown() {
         runCatching { equalizer?.release() }
         runCatching { loudnessEnhancer?.release() }
+        runCatching { virtualizer?.release() }
+        runCatching { environmentalReverb?.release() }
+        runCatching { mediaPlayer?.setAuxEffectSendLevel(0f) }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             runCatching { (dynamicsProcessor as? DynamicsProcessing)?.release() }
         }
         equalizer = null
         loudnessEnhancer = null
         dynamicsProcessor = null
+        virtualizer = null
+        environmentalReverb = null
     }
 
-    private fun applyPreset(preset: EqPreset, sessionId: Int) {
+    private fun applyEffects(preset: EqPreset, spatial: Boolean, sessionId: Int) {
         tearDown()
 
-        if (preset == EqPreset.OFF) return
-
-        // 1. Equalizer bands
-        runCatching {
-            equalizer = Equalizer(0, sessionId).apply {
-                enabled = true
-                val bandCount = numberOfBands.toInt()
-                preset.bands.take(bandCount).forEachIndexed { i, gainMb ->
-                    val min = bandLevelRange[0].toInt()
-                    val max = bandLevelRange[1].toInt()
-                    setBandLevel(i.toShort(), gainMb.coerceIn(min, max).toShort())
+        // 1. HRTF Spatializer (Insert Effect - safe from deadlocks)
+        if (spatial) {
+            runCatching {
+                // Using Android's native Binaural Virtualizer which executes true HRTF (Head-Related Transfer Function)
+                // without requiring the deadlock-prone attachAuxEffect() required by Reverb.
+                virtualizer = android.media.audiofx.Virtualizer(0, sessionId).apply {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                        runCatching { forceVirtualizationMode(android.media.audiofx.Virtualizer.VIRTUALIZATION_MODE_BINAURAL) }
+                    }
+                    enabled = true
+                    runCatching { setStrength(750.toShort()) } // 75% HRTF width - the perfect sweet spot!
                 }
             }
         }
 
-        // 2. Dynamics Processing (API 28+) — Smart Tunnel & Universal Safety Limiter
+        // We process EQ and Dynamics even if preset is OFF, because Spatial acts as an independent layer
+        val actualPreset = preset
+
+        // 2. Equalizer bands (Emulate Kei-Audio's cinematic low/high bumps)
+        runCatching {
+            equalizer = Equalizer(0, sessionId).apply {
+                enabled = true
+                val bandCount = numberOfBands.toInt()
+                actualPreset.bands.take(bandCount).forEachIndexed { i, gainMb ->
+                    val min = bandLevelRange[0].toInt()
+                    val max = bandLevelRange[1].toInt()
+                    
+                    var finalGain = gainMb
+                    if (spatial) {
+                        if (i == 0) finalGain += 300 // +3dB Sub-bass bump
+                        if (i == bandCount - 1) finalGain += 150 // +1.5dB air bump
+                    }
+                    
+                    setBandLevel(i.toShort(), finalGain.coerceIn(min, max).toShort())
+                }
+            }
+        }
+
+        // 3. Dynamics Processing — Smart Tunnel, Safety Limiter, & Crystalizer
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             runCatching {
                 val config = DynamicsProcessing.Config.Builder(
@@ -199,20 +245,20 @@ class YamadaEQManager(private val context: Context) {
                 ).build()
 
                 val dp = DynamicsProcessing(0, sessionId, config).apply {
-                    val gainDb = preset.loudnessGainMb / 100f
+                    val gainDb = actualPreset.loudnessGainMb / 100f
                     for (ch in 0..1) {
                         val mbcBand = getMbcBandByChannelIndex(ch, 0)
                         val tunedBand = DynamicsProcessing.MbcBand(mbcBand).apply {
-                            if (preset.smartTunnel) {
+                            if (actualPreset.smartTunnel) {
                                 attackTime    = 2f
                                 releaseTime   = 60f
                                 ratio         = 2.5f
                                 threshold     = -20f
                                 kneeWidth     = 6f
                                 noiseGateThreshold = -80f
-                                expanderRatio = 1.0f
+                                expanderRatio = if (spatial) 1.2f else 1.0f // Light Crystalizer expansion
                                 preGain       = 5f
-                                postGain      = 8.5f
+                                postGain      = if (spatial) 9.5f else 8.5f // +1dB clarity bump
                             } else {
                                 // Transparent volume boost for non-smart presets
                                 attackTime    = 50f
@@ -221,21 +267,21 @@ class YamadaEQManager(private val context: Context) {
                                 threshold     = 0f
                                 kneeWidth     = 0f
                                 noiseGateThreshold = -90f
-                                expanderRatio = 1.0f
+                                expanderRatio = if (spatial) 1.15f else 1.0f
                                 preGain       = gainDb
-                                postGain      = 0f
+                                postGain      = if (spatial) 1.5f else 0f // +1.5dB boost
                             }
                         }
                         setMbcBandByChannelIndex(ch, 0, tunedBand)
 
-                        // Universal Safety Limiter to prevent clipping from EQ and volume boosts
+                        // Universal Safety Limiter
                         val lim = getLimiterByChannelIndex(ch)
                         val tunedLim = DynamicsProcessing.Limiter(lim).apply {
                             attackTime  = 2f
                             releaseTime = 50f
                             ratio       = 10f
-                            threshold   = -0.5f  // Ceiling before brickwalling
-                            postGain    = if (preset.smartTunnel) 5f else 0f
+                            threshold   = -0.5f 
+                            postGain    = if (actualPreset.smartTunnel) 5f else 0f
                         }
                         setLimiterByChannelIndex(ch, tunedLim)
                     }
@@ -243,11 +289,12 @@ class YamadaEQManager(private val context: Context) {
                 }
                 dynamicsProcessor = dp
             }
-        } else if (preset.loudnessGainMb > 0) {
-            // 3. Fallback for all presets on API < 28
+        } else if (actualPreset.loudnessGainMb > 0 || spatial) {
+            // 4. Fallback for all presets on API < 28
             runCatching {
                 loudnessEnhancer = LoudnessEnhancer(sessionId).apply {
-                    setTargetGain(preset.loudnessGainMb)
+                    val spatialBoost = if (spatial) 150 else 0
+                    setTargetGain(actualPreset.loudnessGainMb + spatialBoost)
                     enabled = true
                 }
             }
@@ -261,10 +308,11 @@ class YamadaEQManager(private val context: Context) {
 
 @Composable
 fun EqDialog(
-    eqManager: YamadaEQManager,
+    eqEngine: YamadaAudioEngine,
     onDismiss: () -> Unit
 ) {
-    val currentPreset by eqManager.currentPreset.collectAsState()
+    val currentPreset by eqEngine.currentPreset.collectAsState()
+    val spatialEnabled by eqEngine.spatialEnabled.collectAsState()
 
     Dialog(onDismissRequest = onDismiss) {
         Column(
@@ -274,7 +322,7 @@ fun EqDialog(
                 .padding(20.dp)
         ) {
             Text(
-                text = "Yamada EQ",
+                text = "Yamada Audio Engine",
                 color = Color(0xFFB8355B),
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
@@ -291,12 +339,22 @@ fun EqDialog(
             val offPreset = presets.first { it == EqPreset.OFF }
             val otherPresets = presets.filter { it != EqPreset.OFF }
 
-            Row(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 EqPresetTile(
                     preset = offPreset,
                     isSelected = offPreset == currentPreset,
-                    onClick = { eqManager.setPreset(offPreset) },
-                    modifier = Modifier.fillMaxWidth()
+                    onClick = { eqEngine.setPreset(offPreset) },
+                    modifier = Modifier.weight(1f)
+                )
+                FeatureTile(
+                    emoji = "🎧",
+                    displayName = "Spatial",
+                    isSelected = spatialEnabled,
+                    onClick = { eqEngine.toggleSpatial() },
+                    modifier = Modifier.weight(1f)
                 )
             }
 
@@ -311,7 +369,7 @@ fun EqDialog(
                         EqPresetTile(
                             preset = preset,
                             isSelected = preset == currentPreset,
-                            onClick = { eqManager.setPreset(preset) },
+                            onClick = { eqEngine.setPreset(preset) },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -332,6 +390,23 @@ fun EqDialog(
 @Composable
 private fun EqPresetTile(
     preset: EqPreset,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    FeatureTile(
+        emoji = preset.emoji,
+        displayName = preset.displayName,
+        isSelected = isSelected,
+        onClick = onClick,
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun FeatureTile(
+    emoji: String,
+    displayName: String,
     isSelected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -357,14 +432,14 @@ private fun EqPresetTile(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = preset.emoji,
+            text = emoji,
             color = Color.White,
             fontSize = 20.sp,
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = preset.displayName,
+            text = displayName,
             color = Color.White,
             fontSize = 11.sp,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,

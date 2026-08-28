@@ -367,7 +367,7 @@ fun PlayerScreen(
                         Icon(imageVector = Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                     }
                     Spacer(modifier = Modifier.height(32.dp))
-                    val eqPreset by playerService?.eqManager?.currentPreset?.collectAsState() ?: run { remember { mutableStateOf(EqPreset.OFF) } }
+                    val eqPreset by playerService?.eqEngine?.currentPreset?.collectAsState() ?: run { remember { mutableStateOf(EqPreset.OFF) } }
                     val eqActiveLabel = remember(eqPreset) { if (eqPreset == EqPreset.OFF) "EQ" else eqPreset.displayName }
                     val eqIsActive = eqPreset != EqPreset.OFF
                     val speedPitchActive = currentSpeed != 1.0f || currentPitch != 1.0f
@@ -593,7 +593,7 @@ fun PlayerScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            val eqPreset by playerService?.eqManager?.currentPreset?.collectAsState() ?: run { remember { mutableStateOf(EqPreset.OFF) } }
+            val eqPreset by playerService?.eqEngine?.currentPreset?.collectAsState() ?: run { remember { mutableStateOf(EqPreset.OFF) } }
             val eqActiveLabel = remember(eqPreset) { if (eqPreset == EqPreset.OFF) "EQ" else eqPreset.displayName }
             val eqIsActive = eqPreset != EqPreset.OFF
 
@@ -695,7 +695,7 @@ fun PlayerScreen(
         val service = playerService
         if (service != null) {
             EqDialog(
-                eqManager = service.eqManager,
+                eqEngine = service.eqEngine,
                 onDismiss = { showEqDialog = false }
             )
         } else {

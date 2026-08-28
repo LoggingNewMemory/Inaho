@@ -103,7 +103,7 @@ class PlayerService : Service() {
     private var isMainPreparing = false
     private var isBgPreparing = false
 
-    lateinit var eqManager: YamadaEQManager
+    lateinit var eqEngine: YamadaAudioEngine
         private set
 
     // ── Video Surface Handling ─────────────────────────────────────────────────
@@ -152,7 +152,7 @@ class PlayerService : Service() {
         createNotificationChannel()
         setupMediaSession()
 
-        eqManager = YamadaEQManager(applicationContext)
+        eqEngine = YamadaAudioEngine(this)
 
         val filter = IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -451,7 +451,7 @@ class PlayerService : Service() {
     }
 
     fun stopPlayback() {
-        eqManager.release()
+        eqEngine.release()
 
         safelyDestroyPlayer(bgMediaPlayer)
         bgMediaPlayer = null
@@ -493,7 +493,7 @@ class PlayerService : Service() {
     }
 
     private fun prepareAndPlay(song: Song) {
-        eqManager.release()
+        eqEngine.release()
         val uri = song.trackUri
 
         val generation = ++playGeneration
@@ -510,7 +510,10 @@ class PlayerService : Service() {
 
         mediaPlayer = MediaPlayer().apply {
             try {
-                setAudioAttributes(AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).setUsage(AudioAttributes.USAGE_MEDIA).build())
+                val attrBuilder = android.media.AudioAttributes.Builder()
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                setAudioAttributes(attrBuilder.build())
 
                 if (song.isVideo && currentSurface?.isValid == true) {
                     setSurface(currentSurface)
@@ -528,7 +531,11 @@ class PlayerService : Service() {
                 setDataSource(applicationContext, uri)
                 setOnPreparedListener { mp ->
                     if (generation != playGeneration) return@setOnPreparedListener
-                    eqManager.attach(mp.audioSessionId)
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        if (generation == playGeneration) {
+                            eqEngine.attach(mp)
+                        }
+                    }
                     _playerState.value = _playerState.value.copy(audioSessionId = mp.audioSessionId)
 
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && (currentPlaybackSpeed != 1.0f || currentPlaybackPitch != 1.0f)) {
@@ -575,7 +582,10 @@ class PlayerService : Service() {
 
         bgMediaPlayer = MediaPlayer().apply {
             try {
-                setAudioAttributes(AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).setUsage(AudioAttributes.USAGE_MEDIA).build())
+                val attrBuilder = android.media.AudioAttributes.Builder()
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                setAudioAttributes(attrBuilder.build())
 
                 if (currentBgSurface?.isValid == true) {
                     setSurface(currentBgSurface)
@@ -674,7 +684,7 @@ class PlayerService : Service() {
         super.onDestroy()
         runCatching { unregisterReceiver(noisyAudioReceiver) }
 
-        eqManager.release()
+        eqEngine.release()
 
         safelyDestroyPlayer(bgMediaPlayer)
         bgMediaPlayer = null
