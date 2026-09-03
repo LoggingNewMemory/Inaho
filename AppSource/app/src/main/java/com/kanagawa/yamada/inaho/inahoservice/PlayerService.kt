@@ -1,6 +1,6 @@
 package com.kanagawa.yamada.inaho.inahoservice
 
-import android.app.Service
+import androidx.media.MediaBrowserServiceCompat
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -55,7 +55,7 @@ data class PlayerState(
 // ==========================================
 // PLAYER SERVICE
 // ==========================================
-class PlayerService : Service() {
+class PlayerService : MediaBrowserServiceCompat() {
 
     private val binder = PlayerBinder()
 
@@ -112,6 +112,7 @@ class PlayerService : Service() {
         )
 
         mediaSessionManager = MediaSessionManager(this)
+        sessionToken = mediaSessionManager.mediaSession.sessionToken
         notificationManager = MediaNotificationManager(this)
 
         startPositionPoller()
@@ -127,7 +128,28 @@ class PlayerService : Service() {
         return START_NOT_STICKY
     }
 
-    override fun onBind(intent: Intent?): IBinder = binder
+    override fun onBind(intent: Intent?): IBinder? {
+        return if (intent?.action == "android.media.browse.MediaBrowserService") {
+            super.onBind(intent)
+        } else {
+            binder
+        }
+    }
+
+    override fun onGetRoot(
+        clientPackageName: String,
+        clientUid: Int,
+        rootHints: android.os.Bundle?
+    ): BrowserRoot? {
+        return BrowserRoot("inaho_root_id", null)
+    }
+
+    override fun onLoadChildren(
+        parentId: String,
+        result: Result<MutableList<android.support.v4.media.MediaBrowserCompat.MediaItem>>
+    ) {
+        result.sendResult(mutableListOf())
+    }
 
     override fun onDestroy() {
         super.onDestroy()
