@@ -321,9 +321,13 @@ class PlayerService : Service() {
     }
 
     private fun updateSessionAndNotification() {
-        mediaSessionManager.updateState(_playerState.value, getCurrentPosition())
-        if (isForeground) {
-            notificationManager.updateNotification(_playerState.value, mediaSessionManager.mediaSession.sessionToken)
+        val state = _playerState.value
+        val pos = getCurrentPosition()
+        serviceScope.launch {
+            mediaSessionManager.updateState(state, pos)
+            if (isForeground) {
+                notificationManager.updateNotification(state, mediaSessionManager.mediaSession.sessionToken)
+            }
         }
     }
 

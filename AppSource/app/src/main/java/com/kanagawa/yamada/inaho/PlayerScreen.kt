@@ -12,6 +12,7 @@ import com.kanagawa.yamada.inaho.inahoservice.RepeatMode
 import android.content.BroadcastReceiver
 import androidx.compose.material.icons.automirrored.filled.*
 import android.content.ContentUris
+import androidx.compose.animation.core.tween
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -386,7 +387,7 @@ fun PlayerScreen(
                         IconButton(onClick = { playerService?.skipPrev() }, enabled = song != null, modifier = Modifier.size(48.dp)) { Icon(imageVector = Icons.Default.SkipPrevious, contentDescription = "Previous", tint = if (song != null) Color.White else Color.White.copy(alpha = 0.3f), modifier = Modifier.size(34.dp)) }
                         Box(modifier = Modifier.size(72.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
                             IconButton(onClick = { playerService?.togglePlayPause() }, enabled = song != null, modifier = Modifier.fillMaxSize()) {
-                                AnimatedContent(targetState = playerState.isPlaying, transitionSpec = { scaleIn(spring()) + fadeIn() togetherWith scaleOut(spring()) + fadeOut() }, label = "PlayPauseButton") { playing ->
+                                AnimatedContent(targetState = playerState.isPlaying, transitionSpec = { scaleIn(tween(150)) + fadeIn(tween(150)) togetherWith scaleOut(tween(150)) + fadeOut(tween(150)) }, label = "PlayPauseButton") { playing ->
                                     Icon(imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = if (playing) "Pause" else "Play", tint = Color(0xFF0D0A0A), modifier = Modifier.size(40.dp))
                                 }
                             }
@@ -646,7 +647,7 @@ fun PlayerScreen(
                         AnimatedContent(
                             targetState = playerState.isPlaying,
                             transitionSpec = {
-                                scaleIn(spring()) + fadeIn() togetherWith scaleOut(spring()) + fadeOut()
+                                scaleIn(tween(150)) + fadeIn(tween(150)) togetherWith scaleOut(tween(150)) + fadeOut(tween(150))
                             },
                             label = "PlayPauseButton"
                         ) { playing ->
