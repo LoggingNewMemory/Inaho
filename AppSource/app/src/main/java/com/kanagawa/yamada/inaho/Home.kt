@@ -72,7 +72,8 @@ private val appLaunchSeed = kotlin.random.Random.Default.nextLong()
 @Composable
 fun HomeScreen(
     musicViewModel: MusicViewModel = viewModel(),
-    onNavigateToPlayer: () -> Unit
+    onNavigateToPlayer: () -> Unit,
+    onNavigateToLetter: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val settings by musicViewModel.settingsManager.settingsFlow.collectAsState()
@@ -86,7 +87,7 @@ fun HomeScreen(
     val accentColor = getAppAccentColor(settings)
 
     val isVip = remember(settings.userName) {
-        listOf("Kanagawa Yamada").contains(settings.userName.trim())
+        listOf("Kanagawa Yamada", "Ochinai Inaho", "落乃いなほ").contains(settings.userName.trim())
     }
     val nameColor = if (isVip) accentColor else Color.White
 
@@ -300,7 +301,20 @@ fun HomeScreen(
                         text = "いらっしゃいませ,",
                         color = Color.White,
                         fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.pointerInput(Unit) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val down = awaitFirstDown()
+                                    val job = scope.launch {
+                                        kotlinx.coroutines.delay(1000)
+                                        onNavigateToLetter?.invoke()
+                                    }
+                                    waitForUpOrCancellation()
+                                    job.cancel()
+                                }
+                            }
+                        }
                     )
                     val nameFontSize = if (settings.userName.length > 12) 22.sp else 28.sp
                     Text(text = settings.userName, color = nameColor, fontSize = nameFontSize, fontWeight = FontWeight.Bold, lineHeight = 28.sp)
@@ -466,7 +480,7 @@ fun HomeScreen(
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2020))
             ) {
-                Text("Let's Make Your Playlist Today!", color = accentColor, fontWeight = FontWeight.SemiBold)
+                Text("Let Inaho Make Your Playlist Today!", color = accentColor, fontWeight = FontWeight.SemiBold)
             }
 
             Spacer(modifier = Modifier.height(16.dp))

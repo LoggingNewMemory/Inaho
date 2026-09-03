@@ -12,9 +12,9 @@ No accounts. No streaming. No cloud. Just your music, on your device.
 
 ---
 
-## Features
+## ✨ Features
 
-### Beautiful & Fluid UI
+### 🎨 Beautiful & Fluid UI
 
 - **Jetpack Compose driven** — a fully modern UI with seamless animated screen transitions and reactive state
 - **AMOLED Black theme** — a true-black option to save battery on OLED/AMOLED displays
@@ -22,7 +22,7 @@ No accounts. No streaming. No cloud. Just your music, on your device.
 - **Dynamic album art** — extracted, downsampled, and aggressively cached (LRU + disk) for stutter-free scrolling
 - **AMV Mode** — Allow users to play .mp4 (Like song covers, etc)
 
-### Advanced Audio & Playback
+### 🎧 Advanced Audio & Playback
 
 - **Yamada EQ** — a custom audio engine with 7 built-in presets: Off, Smart, Rock, Jazz, Classic, Pop, Bass
   - *Smart* preset uses `DynamicsProcessing` (API 28+) for dynamic gain riding — boosting signal on beat drops and lifts, with automatic `LoudnessEnhancer` fallback on older devices
@@ -32,13 +32,13 @@ No accounts. No streaming. No cloud. Just your music, on your device.
 - **Sleep timer** — auto-pause after 5, 10, 15, 20, 30, or 60 minutes
 - **Background & lock screen playback** — full `MediaSessionCompat` integration for rich media notifications and hardware controls
 
-### Lyrics Support
+### 🎵 Lyrics Support
 
 - **Online Lyrics Fetching** — seamlessly fetch synced (`.lrc`) or plain lyrics from LRCLIB using smart metadata matching
 - **Offline Save** — save fetched lyrics locally to your device for offline viewing and playback
 - **Dynamic Display** — synced lyrics scroll automatically with the music, powered by smooth animations
 
-### Library Management
+### 📁 Library Management
 
 - **Smart sorting** — by title (A–Z / Z–A), artist, recently added, or duration
 - **Folder filtering** — optionally restrict your library to the `/Music` folder, keeping out voice notes and app audio
@@ -49,7 +49,7 @@ No accounts. No streaming. No cloud. Just your music, on your device.
 
 ---
 
-## Tech Stack
+## 🛠 Tech Stack
 
 | Layer | Technology |
 |---|---|
@@ -63,7 +63,7 @@ No accounts. No streaming. No cloud. Just your music, on your device.
 
 ---
 
-## Permissions
+## 📋 Permissions
 
 | Permission | Reason |
 |---|---|
@@ -74,39 +74,38 @@ No accounts. No streaming. No cloud. Just your music, on your device.
 
 ---
 
-## Requirements
+## 📱 Requirements
 
 - **Android 8.0+** (API 26) — minimum
 - **Android 9.0+** (API 28) — required for Smart EQ's `DynamicsProcessing`; older devices fall back gracefully
 
 ---
 
-## Notice
-### NOTICE OF SWITCHING
+## 📖 The Story Behind "Inaho"
 
-Starting from version 5.0 Inaho Music Player will be switched to Technical App instead of Fan App of Ochinai Inaho
+> *"Makasih buat covernya, aku suka."*
 
-[Commit b07a4b8](https://github.com/LoggingNewMemory/Inaho/commit/b07a4b8a09a740becc9450f239916076ad4777dc)
+This app was originally built and named in honor of [Ochinai Inaho](https://www.youtube.com/@%E8%90%BD%E4%B9%83%E3%81%84%E3%81%AA%E3%81%BB), a Japanese VTuber whose vocal cover inspired its creation. It started as a tribute — something made with the quiet hope of being noticed (But at the end not noticed) — and evolved into a passion project and a gift to anyone who loves their local music library.
 
-=
-
-Desserved well because even Inaho didn't notice it. However the app name will still "Inaho" but all Ochinai Inaho stuffs will be discarded completely. When? Next update
-
-=
-
-I just can't bring myself to see her again, I decide to trash it completely and I will (supposed) NEVER make any fan app based on VTuber
-
--- Kanagawa Yamada<br>
-Developer of Inaho Music Player
+As of the 3.0 release, Inaho has transitioned into a purely technical, feature-driven app, remaining a robust daily driver for your local audio needs.
 
 ---
 
-## Developer
+## 👨‍💻 Developer
 
 Developed by **Kanagawa Yamada**
 
 - Email: albert.wesley.dion@gmail.com
+- X / Twitter: [@Kanagawa_Yamada](https://x.com/Kanagawa_Yamada)
 - GitHub: [@LoggingNewMemory](https://github.com/LoggingNewMemory)
 - YouTube: [@KanagawaYamada](https://youtube.com/@KanagawaYamada)
 
 ---
+
+## 📄 License
+
+This project is source-available. If you fork or copy it, please keep the credit comment in `MainActivity.kt` intact. That's all I ask.
+
+---
+
+*Untuk Inaho — semoga karirmu terus bersinar.*

@@ -423,8 +423,7 @@ fun SettingsScreen(
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 ThemeSelectorChip(
-                    title = "h",
-                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    title = "Inaho",
                     color = Color(0xFFB8355B),
                     isSelected = settings.theme == AppTheme.INAHO,
                     onClick = { settingsManager.updateTheme(AppTheme.INAHO) },
@@ -781,7 +780,29 @@ fun SettingsScreen(
             }
         )
 
+        Spacer(modifier = Modifier.height(24.dp))
 
+        DeveloperProfile(
+            role = "Inspired By",
+            roleColor = accentColor,
+            avatarResId = R.drawable.ic_inaho, // Ensure this exists in your res/drawable
+            name = "Ochinai Inaho",
+            description = "Japanese VTuber under the agency of Goraku",
+            socials = {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    SocialLink(
+                        iconResId = R.drawable.x,
+                        text = "X",
+                        url = "https://x.com/inaho_vt",
+                        accentColor = Color(0xFFB8355B))
+                    SocialLink(
+                        iconResId = R.drawable.youtube,
+                        text = "YouTube",
+                        url = "https://www.youtube.com/@%E8%90%BD%E4%B9%83%E3%81%84%E3%81%AA%E3%81%BB",
+                        accentColor = Color(0xFFB8355B))
+                }
+            }
+        )
 
         Spacer(modifier = Modifier.height(200.dp))
     }
@@ -793,8 +814,7 @@ private fun ThemeSelectorChip(
     color: Color,
     isSelected: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    fontStyle: androidx.compose.ui.text.font.FontStyle = androidx.compose.ui.text.font.FontStyle.Normal
+    modifier: Modifier = Modifier
 ) {
     val bgColor = if (isSelected) color else Color(0xFF1E1414)
     val contentColor = if (isSelected) Color.White else color
@@ -811,8 +831,7 @@ private fun ThemeSelectorChip(
             text = title,
             color = contentColor,
             fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            fontStyle = fontStyle
+            fontWeight = FontWeight.Bold
         )
     }
 }
