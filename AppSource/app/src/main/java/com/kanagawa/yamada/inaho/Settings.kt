@@ -114,7 +114,7 @@ data class AppSettings(
     val theme: AppTheme = AppTheme.INAHO,
     val userPhotoUri: String? = null,
     val keepScreenOn: Boolean = false,
-    val immersiveMode: Boolean = true,
+    val immersiveMode: Boolean = false,
     val customThemeColor: Int = 0xFFB8355B.toInt(),
     val visualizerType: VisualizerType = VisualizerType.NONE,
     val crossfadeDuration: Float = 0f
@@ -139,7 +139,7 @@ class SettingsManager(context: Context) {
             theme = AppTheme.valueOf(prefs.getString("theme", AppTheme.INAHO.name) ?: AppTheme.INAHO.name),
             userPhotoUri = prefs.getString("user_photo_uri", null),
             keepScreenOn = prefs.getBoolean("keep_screen_on", false),
-            immersiveMode = prefs.getBoolean("immersive_mode", true),
+            immersiveMode = prefs.getBoolean("immersive_mode", false),
             customThemeColor = prefs.getInt("custom_theme_color", 0xFFB8355B.toInt()),
             visualizerType = VisualizerType.valueOf(prefs.getString("visualizer_type", VisualizerType.NONE.name) ?: VisualizerType.NONE.name),
             crossfadeDuration = try { prefs.getFloat("crossfade_duration", 0f) } catch (e: Exception) { prefs.getInt("crossfade_duration", 0).toFloat() }
