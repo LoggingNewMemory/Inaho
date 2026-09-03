@@ -157,8 +157,16 @@ class PlayerService : Service() {
     }
 
     fun playSong(song: Song, queue: List<Song>, index: Int) {
-        val q = if (_playerState.value.isShuffled) queue.shuffled() else queue
-        val i = if (_playerState.value.isShuffled) q.indexOf(song) else index
+        val q: List<Song>
+        val i: Int
+        if (_playerState.value.isShuffled) {
+            val remaining = queue.filter { it.id != song.id }.shuffled()
+            q = listOf(song) + remaining
+            i = 0
+        } else {
+            q = queue
+            i = index
+        }
 
         _playerState.value = _playerState.value.copy(
             originalQueue = queue,
@@ -191,8 +199,25 @@ class PlayerService : Service() {
     fun toggleShuffle() {
         val state = _playerState.value
         val isNowShuffled = !state.isShuffled
-        val newQueue = if (isNowShuffled) state.activeQueue.shuffled() else state.originalQueue
-        val newIndex = state.currentSong?.let { newQueue.indexOf(it) } ?: 0
+        
+        val newQueue: List<Song>
+        val newIndex: Int
+        
+        if (isNowShuffled) {
+            val currentSong = state.currentSong
+            if (currentSong != null) {
+                val remaining = state.activeQueue.filter { it.id != currentSong.id }.shuffled()
+                newQueue = listOf(currentSong) + remaining
+                newIndex = 0
+            } else {
+                newQueue = state.activeQueue.shuffled()
+                newIndex = 0
+            }
+        } else {
+            newQueue = state.originalQueue
+            newIndex = state.currentSong?.let { newQueue.indexOf(it) } ?: 0
+        }
+        
         _playerState.value = state.copy(isShuffled = isNowShuffled, activeQueue = newQueue, currentIndex = newIndex)
     }
 
