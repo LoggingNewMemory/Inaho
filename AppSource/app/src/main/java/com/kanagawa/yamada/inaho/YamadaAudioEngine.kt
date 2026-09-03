@@ -103,9 +103,20 @@ enum class EqPreset(
 // ==========================================
 
 class YamadaAudioEngine(private val context: Context) {
+    private val prefs = context.getSharedPreferences("inaho_eq", Context.MODE_PRIVATE)
 
     private val _currentPreset = MutableStateFlow(EqPreset.OFF)
     val currentPreset = _currentPreset.asStateFlow()
+
+    private val isReplayGainEnabled = MutableStateFlow(prefs.getBoolean("replaygain_enabled", false))
+    val replayGainEnabled = isReplayGainEnabled.asStateFlow()
+
+    private var currentTrackReplayGainMb: Int = 0
+
+    var currentVolumeMultiplier: Float = 1.0f
+        private set
+
+    var onVolumeMultiplierChanged: ((Float) -> Unit)? = null
 
 
     private var audioSessionId: Int = 0
@@ -115,7 +126,6 @@ class YamadaAudioEngine(private val context: Context) {
 
     private var environmentalReverb: android.media.audiofx.EnvironmentalReverb? = null
 
-    private val prefs = context.getSharedPreferences("inaho_eq", Context.MODE_PRIVATE)
 
     private var mediaPlayer: android.media.MediaPlayer? = null
 
@@ -134,6 +144,43 @@ class YamadaAudioEngine(private val context: Context) {
         tearDown()
         audioSessionId = 0
         mediaPlayer = null
+    }
+
+    fun setReplayGainEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("replaygain_enabled", enabled).apply()
+        isReplayGainEnabled.value = enabled
+        if (audioSessionId != 0) applyEffects(_currentPreset.value, audioSessionId)
+    }
+
+    fun analyzeAndSetTrack(path: String) {
+        currentTrackReplayGainMb = 0
+        if (isReplayGainEnabled.value && path.isNotEmpty()) {
+            try {
+                val f = org.jaudiotagger.audio.AudioFileIO.read(java.io.File(path))
+                val tag = f.tag
+                if (tag != null) {
+                    var gainStr = ""
+                    val fields = tag.fields
+                    while(fields.hasNext()) {
+                        val field = fields.next()
+                        if (field.toString().contains("REPLAYGAIN_TRACK_GAIN", ignoreCase = true)) {
+                            gainStr = field.toString()
+                            break
+                        }
+                    }
+                    if (gainStr.isNotEmpty()) {
+                        val match = Regex("""([+-]?[0-9]*\.?[0-9]+)""").find(gainStr)
+                        if (match != null) {
+                            val db = match.value.toFloat()
+                            currentTrackReplayGainMb = (db * 100).toInt()
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        if (audioSessionId != 0) applyEffects(_currentPreset.value, audioSessionId)
     }
 
     fun setPreset(preset: EqPreset) {
@@ -176,7 +223,19 @@ class YamadaAudioEngine(private val context: Context) {
 
         runCatching {
             customDynamicsProcessor = YamadaCustomDynamics(sessionId).apply {
-                applyDynamics(actualPreset)
+                var totalGainMb = actualPreset.loudnessGainMb + currentTrackReplayGainMb
+                if (actualPreset.smartTunnel) {
+                    totalGainMb += 100
+                }
+
+                if (totalGainMb > 0) {
+                    applyGain(totalGainMb)
+                    currentVolumeMultiplier = 1.0f
+                } else {
+                    applyGain(0)
+                    currentVolumeMultiplier = Math.pow(10.0, totalGainMb / 2000.0).toFloat()
+                }
+                onVolumeMultiplierChanged?.invoke(currentVolumeMultiplier)
             }
         }
     }
@@ -200,19 +259,11 @@ class YamadaCustomDynamics(sessionId: Int) {
         }
     }
 
-    fun applyDynamics(preset: EqPreset) {
+    fun applyGain(gainMb: Int) {
         runCatching {
             loudnessEnhancer?.apply {
-                // Emulate the dynamic gain via LoudnessEnhancer
-                var baseGain = preset.loudnessGainMb
-
-                // Emulate Smart Tunnel by giving an extra volume bump
-                if (preset.smartTunnel) {
-                    baseGain += 100
-                }
-
-                setTargetGain(baseGain)
-                enabled = true
+                setTargetGain(gainMb)
+                enabled = gainMb != 0
             }
         }
     }
@@ -297,6 +348,42 @@ fun EqDialog(
                 )
             }
 
+            Spacer(modifier = Modifier.height(8.dp))
+
+            val replayGainEnabled by eqEngine.replayGainEnabled.collectAsState()
+
+            val rgBgColor by animateColorAsState(
+                targetValue = if (replayGainEnabled) Color(0xFFB8355B) else Color(0xFF251818),
+                animationSpec = tween(200),
+                label = "rg_bg"
+            )
+            val rgBorderColor by animateColorAsState(
+                targetValue = if (replayGainEnabled) Color(0xFFD4577A) else Color(0xFF3A2020),
+                animationSpec = tween(200),
+                label = "rg_border"
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(rgBgColor)
+                    .border(1.dp, rgBorderColor, RoundedCornerShape(12.dp))
+                    .clickable { eqEngine.setReplayGainEnabled(!replayGainEnabled) }
+                    .padding(vertical = 12.dp, horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("ReplayGain", color = Color.White, fontWeight = if (replayGainEnabled) FontWeight.Bold else FontWeight.Normal, fontSize = 14.sp)
+                    Text("Normalize volume across tracks", color = if (replayGainEnabled) Color(0xFFE0E0E0) else Color(0xFF888888), fontSize = 11.sp)
+                }
+                Text(
+                    text = "±",
+                    color = Color.White,
+                    fontSize = 20.sp
+                )
+            }
             Spacer(modifier = Modifier.height(8.dp))
 
             otherPresets.chunked(3).forEach { row ->

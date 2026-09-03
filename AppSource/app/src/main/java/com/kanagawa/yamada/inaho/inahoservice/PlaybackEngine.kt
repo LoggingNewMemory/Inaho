@@ -21,7 +21,13 @@ class PlaybackEngine(
     var currentSurface: Surface? = null
     var currentBgSurface: Surface? = null
     
-    val eqEngine = YamadaAudioEngine(context)
+    val eqEngine = YamadaAudioEngine(context).apply {
+        onVolumeMultiplierChanged = { mult ->
+            if (mediaPlayer != null && !fadingOutPlayers.contains(mediaPlayer)) {
+                try { mediaPlayer?.setVolume(mult, mult) } catch (_: Exception) {}
+            }
+        }
+    }
     
     private val fadingOutPlayers = mutableSetOf<MediaPlayer>()
     private var crossfadeJob: Job? = null
@@ -126,7 +132,7 @@ class PlaybackEngine(
         mediaPlayer = null
 
         mediaPlayer = MediaPlayer().apply {
-            if (doCrossfade) setVolume(0f, 0f)
+            if (doCrossfade) setVolume(0f, 0f) else setVolume(eqEngine.currentVolumeMultiplier, eqEngine.currentVolumeMultiplier)
             try {
                 val attrBuilder = android.media.AudioAttributes.Builder()
                     .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
@@ -137,6 +143,7 @@ class PlaybackEngine(
                     setSurface(currentSurface)
                 }
 
+                eqEngine.analyzeAndSetTrack(song.path)
                 setDataSource(context, uri)
                 attachMainListeners(this, song, generation, doCrossfade, crossfadeSec, currentState)
                 prepareAsync()
@@ -290,7 +297,7 @@ class PlaybackEngine(
             val interval = (durationSec * 1000 / steps).toLong()
             for (i in steps downTo 1) {
                 if (!isActive) break
-                val vol = i.toFloat() / steps
+                val vol = (i.toFloat() / steps) * eqEngine.currentVolumeMultiplier
                 try { mp.setVolume(vol, vol) } catch (_: Exception) {}
                 delay(interval)
             }
@@ -305,7 +312,7 @@ class PlaybackEngine(
             val interval = (durationSec * 1000 / steps).toLong()
             for (i in 1..steps) {
                 if (!isActive) break
-                val vol = i.toFloat() / steps
+                val vol = (i.toFloat() / steps) * eqEngine.currentVolumeMultiplier
                 try { mp.setVolume(vol, vol) } catch (_: Exception) {}
                 delay(interval)
             }
