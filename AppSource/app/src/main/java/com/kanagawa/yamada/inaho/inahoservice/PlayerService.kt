@@ -203,19 +203,15 @@ class PlayerService : Service() {
             RepeatMode.ONE -> RepeatMode.OFF
         }
         _playerState.value = state.copy(repeatMode = nextMode)
+        playbackEngine.setLooping(nextMode == RepeatMode.ONE)
     }
 
     fun skipNext(isAutoCompletion: Boolean = false, isCrossfading: Boolean = false) {
         val state = _playerState.value
         if (state.activeQueue.isEmpty()) return
 
-        if (state.repeatMode == RepeatMode.ONE && isAutoCompletion && !isCrossfading) {
-            seekTo(0)
-            if (!state.isPlaying) togglePlayPause()
-            return
-        }
-
-        val nextSong = state.nextSong
+        val nextSong = if (state.repeatMode == RepeatMode.ONE && isAutoCompletion) state.currentSong else state.nextSong
+        
         if (nextSong != null) {
             val prefs = getSharedPreferences("inaho_settings", Context.MODE_PRIVATE)
             val isGapless = prefs.getBoolean("gapless_playback", false)

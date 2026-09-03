@@ -55,6 +55,15 @@ class PlaybackEngine(
         }
     }
 
+    fun setLooping(isLooping: Boolean) {
+        try {
+            mediaPlayer?.isLooping = isLooping
+            bgMediaPlayer?.isLooping = isLooping
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     fun togglePlayPause(isPlaying: Boolean) {
         try {
             if (isPlaying) {
@@ -130,6 +139,7 @@ class PlaybackEngine(
         mediaPlayer = null
 
         mediaPlayer = MediaPlayer().apply {
+            isLooping = currentState.repeatMode == RepeatMode.ONE
             if (doCrossfade) setVolume(0f, 0f)
             try {
                 val attrBuilder = android.media.AudioAttributes.Builder()
@@ -180,7 +190,7 @@ class PlaybackEngine(
             }
 
             if (song.isVideo) {
-                prepareBgPlayer(song, generation)
+                prepareBgPlayer(song, generation, currentState)
             } else {
                 isBgPrepared = true
                 checkAndStartBoth(generation)
@@ -233,11 +243,12 @@ class PlaybackEngine(
         }
     }
 
-    private fun prepareBgPlayer(song: Song, generation: Int) {
+    private fun prepareBgPlayer(song: Song, generation: Int, currentState: PlayerState) {
         if (generation != playGeneration) return
         isBgPreparing = true
 
         bgMediaPlayer = MediaPlayer().apply {
+            isLooping = currentState.repeatMode == RepeatMode.ONE
             try {
                 val attrBuilder = android.media.AudioAttributes.Builder()
                     .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
@@ -349,7 +360,9 @@ class PlaybackEngine(
         val prefs = context.getSharedPreferences("inaho_settings", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("gapless_playback", false)) return
 
-        val nextSong = currentState.nextSong ?: return
+        if (currentState.repeatMode == RepeatMode.ONE) return
+        val nextSong = currentState.nextSong
+        if (nextSong == null) return
         
         nextMediaPlayer = MediaPlayer().apply {
             try {
@@ -374,7 +387,7 @@ class PlaybackEngine(
                 delay(500)
                 val prefs = context.getSharedPreferences("inaho_settings", Context.MODE_PRIVATE)
                 val crossfadeSec = try { prefs.getFloat("crossfade_duration", 0f) } catch (e: Exception) { prefs.getInt("crossfade_duration", 0).toFloat() }
-                if (crossfadeSec > 0 && mediaPlayer?.isPlaying == true) {
+                if (crossfadeSec > 0 && mediaPlayer?.isPlaying == true && mediaPlayer?.isLooping == false) {
                     val duration = mediaPlayer?.duration ?: 0
                     val position = mediaPlayer?.currentPosition ?: 0
                     if (duration > 0 && (duration - position) <= (crossfadeSec * 1000).toInt() + 500) {
