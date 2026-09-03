@@ -35,7 +35,7 @@
 
         <!-- PlayerService: foreground media playback service -->
         <service
-            android:name=".PlayerService"
+            android:name=".inahoservice.PlayerService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 

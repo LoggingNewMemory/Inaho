@@ -5,6 +5,10 @@ Copyright (C) 2026 Kanagawa Yamada
 
 package com.kanagawa.yamada.inaho
 
+import com.kanagawa.yamada.inaho.inahoservice.PlayerService
+import com.kanagawa.yamada.inaho.inahoservice.PlayerState
+import com.kanagawa.yamada.inaho.inahoservice.RepeatMode
+
 import android.app.Application
 import android.content.Context
 import android.os.Bundle
