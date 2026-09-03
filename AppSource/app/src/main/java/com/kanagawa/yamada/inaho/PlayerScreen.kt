@@ -324,9 +324,9 @@ fun PlayerScreen(
                         }
                     }
                     
-                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                    Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                         val artLayerAlpha by animateFloatAsState(targetValue = if (showQueueSheet) 0f else 1f, label = "ArtLayerAlpha")
-                        Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp)).background(surfaceColor).alpha(artLayerAlpha).clickable(enabled = !showQueueSheet) { isAmvModeActive = !isAmvModeActive }, contentAlignment = Alignment.Center) {
+                        Box(modifier = Modifier.aspectRatio(1f, matchHeightConstraintsFirst = false).clip(RoundedCornerShape(12.dp)).background(surfaceColor).alpha(artLayerAlpha).clickable(enabled = !showQueueSheet) { isAmvModeActive = !isAmvModeActive }, contentAlignment = Alignment.Center) {
                             AMVVideoSurface(playerService = playerService, isBackground = false, modifier = Modifier.fillMaxSize())
                             if (coverBitmap != null) Image(bitmap = coverBitmap.asImageBitmap(), contentDescription = "Album Art", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().alpha(coverAlpha))
                             else Box(modifier = Modifier.fillMaxSize().alpha(coverAlpha).background(surfaceColor), contentAlignment = Alignment.Center) { Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = Color(0xFF3D2020), modifier = Modifier.size(80.dp)) }
@@ -402,6 +402,7 @@ fun PlayerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .safeDrawingPadding()
+                
                 .padding(horizontal = 24.dp)
         ) {
             Box(
@@ -443,8 +444,8 @@ fun PlayerScreen(
 
             // 1. Wrap the Queue Panel and Video Surface in a Box so they overlap
             Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.TopCenter
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentAlignment = Alignment.Center
             ) {
                 // 2. Animate the alpha instead of removing it from composition
                 val artLayerAlpha by animateFloatAsState(
@@ -454,8 +455,7 @@ fun PlayerScreen(
 
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
+                        .aspectRatio(1f, matchHeightConstraintsFirst = false)
                         .clip(RoundedCornerShape(12.dp))
                         .background(surfaceColor)
                         .alpha(artLayerAlpha) // Apply the alpha here
@@ -596,7 +596,7 @@ fun PlayerScreen(
                 Icon(imageVector = Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
             }
 
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(24.dp))
 
             val eqPreset by playerService?.eqEngine?.currentPreset?.collectAsState() ?: run { remember { mutableStateOf(EqPreset.OFF) } }
             val eqActiveLabel = remember(eqPreset) { if (eqPreset == EqPreset.OFF) "EQ" else eqPreset.displayName }
@@ -785,8 +785,7 @@ fun QueuePanel(
 
     Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(1f)
+            .aspectRatio(1f, matchHeightConstraintsFirst = false)
             .clip(RoundedCornerShape(12.dp))
             .background(Color.Transparent)
     ) {

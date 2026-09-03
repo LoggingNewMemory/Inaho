@@ -45,8 +45,7 @@ fun NavBar(
     NavigationBar(
         containerColor = containerColor,
         contentColor = Color.White,
-        tonalElevation = 8.dp,
-        modifier = Modifier.height(70.dp)
+        tonalElevation = 8.dp
     ) {
         navItems.forEach { item ->
             NavigationBarItem(
@@ -78,8 +77,7 @@ fun NavRail(
 
     NavigationRail(
         containerColor = containerColor,
-        contentColor = Color.White,
-        modifier = Modifier.width(80.dp)
+        contentColor = Color.White
     ) {
         navItems.forEach { item ->
             NavigationRailItem(

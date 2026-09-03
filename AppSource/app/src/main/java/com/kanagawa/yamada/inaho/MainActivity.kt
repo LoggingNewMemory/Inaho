@@ -19,6 +19,10 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -53,16 +57,26 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            window.attributes.layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
 
-        // Set the ENTIRE APP to Full Immersive Mode
-        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
-        windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
+
 
         setContent {
             HaloMusicTheme {
                 val musicViewModel: MusicViewModel = viewModel()
                 val settings by musicViewModel.settingsManager.settingsFlow.collectAsState()
+
+                LaunchedEffect(settings.immersiveMode) {
+                    val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
+                    if (settings.immersiveMode) {
+                        windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
+                    } else {
+                        windowInsetsController.show(WindowInsetsCompat.Type.systemBars())
+                    }
+                }
 
                 val accentColor = getAppAccentColor(settings)
 
@@ -98,7 +112,7 @@ class MainActivity : ComponentActivity() {
                                     accentColor = accentColor
                                 )
                             }
-                            Box(modifier = Modifier.weight(1f)) {
+                            Box(modifier = Modifier.weight(1f).windowInsetsPadding(WindowInsets.safeDrawing)) {
                                 AnimatedContent(
                                     targetState = currentScreen,
                                     transitionSpec = {
@@ -132,7 +146,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         ) { innerPadding ->
-                            Box(modifier = Modifier.padding(innerPadding)) {
+                            Box(modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding)) {
                                 AnimatedContent(
                                     targetState = currentScreen,
                                     transitionSpec = {

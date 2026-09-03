@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Nightlight
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.GraphicEq
@@ -113,6 +114,7 @@ data class AppSettings(
     val theme: AppTheme = AppTheme.INAHO,
     val userPhotoUri: String? = null,
     val keepScreenOn: Boolean = false,
+    val immersiveMode: Boolean = true,
     val customThemeColor: Int = 0xFFB8355B.toInt(),
     val visualizerType: VisualizerType = VisualizerType.NONE,
     val crossfadeDuration: Float = 0f
@@ -137,6 +139,7 @@ class SettingsManager(context: Context) {
             theme = AppTheme.valueOf(prefs.getString("theme", AppTheme.INAHO.name) ?: AppTheme.INAHO.name),
             userPhotoUri = prefs.getString("user_photo_uri", null),
             keepScreenOn = prefs.getBoolean("keep_screen_on", false),
+            immersiveMode = prefs.getBoolean("immersive_mode", true),
             customThemeColor = prefs.getInt("custom_theme_color", 0xFFB8355B.toInt()),
             visualizerType = VisualizerType.valueOf(prefs.getString("visualizer_type", VisualizerType.NONE.name) ?: VisualizerType.NONE.name),
             crossfadeDuration = try { prefs.getFloat("crossfade_duration", 0f) } catch (e: Exception) { prefs.getInt("crossfade_duration", 0).toFloat() }
@@ -204,6 +207,11 @@ class SettingsManager(context: Context) {
         _settingsFlow.value = _settingsFlow.value.copy(keepScreenOn = enabled)
     }
 
+    fun updateImmersiveMode(enabled: Boolean) {
+        prefs.edit().putBoolean("immersive_mode", enabled).apply()
+        _settingsFlow.value = _settingsFlow.value.copy(immersiveMode = enabled)
+    }
+
     fun updateCustomThemeColor(color: Int) {
         prefs.edit().putInt("custom_theme_color", color).apply()
         _settingsFlow.value = _settingsFlow.value.copy(customThemeColor = color)
@@ -254,7 +262,6 @@ fun SettingsScreen(
             .background(if (settings.amoledBlack) Color.Black else Color(0xFF120E0E))
             .safeDrawingPadding()
             .alpha(settingsAlpha)
-            .padding(start = 2.dp, end = 2.dp, bottom = 4.dp)
             .verticalScroll(rememberScrollState())
     ) {
         Row(
@@ -338,6 +345,15 @@ fun SettingsScreen(
             checked = settings.keepScreenOn,
             accentColor = accentColor,
             onToggle = { settingsManager.updateKeepScreenOn(it) }
+        )
+        
+        SettingsToggleRow(
+            icon = Icons.Default.Fullscreen,
+            title = "Immersive Mode",
+            subtitle = "Hide status bar and navigation bar",
+            checked = settings.immersiveMode,
+            accentColor = accentColor,
+            onToggle = { settingsManager.updateImmersiveMode(it) }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
