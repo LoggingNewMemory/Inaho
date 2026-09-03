@@ -31,6 +31,7 @@ import android.view.Surface
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.*
 
 // ==========================================
 // PLAYER STATE
@@ -103,8 +104,86 @@ class PlayerService : Service() {
     private var isMainPreparing = false
     private var isBgPreparing = false
 
+    private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
+    private var nextMediaPlayer: MediaPlayer? = null
+    private val fadingOutPlayers = mutableListOf<MediaPlayer>()
+    private var crossfadeJob: Job? = null
+
     lateinit var eqEngine: YamadaAudioEngine
         private set
+
+    private fun fadeOutAndRelease(mp: MediaPlayer?, durationSec: Float) {
+        if (mp == null || !mp.isPlaying) {
+            safelyDestroyPlayer(mp)
+            return
+        }
+        fadingOutPlayers.add(mp)
+        serviceScope.launch {
+            val steps = 20
+            val delayMs = (durationSec * 1000L / steps).toLong()
+            for (i in steps downTo 0) {
+                val volume = i.toFloat() / steps.toFloat()
+                try { mp.setVolume(volume, volume) } catch (e: Exception) { break }
+                delay(delayMs)
+            }
+            safelyDestroyPlayer(mp)
+            fadingOutPlayers.remove(mp)
+        }
+    }
+
+    private fun fadeIn(mp: MediaPlayer, durationSec: Float) {
+        serviceScope.launch {
+            val steps = 20
+            val delayMs = (durationSec * 1000L / steps).toLong()
+            for (i in 0..steps) {
+                val volume = i.toFloat() / steps.toFloat()
+                try { mp.setVolume(volume, volume) } catch (e: Exception) { break }
+                delay(delayMs)
+            }
+        }
+    }
+
+    private fun setupNextMediaPlayer(currentMp: MediaPlayer) {
+        val prefs = getSharedPreferences("inaho_settings", Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("gapless_playback", false)) return
+        
+        val nextSong = _playerState.value.nextSong ?: return
+        if (nextSong.isVideo) return // Skip gapless for video
+        
+        safelyDestroyPlayer(nextMediaPlayer)
+        nextMediaPlayer = MediaPlayer().apply {
+            try {
+                setAudioAttributes(AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .setUsage(AudioAttributes.USAGE_MEDIA).build())
+                setDataSource(applicationContext, nextSong.trackUri)
+                setOnPreparedListener { mp ->
+                    try { currentMp.setNextMediaPlayer(mp) } catch (e: Exception) {}
+                }
+                prepareAsync()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private fun startCrossfadePoller() {
+        crossfadeJob?.cancel()
+        crossfadeJob = serviceScope.launch {
+            while (isActive) {
+                delay(500)
+                val prefs = getSharedPreferences("inaho_settings", Context.MODE_PRIVATE)
+                val crossfadeSec = try { prefs.getFloat("crossfade_duration", 0f) } catch (e: Exception) { prefs.getInt("crossfade_duration", 0).toFloat() }
+                if (crossfadeSec > 0 && mediaPlayer?.isPlaying == true) {
+                    val duration = mediaPlayer?.duration ?: 0
+                    val position = mediaPlayer?.currentPosition ?: 0
+                    if (duration > 0 && (duration - position) <= crossfadeSec * 1000) {
+                        skipNext(isAutoCompletion = true, isCrossfading = true)
+                    }
+                }
+            }
+        }
+    }
 
     // ── Video Surface Handling ─────────────────────────────────────────────────
     var currentSurface: Surface? = null
@@ -327,7 +406,7 @@ class PlayerService : Service() {
         _playerState.value = state.copy(repeatMode = newMode)
     }
 
-    fun skipNext(isAutoCompletion: Boolean = false) {
+    fun skipNext(isAutoCompletion: Boolean = false, isCrossfading: Boolean = false) {
         val state = _playerState.value
         if (state.activeQueue.isEmpty()) return
 
@@ -358,7 +437,7 @@ class PlayerService : Service() {
             videoWidth   = 0,
             videoHeight  = 0
         )
-        prepareAndPlay(nextSong)
+        prepareAndPlay(nextSong, isCrossfading)
     }
 
     fun skipPrev() {
@@ -451,6 +530,13 @@ class PlayerService : Service() {
     }
 
     fun stopPlayback() {
+        serviceScope.coroutineContext.cancelChildren()
+        fadingOutPlayers.forEach { safelyDestroyPlayer(it) }
+        fadingOutPlayers.clear()
+        
+        safelyDestroyPlayer(nextMediaPlayer)
+        nextMediaPlayer = null
+
         eqEngine.release()
 
         safelyDestroyPlayer(bgMediaPlayer)
@@ -492,7 +578,16 @@ class PlayerService : Service() {
         }
     }
 
-    private fun prepareAndPlay(song: Song) {
+    private fun prepareAndPlay(song: Song, isCrossfading: Boolean = false) {
+        val prefs = getSharedPreferences("inaho_settings", Context.MODE_PRIVATE)
+        val crossfadeSec = try { prefs.getFloat("crossfade_duration", 0f) } catch (e: Exception) { prefs.getInt("crossfade_duration", 0).toFloat() }
+        val doCrossfade = isCrossfading || (crossfadeSec > 0 && mediaPlayer?.isPlaying == true)
+        
+        // Let polling handle crossfade auto-completion, prevent double skip
+        if (isCrossfading) {
+            crossfadeJob?.cancel()
+        }
+
         eqEngine.release()
         val uri = song.trackUri
 
@@ -505,10 +600,16 @@ class PlayerService : Service() {
 
         safelyDestroyPlayer(bgMediaPlayer)
         bgMediaPlayer = null
-        safelyDestroyPlayer(mediaPlayer)
+        
+        if (doCrossfade) {
+            fadeOutAndRelease(mediaPlayer, crossfadeSec)
+        } else {
+            safelyDestroyPlayer(mediaPlayer)
+        }
         mediaPlayer = null
 
         mediaPlayer = MediaPlayer().apply {
+            if (doCrossfade) setVolume(0f, 0f)
             try {
                 val attrBuilder = android.media.AudioAttributes.Builder()
                     .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
@@ -554,10 +655,40 @@ class PlayerService : Service() {
                     } else {
                         isBgPrepared = true
                         checkAndStartBoth(generation)
+                        if (doCrossfade) fadeIn(mp, crossfadeSec)
+                        setupNextMediaPlayer(mp)
+                        startCrossfadePoller()
                     }
                 }
                 setOnCompletionListener {
-                    skipNext(isAutoCompletion = true)
+                    val prefs = getSharedPreferences("inaho_settings", Context.MODE_PRIVATE)
+                    if (prefs.getBoolean("gapless_playback", false) && nextMediaPlayer != null) {
+                        val nextSong = _playerState.value.nextSong
+                        if (nextSong != null) {
+                            val oldMp = mediaPlayer
+                            mediaPlayer = nextMediaPlayer
+                            nextMediaPlayer = null
+                            safelyDestroyPlayer(oldMp)
+                            
+                            _playerState.value = _playerState.value.copy(
+                                currentSong = nextSong,
+                                currentIndex = _playerState.value.activeQueue.indexOf(nextSong),
+                                positionMs = 0L,
+                                durationMs = nextSong.durationMs,
+                                audioSessionId = mediaPlayer?.audioSessionId
+                            )
+                            mediaPlayer?.let { 
+                                eqEngine.attach(it)
+                                setupNextMediaPlayer(it)
+                            }
+                            updateMediaSessionState()
+                            updateNotification()
+                        } else {
+                            skipNext(isAutoCompletion = true)
+                        }
+                    } else {
+                        skipNext(isAutoCompletion = true)
+                    }
                 }
                 setOnErrorListener { _, _, _ ->
                     if (generation == playGeneration) {
@@ -682,6 +813,7 @@ class PlayerService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        serviceScope.cancel()
         runCatching { unregisterReceiver(noisyAudioReceiver) }
 
         eqEngine.release()

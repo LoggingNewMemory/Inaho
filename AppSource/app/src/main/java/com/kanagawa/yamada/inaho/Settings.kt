@@ -114,7 +114,9 @@ data class AppSettings(
     val userPhotoUri: String? = null,
     val keepScreenOn: Boolean = false,
     val customThemeColor: Int = 0xFFB8355B.toInt(),
-    val visualizerType: VisualizerType = VisualizerType.NONE
+    val visualizerType: VisualizerType = VisualizerType.NONE,
+    val gaplessPlayback: Boolean = false,
+    val crossfadeDuration: Float = 0f
 )
 
 class SettingsManager(context: Context) {
@@ -137,7 +139,9 @@ class SettingsManager(context: Context) {
             userPhotoUri = prefs.getString("user_photo_uri", null),
             keepScreenOn = prefs.getBoolean("keep_screen_on", false),
             customThemeColor = prefs.getInt("custom_theme_color", 0xFFB8355B.toInt()),
-            visualizerType = VisualizerType.valueOf(prefs.getString("visualizer_type", VisualizerType.NONE.name) ?: VisualizerType.NONE.name)
+            visualizerType = VisualizerType.valueOf(prefs.getString("visualizer_type", VisualizerType.NONE.name) ?: VisualizerType.NONE.name),
+            gaplessPlayback = prefs.getBoolean("gapless_playback", false),
+            crossfadeDuration = try { prefs.getFloat("crossfade_duration", 0f) } catch (e: Exception) { prefs.getInt("crossfade_duration", 0).toFloat() }
         )
     )
     val settingsFlow = _settingsFlow.asStateFlow()
@@ -210,6 +214,16 @@ class SettingsManager(context: Context) {
     fun updateVisualizerType(type: VisualizerType) {
         prefs.edit().putString("visualizer_type", type.name).apply()
         _settingsFlow.value = _settingsFlow.value.copy(visualizerType = type)
+    }
+
+    fun updateGaplessPlayback(enabled: Boolean) {
+        prefs.edit().putBoolean("gapless_playback", enabled).apply()
+        _settingsFlow.value = _settingsFlow.value.copy(gaplessPlayback = enabled)
+    }
+
+    fun updateCrossfadeDuration(seconds: Float) {
+        prefs.edit().putFloat("crossfade_duration", seconds).apply()
+        _settingsFlow.value = _settingsFlow.value.copy(crossfadeDuration = seconds)
     }
 }
 
@@ -672,6 +686,35 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
+            text = "PLAYBACK",
+            color = Color(0xFF555555),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+        )
+
+        SettingsToggleRow(
+            icon = Icons.Default.OndemandVideo, // Generic icon, change if needed
+            title = "Gapless Playback",
+            subtitle = "Enable continuous playback without pauses between tracks",
+            checked = settings.gaplessPlayback,
+            accentColor = accentColor,
+            onToggle = { settingsManager.updateGaplessPlayback(it) }
+        )
+
+        SettingsSliderRow(
+            title = "Crossfade Duration (${String.format("%.1f", settings.crossfadeDuration)}s)",
+            value = settings.crossfadeDuration,
+            range = 0f..1f,
+            steps = 9,
+            enabled = true, // Always enabled
+            accentColor = accentColor,
+            onValueChange = { settingsManager.updateCrossfadeDuration(it) }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
             text = "STORAGE",
             color = Color(0xFF555555),
             fontSize = 11.sp,
@@ -872,6 +915,7 @@ private fun SettingsSliderRow(
     range: ClosedFloatingPointRange<Float>,
     enabled: Boolean,
     accentColor: Color,
+    steps: Int = 0,
     onValueChange: (Float) -> Unit
 ) {
     val alpha = if (enabled) 1f else 0.4f
@@ -879,13 +923,14 @@ private fun SettingsSliderRow(
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(text = title, color = Color.White.copy(alpha = alpha), fontSize = 16.sp, fontWeight = FontWeight.Medium)
-            val displayValue = if (range.endInclusive > 1f) value.toInt().toString() else String.format("%.2f", value)
+            val displayValue = if (range.endInclusive > 1f) value.toInt().toString() else String.format("%.1f", value)
             Text(text = displayValue, color = accentColor.copy(alpha = alpha), fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
         Slider(
             value = value,
             onValueChange = onValueChange,
             valueRange = range,
+            steps = steps,
             enabled = enabled,
             colors = SliderDefaults.colors(
                 thumbColor = if (enabled) Color.White else Color.Gray,
