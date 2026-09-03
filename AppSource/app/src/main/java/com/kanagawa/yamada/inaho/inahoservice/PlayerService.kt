@@ -43,7 +43,6 @@ data class PlayerState(
 ) {
     val nextSong: Song?
         get() = if (currentIndex + 1 < activeQueue.size) activeQueue[currentIndex + 1]
-        else if (repeatMode == RepeatMode.ALL && activeQueue.isNotEmpty()) activeQueue[0]
         else null
 
     val hasPrev: Boolean
@@ -214,12 +213,18 @@ class PlayerService : Service() {
         var nextSong = state.nextSong
         var newHasRepeatedOnce = false
 
-        if (state.repeatMode == RepeatMode.ONE && isAutoCompletion) {
-            if (!state.hasRepeatedOnce) {
+        if (isAutoCompletion) {
+            if (state.repeatMode == RepeatMode.ALL) {
+                // User defined "Normal Repeat" as looping the current track indefinitely
                 nextSong = state.currentSong
-                newHasRepeatedOnce = true
-            } else {
-                newHasRepeatedOnce = false
+            } else if (state.repeatMode == RepeatMode.ONE) {
+                // User defined "Repeat 1" as looping the track EXACTLY ONCE
+                if (!state.hasRepeatedOnce) {
+                    nextSong = state.currentSong
+                    newHasRepeatedOnce = true
+                } else {
+                    newHasRepeatedOnce = false
+                }
             }
         }
         
