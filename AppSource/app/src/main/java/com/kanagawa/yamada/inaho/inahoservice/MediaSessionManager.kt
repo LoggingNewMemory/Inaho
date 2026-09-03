@@ -21,6 +21,14 @@ class MediaSessionManager(
                 override fun onSkipToPrevious() { service.skipPrev() }
                 override fun onSeekTo(pos: Long) { service.seekTo(pos) }
                 override fun onStop() { service.stopPlayback() }
+                override fun onPlayFromMediaId(mediaId: String?, extras: android.os.Bundle?) {
+                    if (mediaId != null) {
+                        val id = mediaId.toLongOrNull()
+                        if (id != null) {
+                            service.playFromMediaId(id)
+                        }
+                    }
+                }
             })
             isActive = true
         }
