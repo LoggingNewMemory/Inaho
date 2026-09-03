@@ -38,7 +38,8 @@ data class PlayerState(
     val repeatMode: RepeatMode = RepeatMode.OFF,
     val videoWidth: Int = 0,
     val videoHeight: Int = 0,
-    val audioSessionId: Int? = null
+    val audioSessionId: Int? = null,
+    val hasRepeatedOnce: Boolean = false
 ) {
     val nextSong: Song?
         get() = if (currentIndex + 1 < activeQueue.size) activeQueue[currentIndex + 1]
@@ -107,7 +108,7 @@ class PlayerService : Service() {
         playbackEngine = PlaybackEngine(
             context = this,
             serviceScope = serviceScope,
-            onGaplessNext = { skipNext(isAutoCompletion = true) },
+            onGaplessNext = { isCrossfading -> skipNext(isAutoCompletion = true, isCrossfading = isCrossfading) },
             onStateUpdate = { _playerState.value = _playerState.value.it() }
         )
 
@@ -167,6 +168,7 @@ class PlayerService : Service() {
             currentSong = song,
             positionMs = 0L,
             durationMs = song.durationMs,
+                hasRepeatedOnce = false,
             videoWidth = 0,
             videoHeight = 0
         )
@@ -203,22 +205,42 @@ class PlayerService : Service() {
             RepeatMode.ONE -> RepeatMode.OFF
         }
         _playerState.value = state.copy(repeatMode = nextMode)
-        playbackEngine.setLooping(nextMode == RepeatMode.ONE)
     }
 
     fun skipNext(isAutoCompletion: Boolean = false, isCrossfading: Boolean = false) {
         val state = _playerState.value
         if (state.activeQueue.isEmpty()) return
 
-        val nextSong = if (state.repeatMode == RepeatMode.ONE && isAutoCompletion) state.currentSong else state.nextSong
+        var nextSong = state.nextSong
+        var newHasRepeatedOnce = false
+
+        if (state.repeatMode == RepeatMode.ONE && isAutoCompletion) {
+            if (!state.hasRepeatedOnce) {
+                nextSong = state.currentSong
+                newHasRepeatedOnce = true
+            } else {
+                newHasRepeatedOnce = false
+            }
+        }
         
         if (nextSong != null) {
             val prefs = getSharedPreferences("inaho_settings", Context.MODE_PRIVATE)
             val isGapless = prefs.getBoolean("gapless_playback", false)
+            val crossfadeSec = try { prefs.getFloat("crossfade_duration", 0f) } catch (e: Exception) { prefs.getInt("crossfade_duration", 0).toFloat() }
+            val actuallyCrossfading = isCrossfading && crossfadeSec > 0
             
-            // If it's autocompletion and we have a next player ready via gapless
-            if (isAutoCompletion && !isCrossfading && isGapless && playbackEngine.nextMediaPlayer != null) {
-                playbackEngine.handleGaplessNext(nextSong, state)
+            // Fast path: use already prepared nextMediaPlayer
+            if (isGapless && playbackEngine.nextMediaPlayer != null && playbackEngine.nextPreparedSong == nextSong) {
+                val manualStart = !isAutoCompletion
+                val newState = state.copy(
+                    currentSong = nextSong,
+                    currentIndex = state.activeQueue.indexOf(nextSong),
+                    positionMs = 0L,
+                    durationMs = nextSong.durationMs,
+                    hasRepeatedOnce = newHasRepeatedOnce
+                )
+                _playerState.value = newState
+                playbackEngine.handleGaplessNext(nextSong, newState, actuallyCrossfading, crossfadeSec, manualStart)
                 updateSessionAndNotification()
                 return
             }
@@ -227,7 +249,8 @@ class PlayerService : Service() {
                 currentSong = nextSong,
                 currentIndex = state.activeQueue.indexOf(nextSong),
                 positionMs = 0L,
-                durationMs = nextSong.durationMs
+                durationMs = nextSong.durationMs,
+                hasRepeatedOnce = newHasRepeatedOnce
             )
             
             if (requestAudioFocus()) {
@@ -256,7 +279,8 @@ class PlayerService : Service() {
             currentSong = prevSong,
             currentIndex = prevIndex,
             positionMs = 0L,
-            durationMs = prevSong.durationMs
+            durationMs = prevSong.durationMs,
+            hasRepeatedOnce = false
         )
         
         if (requestAudioFocus()) {
@@ -280,7 +304,8 @@ class PlayerService : Service() {
                 currentSong = song,
                 currentIndex = index,
                 positionMs = 0L,
-                durationMs = song.durationMs
+                durationMs = song.durationMs,
+                hasRepeatedOnce = false
             )
             if (requestAudioFocus()) {
                 playbackEngine.prepareAndPlay(song, false, _playerState.value)
