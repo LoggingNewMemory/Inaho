@@ -280,6 +280,10 @@ class PlaybackEngine(
             safelyDestroyPlayer(mp)
             return
         }
+        
+        try { mp.setOnCompletionListener(null) } catch (_: Exception) {}
+        try { mp.setOnErrorListener(null) } catch (_: Exception) {}
+        
         fadingOutPlayers.add(mp)
         serviceScope.launch {
             val steps = 20
