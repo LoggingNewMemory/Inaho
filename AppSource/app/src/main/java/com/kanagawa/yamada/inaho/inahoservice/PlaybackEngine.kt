@@ -12,12 +12,10 @@ import kotlinx.coroutines.*
 class PlaybackEngine(
     private val context: Context,
     private val serviceScope: CoroutineScope,
-    private val onGaplessNext: (Boolean) -> Unit,
+    private val onSongCompletion: (Boolean) -> Unit,
     private val onStateUpdate: (PlayerState.() -> PlayerState) -> Unit
 ) {
     var mediaPlayer: MediaPlayer? = null
-    var nextMediaPlayer: MediaPlayer? = null
-    var nextPreparedSong: Song? = null
     var bgMediaPlayer: MediaPlayer? = null
     
     var currentSurface: Surface? = null
@@ -92,10 +90,6 @@ class PlaybackEngine(
         fadingOutPlayers.forEach { safelyDestroyPlayer(it) }
         fadingOutPlayers.clear()
         
-        safelyDestroyPlayer(nextMediaPlayer)
-        nextMediaPlayer = null
-        nextPreparedSong = null
-
         eqEngine.release()
 
         safelyDestroyPlayer(bgMediaPlayer)
@@ -132,7 +126,7 @@ class PlaybackEngine(
         mediaPlayer = null
 
         mediaPlayer = MediaPlayer().apply {
-                        if (doCrossfade) setVolume(0f, 0f)
+            if (doCrossfade) setVolume(0f, 0f)
             try {
                 val attrBuilder = android.media.AudioAttributes.Builder()
                     .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
@@ -187,18 +181,12 @@ class PlaybackEngine(
                 isBgPrepared = true
                 checkAndStartBoth(generation)
                 if (doCrossfade) fadeIn(mp, crossfadeSec)
-                setupNextMediaPlayer(mp, currentState)
                 startCrossfadePoller(currentState)
             }
         }
 
         mp.setOnCompletionListener {
-            val prefs = context.getSharedPreferences("inaho_settings", Context.MODE_PRIVATE)
-            if (prefs.getBoolean("gapless_playback", false) && nextMediaPlayer != null) {
-                onGaplessNext(false)
-            } else {
-                onGaplessNext(false)
-            }
+            onSongCompletion(false)
         }
 
         mp.setOnErrorListener { _, _, _ ->
@@ -211,41 +199,12 @@ class PlaybackEngine(
         }
     }
 
-    fun handleGaplessNext(nextSong: Song, currentState: PlayerState, doCrossfade: Boolean, crossfadeSec: Float, manualStart: Boolean = false) {
-        val oldMp = mediaPlayer
-        mediaPlayer = nextMediaPlayer
-        nextMediaPlayer = null
-        nextPreparedSong = null
-        
-        if (doCrossfade || manualStart) {
-            try { oldMp?.setNextMediaPlayer(null) } catch (_: Exception) {}
-            if (doCrossfade) {
-                fadeOutAndRelease(oldMp, crossfadeSec)
-                mediaPlayer?.let { fadeIn(it, crossfadeSec) }
-            } else {
-                safelyDestroyPlayer(oldMp)
-            }
-            try { mediaPlayer?.start() } catch (_: Exception) {}
-            onStateUpdate { copy(isPlaying = true) }
-        } else {
-            safelyDestroyPlayer(oldMp)
-        }
-        
-        val newGen = ++playGeneration
-        mediaPlayer?.let { newMp ->
-            eqEngine.attach(newMp)
-            setupNextMediaPlayer(newMp, currentState)
-            startCrossfadePoller(currentState)
-            attachMainListeners(newMp, nextSong, newGen, false, 0f, currentState)
-        }
-    }
-
     private fun prepareBgPlayer(song: Song, generation: Int, currentState: PlayerState) {
         if (generation != playGeneration) return
         isBgPreparing = true
 
         bgMediaPlayer = MediaPlayer().apply {
-                        try {
+            try {
                 val attrBuilder = android.media.AudioAttributes.Builder()
                     .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
                     .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
@@ -349,38 +308,6 @@ class PlaybackEngine(
         }
     }
 
-    private fun setupNextMediaPlayer(currentMp: MediaPlayer, currentState: PlayerState) {
-        safelyDestroyPlayer(nextMediaPlayer)
-        nextMediaPlayer = null
-        nextPreparedSong = null
-
-        val prefs = context.getSharedPreferences("inaho_settings", Context.MODE_PRIVATE)
-        if (!prefs.getBoolean("gapless_playback", false)) return
-
-        val nextSong = if (currentState.repeatMode == RepeatMode.ONE && !currentState.hasRepeatedOnce) {
-            currentState.currentSong
-        } else {
-            currentState.nextSong
-        }
-        if (nextSong == null) return
-        
-        nextMediaPlayer = MediaPlayer().apply {
-            try {
-                setAudioAttributes(AudioAttributes.Builder()
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .setUsage(AudioAttributes.USAGE_MEDIA).build())
-                setDataSource(context, nextSong.trackUri)
-                setOnPreparedListener { mp ->
-                    try { currentMp.setNextMediaPlayer(mp) } catch (e: Exception) {}
-                }
-                prepareAsync()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-        nextPreparedSong = nextSong
-    }
-
     private fun startCrossfadePoller(currentState: PlayerState) {
         crossfadeJob?.cancel()
         crossfadeJob = serviceScope.launch {
@@ -392,7 +319,7 @@ class PlaybackEngine(
                     val duration = mediaPlayer?.duration ?: 0
                     val position = mediaPlayer?.currentPosition ?: 0
                     if (duration > 0 && (duration - position) <= (crossfadeSec * 1000).toInt() + 500) {
-                        onGaplessNext(true)
+                        onSongCompletion(true)
                         break
                     }
                 }

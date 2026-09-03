@@ -108,7 +108,7 @@ class PlayerService : Service() {
         playbackEngine = PlaybackEngine(
             context = this,
             serviceScope = serviceScope,
-            onGaplessNext = { isCrossfading -> skipNext(isAutoCompletion = true, isCrossfading = isCrossfading) },
+            onSongCompletion = { isCrossfading -> skipNext(isAutoCompletion = true, isCrossfading = isCrossfading) },
             onStateUpdate = { _playerState.value = _playerState.value.it() }
         )
 
@@ -225,26 +225,9 @@ class PlayerService : Service() {
         
         if (nextSong != null) {
             val prefs = getSharedPreferences("inaho_settings", Context.MODE_PRIVATE)
-            val isGapless = prefs.getBoolean("gapless_playback", false)
             val crossfadeSec = try { prefs.getFloat("crossfade_duration", 0f) } catch (e: Exception) { prefs.getInt("crossfade_duration", 0).toFloat() }
             val actuallyCrossfading = isCrossfading && crossfadeSec > 0
             
-            // Fast path: use already prepared nextMediaPlayer
-            if (isGapless && playbackEngine.nextMediaPlayer != null && playbackEngine.nextPreparedSong == nextSong) {
-                val manualStart = !isAutoCompletion
-                val newState = state.copy(
-                    currentSong = nextSong,
-                    currentIndex = state.activeQueue.indexOf(nextSong),
-                    positionMs = 0L,
-                    durationMs = nextSong.durationMs,
-                    hasRepeatedOnce = newHasRepeatedOnce
-                )
-                _playerState.value = newState
-                playbackEngine.handleGaplessNext(nextSong, newState, actuallyCrossfading, crossfadeSec, manualStart)
-                updateSessionAndNotification()
-                return
-            }
-
             _playerState.value = state.copy(
                 currentSong = nextSong,
                 currentIndex = state.activeQueue.indexOf(nextSong),
@@ -254,7 +237,7 @@ class PlayerService : Service() {
             )
             
             if (requestAudioFocus()) {
-                playbackEngine.prepareAndPlay(nextSong, isCrossfading, _playerState.value)
+                playbackEngine.prepareAndPlay(nextSong, actuallyCrossfading, _playerState.value)
                 updateSessionAndNotification()
             }
         } else {

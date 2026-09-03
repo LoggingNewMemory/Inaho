@@ -115,7 +115,6 @@ data class AppSettings(
     val keepScreenOn: Boolean = false,
     val customThemeColor: Int = 0xFFB8355B.toInt(),
     val visualizerType: VisualizerType = VisualizerType.NONE,
-    val gaplessPlayback: Boolean = false,
     val crossfadeDuration: Float = 0f
 )
 
@@ -140,7 +139,6 @@ class SettingsManager(context: Context) {
             keepScreenOn = prefs.getBoolean("keep_screen_on", false),
             customThemeColor = prefs.getInt("custom_theme_color", 0xFFB8355B.toInt()),
             visualizerType = VisualizerType.valueOf(prefs.getString("visualizer_type", VisualizerType.NONE.name) ?: VisualizerType.NONE.name),
-            gaplessPlayback = prefs.getBoolean("gapless_playback", false),
             crossfadeDuration = try { prefs.getFloat("crossfade_duration", 0f) } catch (e: Exception) { prefs.getInt("crossfade_duration", 0).toFloat() }
         )
     )
@@ -214,11 +212,6 @@ class SettingsManager(context: Context) {
     fun updateVisualizerType(type: VisualizerType) {
         prefs.edit().putString("visualizer_type", type.name).apply()
         _settingsFlow.value = _settingsFlow.value.copy(visualizerType = type)
-    }
-
-    fun updateGaplessPlayback(enabled: Boolean) {
-        prefs.edit().putBoolean("gapless_playback", enabled).apply()
-        _settingsFlow.value = _settingsFlow.value.copy(gaplessPlayback = enabled)
     }
 
     fun updateCrossfadeDuration(seconds: Float) {
@@ -691,15 +684,6 @@ fun SettingsScreen(
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-        )
-
-        SettingsToggleRow(
-            icon = Icons.Default.OndemandVideo, // Generic icon, change if needed
-            title = "Gapless Playback",
-            subtitle = "Enable continuous playback without pauses between tracks",
-            checked = settings.gaplessPlayback,
-            accentColor = accentColor,
-            onToggle = { settingsManager.updateGaplessPlayback(it) }
         )
 
         SettingsSliderRow(
