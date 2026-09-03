@@ -392,7 +392,7 @@ fun PlayerScreen(
                             }
                         }
                         IconButton(onClick = { playerService?.skipNext(isAutoCompletion = false) }, enabled = playerState.hasNext, modifier = Modifier.size(48.dp)) { Icon(imageVector = Icons.Default.SkipNext, contentDescription = "Next", tint = if (playerState.hasNext) Color.White else Color.White.copy(alpha = 0.3f), modifier = Modifier.size(34.dp)) }
-                        IconButton(onClick = { playerService?.toggleRepeat() }, modifier = Modifier.size(48.dp)) { Icon(imageVector = Icons.Default.Repeat, contentDescription = "Repeat", tint = if (repeatMode == RepeatMode.ONE) accentColor else Color.White, modifier = Modifier.size(26.dp)) }
+                        IconButton(onClick = { playerService?.toggleRepeat() }, modifier = Modifier.size(48.dp)) { Icon(imageVector = if (repeatMode == RepeatMode.ONE) Icons.Default.RepeatOne else Icons.Default.Repeat, contentDescription = "Repeat", tint = if (repeatMode != RepeatMode.OFF) accentColor else Color.White, modifier = Modifier.size(26.dp)) }
                     }
                 }
             }
@@ -665,7 +665,7 @@ fun PlayerScreen(
                 }
 
                 IconButton(onClick  = { playerService?.toggleRepeat() }, modifier = Modifier.size(48.dp)) {
-                    Icon(imageVector = Icons.Default.Repeat, contentDescription = "Repeat", tint = if (repeatMode == RepeatMode.ONE) accentColor else Color.White, modifier = Modifier.size(26.dp))
+                    Icon(imageVector = if (repeatMode == RepeatMode.ONE) Icons.Default.RepeatOne else Icons.Default.Repeat, contentDescription = "Repeat", tint = if (repeatMode != RepeatMode.OFF) accentColor else Color.White, modifier = Modifier.size(26.dp))
                 }
             }
         }
