@@ -12,6 +12,7 @@ import android.os.IBinder
 import android.provider.MediaStore
 import android.view.Surface
 import com.kanagawa.yamada.inaho.Song
+import com.kanagawa.yamada.inaho.inahocar.AutoLibraryManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -75,6 +76,7 @@ class PlayerService : MediaBrowserServiceCompat() {
     private lateinit var playbackEngine: PlaybackEngine
     private lateinit var mediaSessionManager: MediaSessionManager
     private lateinit var notificationManager: MediaNotificationManager
+    private lateinit var autoLibraryManager: AutoLibraryManager
 
     private var positionJob: Job? = null
     private var isForeground = false
@@ -109,12 +111,16 @@ class PlayerService : MediaBrowserServiceCompat() {
             context = this,
             serviceScope = serviceScope,
             onSongCompletion = { isCrossfading -> skipNext(isAutoCompletion = true, isCrossfading = isCrossfading) },
-            onStateUpdate = { _playerState.value = _playerState.value.it() }
+            onStateUpdate = { 
+                _playerState.value = _playerState.value.it() 
+                updateSessionAndNotification()
+            }
         )
 
         mediaSessionManager = MediaSessionManager(this)
         sessionToken = mediaSessionManager.mediaSession.sessionToken
         notificationManager = MediaNotificationManager(this)
+        autoLibraryManager = AutoLibraryManager(this)
 
         startPositionPoller()
     }
@@ -142,68 +148,17 @@ class PlayerService : MediaBrowserServiceCompat() {
         clientUid: Int,
         rootHints: android.os.Bundle?
     ): BrowserRoot? {
-        return BrowserRoot("inaho_root_id", null)
+        return BrowserRoot(AutoLibraryManager.ROOT_ID, null)
     }
 
     override fun onLoadChildren(
         parentId: String,
         result: Result<MutableList<android.support.v4.media.MediaBrowserCompat.MediaItem>>
     ) {
-        if (parentId == "inaho_root_id") {
-            result.detach()
-            serviceScope.launch(Dispatchers.IO) {
-                val mediaItems = mutableListOf<android.support.v4.media.MediaBrowserCompat.MediaItem>()
-                var queue = _playerState.value.originalQueue
-                
-                if (queue.isEmpty()) {
-                    // Fetch all songs if queue is empty
-                    val songs = mutableListOf<Song>()
-                    val uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-                    val projection = arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.DATA, MediaStore.Audio.Media.DURATION)
-                    val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
-                    
-                    try {
-                        contentResolver.query(uri, projection, selection, null, "${MediaStore.Audio.Media.TITLE} ASC")?.use { cursor ->
-                            while (cursor.moveToNext()) {
-                                val id = cursor.getLong(0)
-                                val title = cursor.getString(1) ?: "Unknown"
-                                val artist = cursor.getString(2) ?: "Unknown"
-                                val path = cursor.getString(3) ?: ""
-                                val duration = cursor.getLong(4)
-                                val trackUri = android.content.ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
-                                val m = java.util.concurrent.TimeUnit.MILLISECONDS.toMinutes(duration)
-                                val s = java.util.concurrent.TimeUnit.MILLISECONDS.toSeconds(duration) - java.util.concurrent.TimeUnit.MINUTES.toSeconds(m)
-                                val formatted = String.format("%02d:%02d", m, s)
-                                songs.add(Song(id, title, artist, duration, trackUri, formatted, false, path))
-                            }
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                    queue = songs
-                    
-                    // Pre-fill the original queue in PlayerState so playFromMediaId works
-                    _playerState.value = _playerState.value.copy(originalQueue = queue)
-                }
-
-                for (song in queue) {
-                    val description = android.support.v4.media.MediaDescriptionCompat.Builder()
-                        .setMediaId(song.id.toString())
-                        .setTitle(song.title)
-                        .setSubtitle(song.artist)
-                        .build()
-                    
-                    mediaItems.add(
-                        android.support.v4.media.MediaBrowserCompat.MediaItem(
-                            description,
-                            android.support.v4.media.MediaBrowserCompat.MediaItem.FLAG_PLAYABLE
-                        )
-                    )
-                }
-                result.sendResult(mediaItems)
-            }
-        } else {
-            result.sendResult(mutableListOf())
+        result.detach()
+        serviceScope.launch(Dispatchers.IO) {
+            val items = autoLibraryManager.getChildren(parentId)
+            result.sendResult(items.toMutableList())
         }
     }
 
@@ -386,9 +341,14 @@ class PlayerService : MediaBrowserServiceCompat() {
     }
 
     fun playFromMediaId(id: Long) {
-        val state = _playerState.value
-        val queue = state.originalQueue
-        val song = queue.find { it.id == id }
+        var queue = _playerState.value.originalQueue
+        var song = queue.find { it.id == id }
+        
+        if (song == null) {
+            queue = autoLibraryManager.lastBrowsedSongs
+            song = queue.find { it.id == id }
+        }
+        
         if (song != null) {
             val index = queue.indexOf(song)
             playSong(song, queue, index)
@@ -433,7 +393,7 @@ class PlayerService : MediaBrowserServiceCompat() {
         stopSelf()
     }
 
-    private fun updateSessionAndNotification() {
+    fun updateSessionAndNotification() {
         val state = _playerState.value
         val pos = getCurrentPosition()
         serviceScope.launch {

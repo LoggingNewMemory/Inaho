@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
+import com.kanagawa.yamada.inaho.EqPreset
 
 class MediaSessionManager(
     private val service: PlayerService
@@ -29,10 +30,22 @@ class MediaSessionManager(
                         }
                     }
                 }
+                override fun onCustomAction(action: String?, extras: android.os.Bundle?) {
+                    if (action == "CYCLE_EQ") {
+                        val current = service.eqEngine.currentPreset.value
+                        val values = EqPreset.values()
+                        val next = values[(current.ordinal + 1) % values.size]
+                        service.eqEngine.setPreset(next)
+                        // Force update to refresh custom action label
+                        service.updateSessionAndNotification()
+                    }
+                }
             })
             isActive = true
         }
     }
+
+    private var lastMetadataSongId: Long? = null
 
     fun updateState(state: PlayerState, currentPosition: Long) {
         val playbackState = if (state.isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
@@ -40,21 +53,41 @@ class MediaSessionManager(
                       PlaybackStateCompat.ACTION_SKIP_TO_NEXT or PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
                       PlaybackStateCompat.ACTION_SEEK_TO
 
+        val eqName = service.eqEngine.currentPreset.value.displayName
         mediaSession.setPlaybackState(
             PlaybackStateCompat.Builder()
                 .setActions(actions)
                 .setState(playbackState, currentPosition, 1.0f)
+                .addCustomAction(
+                    PlaybackStateCompat.CustomAction.Builder(
+                        "CYCLE_EQ",
+                        "EQ: $eqName",
+                        android.R.drawable.ic_media_play // Simple icon
+                    ).build()
+                )
                 .build()
         )
 
-        state.currentSong?.let { song ->
-            mediaSession.setMetadata(
-                MediaMetadataCompat.Builder()
-                    .putString(MediaMetadataCompat.METADATA_KEY_TITLE, song.title)
-                    .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, song.artist)
-                    .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, song.durationMs)
-                    .build()
-            )
+        val song = state.currentSong
+        if (song != null && song.id != lastMetadataSongId) {
+            lastMetadataSongId = song.id
+            val builder = MediaMetadataCompat.Builder()
+                .putString(MediaMetadataCompat.METADATA_KEY_TITLE, song.title)
+                .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, song.artist)
+                .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, song.durationMs)
+            
+            try {
+                val retriever = android.media.MediaMetadataRetriever()
+                retriever.setDataSource(service, song.trackUri)
+                val art = retriever.embeddedPicture
+                retriever.release()
+                if (art != null) {
+                    val bitmap = android.graphics.BitmapFactory.decodeByteArray(art, 0, art.size)
+                    builder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, bitmap)
+                }
+            } catch (e: Exception) {}
+
+            mediaSession.setMetadata(builder.build())
         }
     }
 
