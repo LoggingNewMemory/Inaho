@@ -78,16 +78,16 @@ class AutoLibraryManager(private val context: Context) {
             }
             parentId == CATEGORY_EQ -> {
                 EqPreset.values().forEach { preset ->
-                    val builder = MediaDescriptionCompat.Builder()
-                        .setMediaId("$PREFIX_EQ${preset.name}")
-                        .setTitle(if (preset.iconRes != null) preset.displayName else "${preset.emoji} ${preset.displayName}")
-                        .setSubtitle(preset.description)
-
-                    if (preset.iconRes != null) {
-                        builder.setIconUri(android.net.Uri.parse("android.resource://com.kanagawa.yamada.inaho/${preset.iconRes}"))
-                    }
-
-                    items.add(MediaItem(builder.build(), MediaItem.FLAG_PLAYABLE))
+                    items.add(
+                        MediaItem(
+                            MediaDescriptionCompat.Builder()
+                                .setMediaId("$PREFIX_EQ${preset.name}")
+                                .setTitle("${preset.emoji} ${preset.displayName}")
+                                .setSubtitle(preset.description)
+                                .build(),
+                            MediaItem.FLAG_PLAYABLE
+                        )
+                    )
                 }
             }
         }
