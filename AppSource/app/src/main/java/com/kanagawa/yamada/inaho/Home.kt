@@ -129,6 +129,7 @@ fun HomeScreen(
             permissions.add(Manifest.permission.READ_MEDIA_VIDEO)
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         } else permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        permissions.add(Manifest.permission.RECORD_AUDIO)
 
         val neededPermissions = permissions.filter { ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED }
         if (neededPermissions.isNotEmpty()) permissionLauncher.launch(neededPermissions.toTypedArray())

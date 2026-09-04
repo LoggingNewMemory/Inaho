@@ -11,6 +11,8 @@ import com.kanagawa.yamada.inaho.inahoservice.RepeatMode
 
 import android.app.Application
 import android.content.Context
+import androidx.compose.ui.platform.LocalContext
+import androidx.activity.compose.rememberLauncherForActivityResult
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -68,6 +70,27 @@ class MainActivity : ComponentActivity() {
                 val musicViewModel: MusicViewModel = viewModel()
                 val settings by musicViewModel.settingsManager.settingsFlow.collectAsState()
 
+                val context = LocalContext.current
+                val permissionLauncher = rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()) { _ -> }
+
+                LaunchedEffect(Unit) {
+                    val permissions = mutableListOf<String>()
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        permissions.add(android.Manifest.permission.READ_MEDIA_AUDIO)
+                        permissions.add(android.Manifest.permission.READ_MEDIA_VIDEO)
+                        permissions.add(android.Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        permissions.add(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+                    }
+                    permissions.add(android.Manifest.permission.RECORD_AUDIO)
+
+                    val neededPermissions = permissions.filter { androidx.core.content.ContextCompat.checkSelfPermission(context, it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
+                    if (neededPermissions.isNotEmpty()) {
+                        permissionLauncher.launch(neededPermissions.toTypedArray())
+                    }
+                }
+
+
                 LaunchedEffect(settings.immersiveMode) {
                     val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
                     if (settings.immersiveMode) {
@@ -83,6 +106,13 @@ class MainActivity : ComponentActivity() {
                 // Route to SETUP if name is blank, otherwise go to HOME
                 var currentScreen by rememberSaveable {
                     mutableStateOf(if (settings.userName.isBlank()) AppScreen.SETUP else AppScreen.HOME)
+                }
+
+                // Force to SETUP if userName is blank, overriding saved state if necessary
+                LaunchedEffect(settings.userName) {
+                    if (settings.userName.isBlank()) {
+                        currentScreen = AppScreen.SETUP
+                    }
                 }
 
                 // Overlay state for the PlayerScreen
