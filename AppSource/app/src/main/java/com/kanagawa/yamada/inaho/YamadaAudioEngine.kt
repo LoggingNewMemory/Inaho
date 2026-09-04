@@ -43,7 +43,8 @@ enum class EqPreset(
     /** Extra loudness boost in millibels applied via LoudnessEnhancer */
     val loudnessGainMb: Int = 0,
     /** Enable Smart Audio Tunnel (dynamic gain riding) */
-    val smartTunnel: Boolean = false
+    val smartTunnel: Boolean = false,
+    val iconRes: Int? = null
 ) {
     OFF(
         displayName = "Off",
@@ -75,12 +76,13 @@ enum class EqPreset(
         bands = intArrayOf(300, 200, 100, 0, 200),
         loudnessGainMb = 400
     ),
-    CLASSIC(
-        displayName = "Classic",
-        emoji = "𝄞",
+    FLAT(
+        displayName = "Flat",
+        emoji = "",
         description = "Flat response, natural dynamics",
         bands = intArrayOf(0, 0, 0, 0, 0),
-        loudnessGainMb = 300 // THE BASELINE SWEET SPOT
+        loudnessGainMb = 300, // THE BASELINE SWEET SPOT
+        iconRes = R.drawable.ic_flat
     ),
     POP(
         displayName = "Pop",
@@ -422,6 +424,7 @@ private fun EqPresetTile(
 ) {
     FeatureTile(
         emoji = preset.emoji,
+        iconRes = preset.iconRes,
         displayName = preset.displayName,
         isSelected = isSelected,
         onClick = onClick,
@@ -432,6 +435,7 @@ private fun EqPresetTile(
 @Composable
 private fun FeatureTile(
     emoji: String,
+    iconRes: Int? = null,
     displayName: String,
     isSelected: Boolean,
     onClick: () -> Unit,
@@ -457,12 +461,21 @@ private fun FeatureTile(
             .padding(vertical = 14.dp, horizontal = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = emoji,
-            color = Color.White,
-            fontSize = 20.sp,
-            textAlign = TextAlign.Center
-        )
+        if (iconRes != null) {
+            androidx.compose.material3.Icon(
+                painter = androidx.compose.ui.res.painterResource(id = iconRes),
+                contentDescription = displayName,
+                tint = Color.White,
+                modifier = Modifier.size(24.dp)
+            )
+        } else {
+            Text(
+                text = emoji,
+                color = Color.White,
+                fontSize = 20.sp,
+                textAlign = TextAlign.Center
+            )
+        }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = displayName,

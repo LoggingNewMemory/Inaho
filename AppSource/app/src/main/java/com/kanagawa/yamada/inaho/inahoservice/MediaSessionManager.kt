@@ -5,6 +5,7 @@ import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import com.kanagawa.yamada.inaho.EqPreset
+import com.kanagawa.yamada.inaho.R
 
 class MediaSessionManager(
     private val service: PlayerService
@@ -24,20 +25,20 @@ class MediaSessionManager(
                 override fun onStop() { service.stopPlayback() }
                 override fun onPlayFromMediaId(mediaId: String?, extras: android.os.Bundle?) {
                     if (mediaId != null) {
+                        if (mediaId.startsWith("preset_")) {
+                            val presetName = mediaId.removePrefix("preset_")
+                            val preset = EqPreset.values().find { it.name == presetName }
+                            if (preset != null) {
+                                service.eqEngine.setPreset(preset)
+                                service.updateSessionAndNotification()
+                            }
+                            return
+                        }
+                        
                         val id = mediaId.toLongOrNull()
                         if (id != null) {
                             service.playFromMediaId(id)
                         }
-                    }
-                }
-                override fun onCustomAction(action: String?, extras: android.os.Bundle?) {
-                    if (action == "CYCLE_EQ") {
-                        val current = service.eqEngine.currentPreset.value
-                        val values = EqPreset.values()
-                        val next = values[(current.ordinal + 1) % values.size]
-                        service.eqEngine.setPreset(next)
-                        // Force update to refresh custom action label
-                        service.updateSessionAndNotification()
                     }
                 }
             })
@@ -53,18 +54,10 @@ class MediaSessionManager(
                       PlaybackStateCompat.ACTION_SKIP_TO_NEXT or PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
                       PlaybackStateCompat.ACTION_SEEK_TO
 
-        val eqName = service.eqEngine.currentPreset.value.displayName
         mediaSession.setPlaybackState(
             PlaybackStateCompat.Builder()
                 .setActions(actions)
                 .setState(playbackState, currentPosition, 1.0f)
-                .addCustomAction(
-                    PlaybackStateCompat.CustomAction.Builder(
-                        "CYCLE_EQ",
-                        "EQ: $eqName",
-                        android.R.drawable.ic_media_play // Simple icon
-                    ).build()
-                )
                 .build()
         )
 

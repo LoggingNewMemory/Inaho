@@ -6,15 +6,18 @@ import android.support.v4.media.MediaBrowserCompat.MediaItem
 import android.support.v4.media.MediaDescriptionCompat
 import com.kanagawa.yamada.inaho.Song
 import com.kanagawa.yamada.inaho.PlaylistManager
+import com.kanagawa.yamada.inaho.YamadaAudioEngine
+import com.kanagawa.yamada.inaho.EqPreset
 
 class AutoLibraryManager(private val context: Context) {
 
     companion object {
         const val ROOT_ID = "inaho_root_id"
         const val CATEGORY_SONGS = "category_songs"
-        const val CATEGORY_HOME = "category_home"
         const val CATEGORY_PLAYLISTS = "category_playlists"
+        const val CATEGORY_EQ = "category_eq"
         const val PREFIX_PLAYLIST = "playlist_"
+        const val PREFIX_EQ = "preset_"
     }
     
     private val playlistManager = PlaylistManager(context)
@@ -47,17 +50,11 @@ class AutoLibraryManager(private val context: Context) {
         when {
             parentId == ROOT_ID -> {
                 items.add(createBrowsableItem(CATEGORY_SONGS, "Songs", "Browse all local music"))
-                items.add(createBrowsableItem(CATEGORY_HOME, "Home", "Compact Mode (Song of the Day)"))
                 items.add(createBrowsableItem(CATEGORY_PLAYLISTS, "Playlists", "Browse custom playlists"))
+                items.add(createBrowsableItem(CATEGORY_EQ, "Yamada EQ", "Select Audio Preset"))
             }
             parentId == CATEGORY_SONGS -> {
                 val songs = fetchSongs(null, null)
-                lastBrowsedSongs = songs
-                songs.forEach { items.add(createPlayableItem(it)) }
-            }
-            parentId == CATEGORY_HOME -> {
-                // Fetch random songs simulating the Home Screen
-                val songs = fetchSongs(null, null).shuffled().take(20)
                 lastBrowsedSongs = songs
                 songs.forEach { items.add(createPlayableItem(it)) }
             }
@@ -77,6 +74,20 @@ class AutoLibraryManager(private val context: Context) {
                         lastBrowsedSongs = playlistSongs
                         playlistSongs.forEach { items.add(createPlayableItem(it)) }
                     }
+                }
+            }
+            parentId == CATEGORY_EQ -> {
+                EqPreset.values().forEach { preset ->
+                    val builder = MediaDescriptionCompat.Builder()
+                        .setMediaId("$PREFIX_EQ${preset.name}")
+                        .setTitle(if (preset.iconRes != null) preset.displayName else "${preset.emoji} ${preset.displayName}")
+                        .setSubtitle(preset.description)
+
+                    if (preset.iconRes != null) {
+                        builder.setIconUri(android.net.Uri.parse("android.resource://com.kanagawa.yamada.inaho/${preset.iconRes}"))
+                    }
+
+                    items.add(MediaItem(builder.build(), MediaItem.FLAG_PLAYABLE))
                 }
             }
         }
