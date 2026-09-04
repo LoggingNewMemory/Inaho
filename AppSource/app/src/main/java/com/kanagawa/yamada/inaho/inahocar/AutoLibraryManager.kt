@@ -12,10 +12,10 @@ import com.kanagawa.yamada.inaho.EqPreset
 class AutoLibraryManager(private val context: Context) {
 
     companion object {
-        const val ROOT_ID = "inaho_root_id"
-        const val CATEGORY_SONGS = "category_songs"
-        const val CATEGORY_PLAYLISTS = "category_playlists"
-        const val CATEGORY_EQ = "category_eq"
+        const val ROOT_ID = "inaho_root_v2"
+        const val CATEGORY_SONGS = "category_1_songs"
+        const val CATEGORY_PLAYLISTS = "category_2_playlists"
+        const val CATEGORY_EQ = "category_3_eq"
         const val PREFIX_PLAYLIST = "playlist_"
         const val PREFIX_EQ = "preset_"
     }
@@ -51,7 +51,7 @@ class AutoLibraryManager(private val context: Context) {
             parentId == ROOT_ID -> {
                 items.add(createBrowsableItem(CATEGORY_SONGS, "Songs", "Browse all local music"))
                 items.add(createBrowsableItem(CATEGORY_PLAYLISTS, "Playlists", "Browse custom playlists"))
-                items.add(createBrowsableItem(CATEGORY_EQ, "Yamada EQ", "Select Audio Preset"))
+                items.add(createBrowsableItem(CATEGORY_EQ, "Yamada AE", "Select Audio Preset"))
             }
             parentId == CATEGORY_SONGS -> {
                 val songs = fetchSongs(null, null)
@@ -77,12 +77,30 @@ class AutoLibraryManager(private val context: Context) {
                 }
             }
             parentId == CATEGORY_EQ -> {
+                val eqPrefs = context.getSharedPreferences("inaho_eq", Context.MODE_PRIVATE)
+                val rgEnabled = eqPrefs.getBoolean("replaygain_enabled", false)
+                val currentPresetName = eqPrefs.getString("preset", EqPreset.OFF.name) ?: EqPreset.OFF.name
+                
+                val rgStateStr = if (rgEnabled) "On" else "Off"
+                items.add(
+                    MediaItem(
+                        MediaDescriptionCompat.Builder()
+                            .setMediaId("action_toggle_replaygain")
+                            .setTitle("Toggle ReplayGain ($rgStateStr)")
+                            .setSubtitle("Normalize volume across tracks")
+                            .build(),
+                        MediaItem.FLAG_PLAYABLE
+                    )
+                )
+
                 EqPreset.values().forEach { preset ->
+                    val isActive = preset.name == currentPresetName
+                    val titleSuffix = if (isActive) " (Active)" else ""
                     items.add(
                         MediaItem(
                             MediaDescriptionCompat.Builder()
                                 .setMediaId("$PREFIX_EQ${preset.name}")
-                                .setTitle("${preset.emoji} ${preset.displayName}")
+                                .setTitle("${preset.emoji} ${preset.displayName}$titleSuffix")
                                 .setSubtitle(preset.description)
                                 .build(),
                             MediaItem.FLAG_PLAYABLE

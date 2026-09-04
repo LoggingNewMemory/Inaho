@@ -24,14 +24,24 @@ class MediaSessionManager(
                 override fun onSkipToPrevious() { service.skipPrev() }
                 override fun onSeekTo(pos: Long) { service.seekTo(pos) }
                 override fun onStop() { service.stopPlayback() }
+                override fun onCustomAction(action: String?, extras: android.os.Bundle?) {
+                }
                 override fun onPlayFromMediaId(mediaId: String?, extras: android.os.Bundle?) {
                     if (mediaId != null) {
+                        if (mediaId == "action_toggle_replaygain") {
+                            val isEnabled = service.eqEngine.replayGainEnabled.value
+                            service.eqEngine.setReplayGainEnabled(!isEnabled)
+                            service.updateSessionAndNotification()
+                            service.notifyChildrenChanged(com.kanagawa.yamada.inaho.inahocar.AutoLibraryManager.CATEGORY_EQ)
+                            return
+                        }
                         if (mediaId.startsWith("preset_")) {
                             val presetName = mediaId.removePrefix("preset_")
                             val preset = EqPreset.values().find { it.name == presetName }
                             if (preset != null) {
                                 service.eqEngine.setPreset(preset)
                                 service.updateSessionAndNotification()
+                                service.notifyChildrenChanged(com.kanagawa.yamada.inaho.inahocar.AutoLibraryManager.CATEGORY_EQ)
                             }
                             return
                         }
