@@ -133,37 +133,69 @@ class AutoLibraryManager(private val context: Context) {
         return albums.toList().sorted()
     }
 
+    private val settingsManager = com.kanagawa.yamada.inaho.SettingsManager(context)
+
     fun fetchSongs(selectionExtra: String?, selectionArgs: Array<String>?): List<Song> {
         val songs = mutableListOf<Song>()
-        val uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+        val settings = settingsManager.settingsFlow.value
+        
+        val collection = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        } else {
+            MediaStore.Files.getContentUri("external")
+        }
+        
         val projection = arrayOf(
-            MediaStore.Audio.Media._ID, 
-            MediaStore.Audio.Media.TITLE, 
-            MediaStore.Audio.Media.ARTIST, 
-            MediaStore.Audio.Media.DATA, 
-            MediaStore.Audio.Media.DURATION
+            MediaStore.Files.FileColumns._ID, 
+            MediaStore.Files.FileColumns.TITLE, 
+            MediaStore.Files.FileColumns.ARTIST, 
+            MediaStore.Files.FileColumns.DATA, 
+            MediaStore.Files.FileColumns.DURATION,
+            MediaStore.Files.FileColumns.MEDIA_TYPE
         )
         
-        var selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+        var selection = "(" +
+                "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ${MediaStore.Files.FileColumns.MEDIA_TYPE_AUDIO} OR " +
+                "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ${MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO}" +
+                ") AND ${MediaStore.Files.FileColumns.DURATION} > 10000"
+
+        if (settings.onlyMusicFolder) {
+            selection += if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                " AND ${MediaStore.Files.FileColumns.RELATIVE_PATH} LIKE '%Music/%'"
+            } else {
+                " AND ${MediaStore.Files.FileColumns.DATA} LIKE '%/Music/%'"
+            }
+        }
+        
         if (selectionExtra != null) {
             selection += " AND $selectionExtra"
         }
         
         try {
-            context.contentResolver.query(uri, projection, selection, selectionArgs, "${MediaStore.Audio.Media.TITLE} ASC")?.use { cursor ->
+            context.contentResolver.query(collection, projection, selection, selectionArgs, "${MediaStore.Files.FileColumns.TITLE} ASC")?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
+                val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.TITLE)
+                val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.ARTIST)
+                val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA)
+                val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DURATION)
+                val mediaTypeCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MEDIA_TYPE)
+                
                 while (cursor.moveToNext()) {
-                    val id = cursor.getLong(0)
-                    val title = cursor.getString(1) ?: "Unknown"
-                    val artist = cursor.getString(2) ?: "Unknown"
-                    val path = cursor.getString(3) ?: ""
-                    val duration = cursor.getLong(4)
+                    val id = cursor.getLong(idCol)
+                    val title = cursor.getString(titleCol) ?: "Unknown"
+                    val artist = cursor.getString(artistCol) ?: "Unknown"
+                    val path = cursor.getString(dataCol) ?: ""
+                    val duration = cursor.getLong(durationCol)
+                    val isVideo = cursor.getInt(mediaTypeCol) == MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO
                     
-                    val trackUri = android.content.ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
+                    val baseUri = if (isVideo) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+                    val trackUri = android.content.ContentUris.withAppendedId(baseUri, id)
+                    
                     val m = java.util.concurrent.TimeUnit.MILLISECONDS.toMinutes(duration)
                     val s = java.util.concurrent.TimeUnit.MILLISECONDS.toSeconds(duration) - java.util.concurrent.TimeUnit.MINUTES.toSeconds(m)
                     val formatted = String.format("%02d:%02d", m, s)
                     
-                    songs.add(Song(id, title, artist, duration, trackUri, formatted, false, path))
+                    songs.add(Song(id, title, artist, duration, trackUri, formatted, isVideo, path))
                 }
             }
         } catch (e: Exception) {
