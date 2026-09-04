@@ -286,7 +286,7 @@ fun PlayerScreen(
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
                 LiveVisualizer(
                     type = settings.visualizerType,
-                    isPlaying = playerState.isPlaying,
+                    isPlaying = playerState.isPlaying && volumeValue > 0f,
                     audioSessionId = playerState.audioSessionId,
                     accentColor = accentColor.copy(alpha = 0.5f),
                     modifier = Modifier.fillMaxWidth().fillMaxHeight(0.45f)
