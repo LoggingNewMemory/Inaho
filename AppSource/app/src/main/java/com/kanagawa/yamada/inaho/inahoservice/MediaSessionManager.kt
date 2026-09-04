@@ -6,6 +6,7 @@ import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import com.kanagawa.yamada.inaho.EqPreset
 import com.kanagawa.yamada.inaho.R
+import kotlinx.coroutines.launch
 
 class MediaSessionManager(
     private val service: PlayerService
@@ -69,18 +70,50 @@ class MediaSessionManager(
                 .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, song.artist)
                 .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, song.durationMs)
             
-            try {
-                val retriever = android.media.MediaMetadataRetriever()
-                retriever.setDataSource(service, song.trackUri)
-                val art = retriever.embeddedPicture
-                retriever.release()
-                if (art != null) {
-                    val bitmap = android.graphics.BitmapFactory.decodeByteArray(art, 0, art.size)
-                    builder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, bitmap)
-                }
-            } catch (e: Exception) {}
-
+            // Set metadata immediately without art
             mediaSession.setMetadata(builder.build())
+
+            // Load art asynchronously to prevent ANR on track change
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                try {
+                    var bitmap = com.kanagawa.yamada.inaho.loadBitmapFromDisk(service, song.id)
+                    if (bitmap == null && !com.kanagawa.yamada.inaho.isArtResolved(service, song.id)) {
+                        val retriever = android.media.MediaMetadataRetriever()
+                        retriever.setDataSource(service, song.trackUri)
+                        val art = retriever.embeddedPicture
+                        if (art != null) {
+                            bitmap = android.graphics.BitmapFactory.decodeByteArray(art, 0, art.size)
+                        } else if (song.isVideo) {
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                                try {
+                                    bitmap = service.contentResolver.loadThumbnail(song.trackUri, android.util.Size(512, 512), null)
+                                } catch (e: Exception) {}
+                            }
+                            if (bitmap == null) {
+                                val frame = retriever.getFrameAtTime(-1)
+                                if (frame != null) {
+                                    val maxSide = 512
+                                    val scale = maxSide.toFloat() / maxOf(frame.width, frame.height)
+                                    if (scale < 1.0f) {
+                                        bitmap = android.graphics.Bitmap.createScaledBitmap(frame, (frame.width * scale).toInt(), (frame.height * scale).toInt(), true)
+                                        frame.recycle()
+                                    } else {
+                                        bitmap = frame
+                                    }
+                                }
+                            }
+                        }
+                        retriever.release()
+                    }
+                    if (bitmap != null) {
+                        // Ensure we haven't changed song while loading
+                        if (lastMetadataSongId == song.id) {
+                            builder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, bitmap)
+                            mediaSession.setMetadata(builder.build())
+                        }
+                    }
+                } catch (e: Exception) {}
+            }
         }
     }
 
