@@ -228,6 +228,13 @@ class YamadaAudioEngine(private val context: Context) {
                     totalGainMb += 100
                 }
 
+                val uiModeManager = context.getSystemService(Context.UI_MODE_SERVICE) as android.app.UiModeManager
+                if (uiModeManager.currentModeType == android.content.res.Configuration.UI_MODE_TYPE_CAR) {
+                    if (totalGainMb > 0) {
+                        totalGainMb = 0
+                    }
+                }
+
                 if (totalGainMb > 0) {
                     applyGain(totalGainMb)
                     currentVolumeMultiplier = 1.0f
