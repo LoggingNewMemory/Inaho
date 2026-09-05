@@ -155,11 +155,7 @@ class PlayerService : MediaBrowserServiceCompat() {
         parentId: String,
         result: Result<MutableList<android.support.v4.media.MediaBrowserCompat.MediaItem>>
     ) {
-        result.detach()
-        serviceScope.launch(Dispatchers.IO) {
-            val items = autoLibraryManager.getChildren(parentId)
-            result.sendResult(items.toMutableList())
-        }
+        result.sendResult(autoLibraryManager.getChildren(parentId).toMutableList())
     }
 
     override fun onDestroy() {
@@ -338,6 +334,28 @@ class PlayerService : MediaBrowserServiceCompat() {
     fun seekTo(positionMs: Long) {
         playbackEngine.seekTo(positionMs)
         updateSessionAndNotification()
+    }
+
+    fun playRandomSong() {
+        val allSongs = autoLibraryManager.fetchSongs(null, null)
+        if (allSongs.isNotEmpty()) {
+            val shuffledQueue = allSongs.shuffled()
+            val state = _playerState.value
+            _playerState.value = state.copy(
+                originalQueue = allSongs,
+                activeQueue = shuffledQueue,
+                currentIndex = 0,
+                currentSong = shuffledQueue[0],
+                isPlaying = true,
+                isShuffled = true,
+                positionMs = 0,
+                durationMs = shuffledQueue[0].durationMs
+            )
+            if (requestAudioFocus()) {
+                playbackEngine.prepareAndPlay(shuffledQueue[0], false, _playerState.value)
+                startForegroundServiceNotification()
+            }
+        }
     }
 
     fun playFromMediaId(id: Long) {

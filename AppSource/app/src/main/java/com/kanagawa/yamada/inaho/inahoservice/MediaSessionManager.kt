@@ -28,10 +28,22 @@ class MediaSessionManager(
                 }
                 override fun onPlayFromMediaId(mediaId: String?, extras: android.os.Bundle?) {
                     if (mediaId != null) {
+                        if (mediaId == com.kanagawa.yamada.inaho.inahocar.AutoLibraryManager.CATEGORY_EQ) {
+                            if (PlayerService.playerState.value.currentSong == null) {
+                                service.playRandomSong()
+                            } else {
+                                service.updateSessionAndNotification()
+                            }
+                            return
+                        }
                         if (mediaId == "action_toggle_replaygain") {
                             val isEnabled = service.eqEngine.replayGainEnabled.value
                             service.eqEngine.setReplayGainEnabled(!isEnabled)
-                            service.updateSessionAndNotification()
+                            if (PlayerService.playerState.value.currentSong == null) {
+                                service.playRandomSong()
+                            } else {
+                                service.updateSessionAndNotification()
+                            }
                             service.notifyChildrenChanged(com.kanagawa.yamada.inaho.inahocar.AutoLibraryManager.CATEGORY_EQ)
                             return
                         }
@@ -40,7 +52,11 @@ class MediaSessionManager(
                             val preset = EqPreset.values().find { it.name == presetName }
                             if (preset != null) {
                                 service.eqEngine.setPreset(preset)
-                                service.updateSessionAndNotification()
+                                if (PlayerService.playerState.value.currentSong == null) {
+                                    service.playRandomSong()
+                                } else {
+                                    service.updateSessionAndNotification()
+                                }
                                 service.notifyChildrenChanged(com.kanagawa.yamada.inaho.inahocar.AutoLibraryManager.CATEGORY_EQ)
                             }
                             return
