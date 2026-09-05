@@ -1,4 +1,4 @@
-<img width="1280" height="720" alt="GH Banner" src="https://github.com/user-attachments/assets/56fd88d4-124b-484e-98d1-633f6a3f4f52" />
+<img width="1280" height="720" alt="GH Banner" src="https://github.com/user-attachments/assets/75e5298b-181f-4eb2-8ae9-1ac3b3e78ef6" />
 
 <br>
 
@@ -8,7 +8,7 @@ Inaho is a beautiful, lightweight, and feature-rich local music player for Andro
 
 No accounts. No streaming. No cloud. Just your music, on your device.
 
-<img width="1280" height="1158" alt="Screenshots" src="https://github.com/user-attachments/assets/b1ec2c08-dadb-4b78-9e2e-190023e71b43" />
+<img width="1280" height="720" alt="Screenshots" src="https://github.com/user-attachments/assets/d2d29ddc-2ac3-419b-87ba-b256e61d51df" />
 
 ---
 
