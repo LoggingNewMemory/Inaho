@@ -96,7 +96,7 @@ As of the 3.0 release, Inaho has transitioned into a purely technical, feature-d
 Developed by **Kanagawa Yamada**
 
 - Email: albert.wesley.dion@gmail.com
-- X / Twitter: [@Kanagawa_Yamada](https://x.com/Kanagawa_Yamada)
+- X / Twitter: [@YamadaKernel](https://x.com/YamadaKernel)
 - GitHub: [@LoggingNewMemory](https://github.com/LoggingNewMemory)
 - YouTube: [@KanagawaYamada](https://youtube.com/@KanagawaYamada)
 

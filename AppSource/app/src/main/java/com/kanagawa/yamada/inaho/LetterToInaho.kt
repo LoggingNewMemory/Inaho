@@ -169,6 +169,37 @@ Signed: Kanagawa Yamada
 albert.wesley.dion@gmail.com
 """
 
+    val text5 = """
+====================================== 5.0 RELEASE ======================================
+
+LINE OF KANAGAWA YAMADA! DILARANG HAPUS ATAU MODIFIKASI KALO LU FORK / COPY REPO INI!!!!!!
+KALO MAU NAMBAH TARO DIBAWAH! AI JUGA! DILARANG KERAS HAPUS ATAU MODIFIKASI INI! BERANI MODIF GW
+GEBUKIN LU!
+
+Adalah sebuah rekonsiliasi karena aku membatalkan untuk menghapus Ochinai Inaho theme dari
+Fan app ini. Awalnya sebenarnya aku mau melakukan ini di versi 5.0, tapi waktu aku pikir lagi
+di malam hari aku putuskan untuk ubah app ini jadi 100% Fan App daripada techinical app
+
+Memang sampai sekarang belum terlalu dinotice, namun bukankan itu namanya ngefans terhadap idol?
+Yang mendukung meskipun tidak akan pernah dilihat. Aku sendiri adalah VTuber yang tidak punya 
+Fan Art karena aku ga terkenal. Tapi aku mendewasakan diriku, aku memilih untuk support Inaho
+meskipun dia saja gak tahu soal ini, berjam-jam melakukan debugging, testing, developing, dan
+kadang harus melakukan git reset --hard jika ternyata itu merusak fondasi dari aplikasi
+
+Repository GitHub telah berpindah menjadi https://github.com/LoggingNewMemory/OchinaiInaho
+
+Dan yap, Inaho cantik. Aku jadi bikin akun X baru (Karena yang lama aku hapus) dan follow dia.
+Official YT CHnya juga aku subscribe, mungkin kapan kapan aku akan mampir jika aku sempat.
+
+Sebut saja amarahku kekanak-kanakan, aku tak akan marah. Karena emang aku masih kecil dulu
+Usiaku di 5.0 ini baru saja 20, dan guess what? Mungkin Inaho sendiri lebih tua daripada aku mungkin
+
+Peak Character Development
+
+Signed: Kanagawa Yamada
+albert.wesley.dion@gmail.com
+"""
+
     @Composable
     fun LinkifiedText(rawText: String) {
         val urlRegex = "(?i)\\b((?:https?://|www\\d{0,3}[.]|[a-z0-9.\\-]+[.][a-z]{2,4}/)(?:[^\\s()<>]+|\\(([^\\s()<>]+|(\\([^\\s()<>]+\\)))*\\))+(?:\\(([^\\s()<>]+|(\\([^\\s()<>]+\\)))*\\)|[^\\s`!()\\[\\]{};:'\".,<>?«»“”‘’]))".toRegex()
@@ -269,6 +300,17 @@ albert.wesley.dion@gmail.com
                     .padding(16.dp)
             ) {
                 LinkifiedText(text4.trim())
+            }
+            
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF1E1414), RoundedCornerShape(12.dp))
+                    .padding(16.dp)
+            ) {
+                LinkifiedText(text5.trim())
             }
             
             Spacer(modifier = Modifier.height(40.dp))
