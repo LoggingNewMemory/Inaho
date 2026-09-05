@@ -18,14 +18,42 @@ class MediaSessionManager(
         mediaSession = MediaSessionCompat(service, "InahoMediaSession", receiver, null).apply {
             setFlags(MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS or MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS)
             setCallback(object : MediaSessionCompat.Callback() {
-                override fun onPlay() { service.togglePlayPause() }
-                override fun onPause() { service.togglePlayPause() }
+                override fun onPlay() { 
+                    if (PlayerService.playerState.value.currentSong == null) {
+                        service.playRandomSong()
+                    } else if (!PlayerService.playerState.value.isPlaying) {
+                        service.togglePlayPause() 
+                    }
+                }
+                override fun onPause() { 
+                    if (PlayerService.playerState.value.isPlaying) {
+                        service.togglePlayPause() 
+                    }
+                }
                 override fun onSkipToNext() { service.skipNext() }
                 override fun onSkipToPrevious() { service.skipPrev() }
                 override fun onSeekTo(pos: Long) { service.seekTo(pos) }
                 override fun onStop() { service.stopPlayback() }
-                override fun onCustomAction(action: String?, extras: android.os.Bundle?) {
+                
+                override fun onSetShuffleMode(shuffleMode: Int) {
+                    val isShuffled = (shuffleMode == PlaybackStateCompat.SHUFFLE_MODE_ALL || shuffleMode == PlaybackStateCompat.SHUFFLE_MODE_GROUP)
+                    if (PlayerService.playerState.value.isShuffled != isShuffled) {
+                        service.toggleShuffle()
+                    }
                 }
+                
+                override fun onSetRepeatMode(repeatMode: Int) {
+                    service.toggleRepeat() // Or map it directly, but toggle is fine for now
+                }
+                
+                override fun onPlayFromSearch(query: String?, extras: android.os.Bundle?) {
+                    if (query.isNullOrEmpty()) {
+                        service.playRandomSong()
+                    } else {
+                        service.playFromSearch(query)
+                    }
+                }
+                override fun onCustomAction(action: String?, extras: android.os.Bundle?) {}
                 override fun onPlayFromMediaId(mediaId: String?, extras: android.os.Bundle?) {
                     if (mediaId != null) {
                         if (mediaId == com.kanagawa.yamada.inaho.inahocar.AutoLibraryManager.CATEGORY_EQ) {

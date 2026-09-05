@@ -387,6 +387,60 @@ class PlayerService : MediaBrowserServiceCompat() {
                 playbackEngine.prepareAndPlay(shuffledQueue[0], false, _playerState.value)
                 startForegroundServiceNotification()
             }
+        } else {
+            mediaSessionManager.mediaSession.setPlaybackState(
+                android.support.v4.media.session.PlaybackStateCompat.Builder()
+                    .setState(android.support.v4.media.session.PlaybackStateCompat.STATE_ERROR, 0, 1.0f)
+                    .setErrorMessage(android.support.v4.media.session.PlaybackStateCompat.ERROR_CODE_APP_ERROR, "No music found on device")
+                    .build()
+            )
+        }
+    }
+
+    fun playFromSearch(query: String) {
+        // Strip out the app name and common mishearings in case Google Assistant fails to remove them
+        var q = query.lowercase()
+            .replace("on in a hoe", "")
+            .replace("in a hoe", "")
+            .replace("on inaho", "")
+            .replace("inaho", "")
+            .trim()
+        
+        if (q.contains("random") || q.contains("shuffle") || q.isEmpty()) {
+            playRandomSong()
+            return
+        }
+        
+        // Intercept EQ presets via voice
+        if (q.contains("yamada") || q.contains("eq") || q.contains("preset") || q.contains("bass") || q.contains("acoustic")) {
+            val preset = com.kanagawa.yamada.inaho.EqPreset.values().find { q.contains(it.name.lowercase()) || q.contains(it.displayName.lowercase()) }
+            if (preset != null) {
+                eqEngine.setPreset(preset)
+                if (_playerState.value.currentSong == null) {
+                    playRandomSong()
+                } else {
+                    updateSessionAndNotification()
+                }
+                return
+            }
+        }
+
+        val allSongs = autoLibraryManager.fetchSongs(null, null)
+        val matches = allSongs.filter { 
+            it.title.lowercase().contains(q) || 
+            it.artist.lowercase().contains(q) 
+        }
+        if (matches.isNotEmpty()) {
+            val song = matches.first()
+            val index = allSongs.indexOf(song)
+            playSong(song, allSongs, index)
+        } else {
+            mediaSessionManager.mediaSession.setPlaybackState(
+                android.support.v4.media.session.PlaybackStateCompat.Builder()
+                    .setState(android.support.v4.media.session.PlaybackStateCompat.STATE_ERROR, 0, 1.0f)
+                    .setErrorMessage(android.support.v4.media.session.PlaybackStateCompat.ERROR_CODE_APP_ERROR, "Song not found")
+                    .build()
+            )
         }
     }
 
