@@ -20,7 +20,7 @@ class AutoLibraryManager(private val context: Context) {
         const val PREFIX_EQ = "preset_"
     }
     
-    private val playlistManager = PlaylistManager(context)
+    
 
     // Helper to create a browsable category item
     private fun createBrowsableItem(id: String, title: String, subtitle: String): MediaItem {
@@ -59,21 +59,35 @@ class AutoLibraryManager(private val context: Context) {
                 songs.forEach { items.add(createPlayableItem(it)) }
             }
             parentId == CATEGORY_PLAYLISTS -> {
-                val playlists = playlistManager.customPlaylistsFlow.value
+                val freshPlaylistManager = PlaylistManager(context)
+                val favorites = freshPlaylistManager.favoritesFlow.value
+                if (favorites.isNotEmpty()) {
+                    items.add(createBrowsableItem("${PREFIX_PLAYLIST}favorites", "Favorites", "${favorites.size} songs"))
+                }
+                
+                val playlists = freshPlaylistManager.customPlaylistsFlow.value
                 playlists.forEach { pl ->
                     items.add(createBrowsableItem("$PREFIX_PLAYLIST${pl.id}", pl.name, "${pl.songIds.size} songs"))
                 }
             }
             parentId.startsWith(PREFIX_PLAYLIST) -> {
-                val plId = parentId.removePrefix(PREFIX_PLAYLIST).toLongOrNull()
-                if (plId != null) {
-                    val pl = playlistManager.customPlaylistsFlow.value.find { it.id == plId }
-                    if (pl != null) {
-                        val allSongs = fetchSongs(null, null)
-                        val playlistSongs = pl.songIds.mapNotNull { id -> allSongs.find { it.id == id } }
-                        lastBrowsedSongs = playlistSongs
-                        playlistSongs.forEach { items.add(createPlayableItem(it)) }
-                    }
+                val plIdStr = parentId.removePrefix(PREFIX_PLAYLIST)
+                val freshPlaylistManager = PlaylistManager(context)
+                
+                val songIds = if (plIdStr == "favorites") {
+                    freshPlaylistManager.favoritesFlow.value
+                } else {
+                    val plId = plIdStr.toLongOrNull()
+                    if (plId != null) {
+                        freshPlaylistManager.customPlaylistsFlow.value.find { it.id == plId }?.songIds
+                    } else null
+                }
+                
+                if (songIds != null) {
+                    val allSongs = fetchSongs(null, null)
+                    val playlistSongs = songIds.mapNotNull { id -> allSongs.find { it.id == id } }
+                    lastBrowsedSongs = playlistSongs
+                    playlistSongs.forEach { items.add(createPlayableItem(it)) }
                 }
             }
             parentId == CATEGORY_EQ -> {

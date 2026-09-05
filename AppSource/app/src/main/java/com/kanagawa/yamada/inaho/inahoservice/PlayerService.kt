@@ -81,6 +81,19 @@ class PlayerService : MediaBrowserServiceCompat() {
     private var positionJob: Job? = null
     private var isForeground = false
 
+    private lateinit var playlistPrefs: android.content.SharedPreferences
+    private val playlistPrefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key?.startsWith("playlist_") == true || key == "favorites_ordered" || key == "favorites") {
+            notifyChildrenChanged(AutoLibraryManager.CATEGORY_PLAYLISTS)
+            if (key.startsWith("playlist_") && key.endsWith("_songs")) {
+                val plIdStr = key.removePrefix("playlist_").removeSuffix("_songs")
+                notifyChildrenChanged("${AutoLibraryManager.PREFIX_PLAYLIST}$plIdStr")
+            } else if (key == "favorites_ordered" || key == "favorites") {
+                notifyChildrenChanged("${AutoLibraryManager.PREFIX_PLAYLIST}favorites")
+            }
+        }
+    }
+
     private lateinit var audioManager: AudioManager
     private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
         when (focusChange) {
@@ -121,6 +134,9 @@ class PlayerService : MediaBrowserServiceCompat() {
         sessionToken = mediaSessionManager.mediaSession.sessionToken
         notificationManager = MediaNotificationManager(this)
         autoLibraryManager = AutoLibraryManager(this)
+        
+        playlistPrefs = getSharedPreferences("inaho_playlists", Context.MODE_PRIVATE)
+        playlistPrefs.registerOnSharedPreferenceChangeListener(playlistPrefsListener)
 
         startPositionPoller()
     }
@@ -160,6 +176,7 @@ class PlayerService : MediaBrowserServiceCompat() {
 
     override fun onDestroy() {
         super.onDestroy()
+        playlistPrefs.unregisterOnSharedPreferenceChangeListener(playlistPrefsListener)
         unregisterReceiver(noisyReceiver)
         serviceJob.cancel()
         playbackEngine.stopPlayback()
