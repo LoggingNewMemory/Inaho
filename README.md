@@ -27,7 +27,7 @@ No accounts. No streaming. No cloud. Just your music, on your device.
 
 ### Advanced Audio & Playback
 
-- **Yamada EQ** — a custom audio engine with 7 built-in presets: Off, Smart, Rock, Jazz, Classic, Pop, Bass
+- **Yamada Audio Engine** — a custom audio engine with 7 built-in presets: Off, Smart, Rock, Jazz, Classic, Pop, Bass
   - *Smart* preset uses `DynamicsProcessing` (API 28+) for dynamic gain riding — boosting signal on beat drops and lifts, with automatic `LoudnessEnhancer` fallback on older devices
   - All presets backed by Android's native `Equalizer`; EQ choice persists across sessions
 - **Playback speed control** — 0.5× to 2.0× in six steps, pitch-stable
