@@ -40,6 +40,7 @@ class PlaybackEngine(
     
     private var currentPlaybackSpeed = 1.0f
     private var currentPlaybackPitch = 1.0f
+    private var currentPlayWhenReady = true
 
     fun setVideoSurface(surface: Surface?) {
         currentSurface = surface
@@ -105,7 +106,7 @@ class PlaybackEngine(
         mediaPlayer = null
     }
     
-    fun prepareAndPlay(song: Song, isCrossfading: Boolean = false, currentState: PlayerState) {
+    fun prepareAndPlay(song: Song, isCrossfading: Boolean = false, currentState: PlayerState, playWhenReady: Boolean = true) {
         val prefs = context.getSharedPreferences("inaho_settings", Context.MODE_PRIVATE)
         val crossfadeSec = try { prefs.getFloat("crossfade_duration", 0f) } catch (e: Exception) { prefs.getInt("crossfade_duration", 0).toFloat() }
         val doCrossfade = isCrossfading || (crossfadeSec > 0 && mediaPlayer?.isPlaying == true)
@@ -120,6 +121,7 @@ class PlaybackEngine(
         val generation = ++playGeneration
         isMainPrepared = false
         isBgPrepared = false
+        currentPlayWhenReady = playWhenReady
 
         isMainPreparing = true
         isBgPreparing = false
@@ -257,10 +259,12 @@ class PlaybackEngine(
 
         if (isMainPrepared && (bgMediaPlayer == null || isBgPrepared)) {
             try {
-                bgMediaPlayer?.start()
-                mp.start()
+                if (currentPlayWhenReady) {
+                    bgMediaPlayer?.start()
+                    mp.start()
+                }
                 onStateUpdate { copy(
-                    isPlaying  = true,
+                    isPlaying  = currentPlayWhenReady,
                     durationMs = mp.duration.toLong(),
                     videoWidth = mp.videoWidth,
                     videoHeight = mp.videoHeight

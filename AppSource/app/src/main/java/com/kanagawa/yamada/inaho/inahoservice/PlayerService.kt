@@ -317,7 +317,22 @@ class PlayerService : MediaBrowserServiceCompat() {
                 updateSessionAndNotification()
             }
         } else {
-            stopPlayback()
+            // Reached the end of the queue
+            val firstSong = state.activeQueue.firstOrNull()
+            if (firstSong != null) {
+                _playerState.value = state.copy(
+                    currentSong = firstSong,
+                    currentIndex = 0,
+                    positionMs = 0L,
+                    durationMs = firstSong.durationMs,
+                    hasRepeatedOnce = false,
+                    isPlaying = false
+                )
+                playbackEngine.prepareAndPlay(firstSong, false, _playerState.value, playWhenReady = false)
+                updateSessionAndNotification()
+            } else {
+                stopPlayback()
+            }
         }
     }
 
@@ -376,11 +391,16 @@ class PlayerService : MediaBrowserServiceCompat() {
     }
 
     fun playFromMediaId(id: Long) {
-        var queue = _playerState.value.originalQueue
+        var queue = autoLibraryManager.lastBrowsedSongs
         var song = queue.find { it.id == id }
         
         if (song == null) {
-            queue = autoLibraryManager.lastBrowsedSongs
+            queue = _playerState.value.originalQueue
+            song = queue.find { it.id == id }
+        }
+        
+        if (song == null) {
+            queue = autoLibraryManager.fetchSongs(null, null)
             song = queue.find { it.id == id }
         }
         
